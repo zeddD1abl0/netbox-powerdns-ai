@@ -81,3 +81,16 @@ the repo alone.
     per job, but M1's container lab will need much more ephemeral storage.
   - **After the merge,** M01 starts with a plan-mode design session.
     13 open questions are needed by M1, plus Q-025; the board groups them.
+- 2026-09-25: **Update at session end.** The user reported that the pipeline
+  run on `1a68497` passed on the GitLab runners with no change to pod disk
+  size, so the M00 criterion for GitLab CI is ticked. Still open for M00
+  close:
+  - confirm the GitHub pipeline result, which wasn't reported separately;
+  - the raw-rendering check in GitLab's file view (the NOTE alert in
+    `docs/_index.md`, the Mermaid diagram in ADR-0007);
+  - re-run `/code-review high` on the ITEM-0014 and ITEM-0015 code;
+  - the `close-milestone` skill and the hand-over.
+
+  Commits `b90b756` and later are documentation only, and go up with the
+  user's next push.
+

@@ -42,7 +42,7 @@ expandable, before writing any product code:
 - [x] Every blocking question in `requirements.md` is answered (ITEM-0002; Q-055 answered 2026-09-25).
 - [x] ADRs exist for the docs platform, the API standard, and persistence and HA (ITEM-0009: ADR-0011, ADR-0012, ADR-0009).
 - [x] `make check` and `make ci` pass locally with only the ADR-0014 prerequisites installed, and in the pinned CI image.
-- [ ] The GitLab CI pipeline passes by calling make targets only.
+- [x] The GitLab CI pipeline passes by calling make targets only (the staged pipeline at `1a68497`, reported by the user 2026-09-25).
 - [x] `projctl lint` fails on a deliberately broken item and passes on a clean tree (26 lint cases in `tools/projctl`; `make project-lint` is clean).
 - [ ] The docs site builds. An alert and a Mermaid block render on the site (verified) and raw on GitLab (after the branch is pushed).
 - [x] Cold-start test passed (ITEM-0011): two runs, 4 files read each.
@@ -105,6 +105,10 @@ Append-only and dated. Record what was run and what was seen.
 - 2026-09-25: The user pushed `1a68497` to both remotes, and the first staged
   pipelines are running. The results, and the next steps for closing M00, are
   in ITEM-0011's notes.
+- 2026-09-25: The user reported that the pipeline run on `1a68497` passed on
+  the GitLab runners, without changing the pods' disk size. That's the run
+  that was evicted earlier as a single 6.5 GB job. No GitHub result was
+  reported separately.
 
 ## Approved design
 
