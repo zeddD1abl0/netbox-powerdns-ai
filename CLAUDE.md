@@ -64,9 +64,10 @@ lives in `project/`, and decisions live in `docs/adr/`.
 
 ## Principles
 
-1. **Self-contained and not tied to a forge** ([ADR-0013](docs/adr/0013-toolchain-per-tool-modules-and-c-compiler.md)).
-   The only prerequisites are Go, Docker, make and a C compiler. Pin every tool
-   in the repo, one module per tool under `tools/`.
+1. **Self-contained and not tied to a forge** ([ADR-0014](docs/adr/0014-toolchain-pinned-release-binaries-on-glibc-linux.md)).
+   Develop on glibc Linux amd64; the prerequisites are Go, Docker, make, curl,
+   tar and sha256sum. Pin every tool: release binaries by SHA-256 in
+   `tools/tools.mk`, others in `tools/<name>/go.mod`. Elsewhere, `make shell`.
    CI files only call make targets. Vendor UI assets; no CDNs. Don't rely on
    forge features (issues, wiki, Pages).
 2. **One source, generated references.** Config keys, metrics, audit events and

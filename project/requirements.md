@@ -41,7 +41,7 @@ When a question is answered:
 | REQ-023 | v1 manages PowerDNS Authoritative. | Q-001, [ADR-0004](../docs/adr/0004-v1-scope-netbox-source-of-truth-powerdns-auth.md) |
 | REQ-024 | NetBox is the source of truth for DNS data. | Q-002, [ADR-0004](../docs/adr/0004-v1-scope-netbox-source-of-truth-powerdns-auth.md) |
 | REQ-025 | Project work is tracked in the repo, in Markdown. | Q-003, [ADR-0002](../docs/adr/0002-track-work-in-repo.md) |
-| REQ-026 | The project is self-contained and not tied to any forge. | Q-004, [ADR-0003](../docs/adr/0003-self-contained-forge-neutral-toolchain.md), superseded by [ADR-0013](../docs/adr/0013-toolchain-per-tool-modules-and-c-compiler.md) |
+| REQ-026 | The project is self-contained and not tied to any forge. | Q-004, [ADR-0003](../docs/adr/0003-self-contained-forge-neutral-toolchain.md), superseded by [ADR-0013](../docs/adr/0013-toolchain-per-tool-modules-and-c-compiler.md), then [ADR-0014](../docs/adr/0014-toolchain-pinned-release-binaries-on-glibc-linux.md) |
 | REQ-027 | DNS data is read from the NetBox DNS plugin. | Q-006, [ADR-0006](../docs/adr/0006-integrations-netbox-dns-plugin-and-powerdns-api.md) |
 | REQ-028 | The app reaches PowerDNS only through its HTTP API, never through backend databases or zone files. | Q-008, [ADR-0006](../docs/adr/0006-integrations-netbox-dns-plugin-and-powerdns-api.md) |
 | REQ-029 | v1 supports primary → secondaries topologies, including hidden primaries. | Q-009, [ADR-0007](../docs/adr/0007-server-groups-and-catalog-zones.md) |
@@ -53,6 +53,8 @@ When a question is answered:
 | REQ-035 | The project is licensed under Apache-2.0. | Q-005, [ADR-0005](../docs/adr/0005-project-identity.md) |
 | REQ-036 | End-to-end tests run against a containerised lab: NetBox with the DNS plugin, a PowerDNS primary, and secondaries. | Q-048 |
 | REQ-037 | The API follows the Zalando RESTful API Guidelines in full, with no version in URL paths. | Q-056, [ADR-0012](../docs/adr/0012-api-standard.md) |
+| REQ-038 | CI and container images are glibc-based (Debian or Ubuntu); Alpine/musl isn't required. | User, 2026-09-25; [ADR-0015](../docs/adr/0015-glibc-based-debian-or-ubuntu-images-for-ci-and-con.md) |
+| REQ-039 | CI pipelines are split into stages (lint, test, build, security, and more later); `make ci` remains the local "do everything" target. | User, 2026-09-25 |
 
 ## Open questions
 

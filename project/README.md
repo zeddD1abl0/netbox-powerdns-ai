@@ -9,7 +9,7 @@
 
 | Milestone | Title | Status | Items closed |
 |---|---|---|---|
-| [M00](milestones/M00-foundation.md) | Foundation | in-progress | 12 of 13 |
+| [M00](milestones/M00-foundation.md) | Foundation | in-progress | 13 of 15 |
 | [M01](milestones/M01-service-skeleton.md) | Service skeleton | planned | — |
 | [M02](milestones/M02-identity.md) | Identity | planned | — |
 | [M03](milestones/M03-read-path-drift-report.md) | Read path and drift report | planned | — |
@@ -24,6 +24,7 @@
 | Item | Title | Type | Status | Waiting on |
 |---|---|---|---|---|
 | [ITEM-0011](items/ITEM-0011-cold-start-test.md) | Cold-start test and M0 close | task | in-progress | — |
+| [ITEM-0015](items/ITEM-0015-split-ci-into-stages.md) | Split CI into stages | task | open | — |
 | [ITEM-0001](items/ITEM-0001-process-scaffolding.md) | Process scaffolding (M0a) | task | done 2026-09-25 | — |
 | [ITEM-0002](items/ITEM-0002-answer-blocking-questions.md) | Answer the questions that block M1 | task | done 2026-09-25 | — |
 | [ITEM-0003](items/ITEM-0003-triage-remaining-questions.md) | Settle the non-blocking questions that M0 needs | task | done 2026-09-25 | — |
@@ -36,6 +37,7 @@
 | [ITEM-0010](items/ITEM-0010-finalise-milestones.md) | Finalise the milestone list and write the milestone stubs | task | done 2026-09-25 | — |
 | [ITEM-0012](items/ITEM-0012-per-item-commit-model.md) | Adopt per-item commits on milestone branches | task | done 2026-09-25 | — |
 | [ITEM-0013](items/ITEM-0013-fix-the-m0-code-review-findings.md) | Fix the M0 code-review findings | bug | done 2026-09-25 | — |
+| [ITEM-0014](items/ITEM-0014-pin-tool-release-binaries-instead-of-building-from.md) | Pin tool release binaries instead of building from source | task | done 2026-09-25 | — |
 
 ## Open questions
 
@@ -53,8 +55,8 @@
 
 ## Requirements
 
-37 requirements, listed in [requirements.md](requirements.md#requirements). 26 aren't referenced by any item yet: REQ-002, REQ-003, REQ-004, REQ-005, REQ-006, REQ-007, REQ-008, REQ-009, REQ-010, REQ-011, REQ-014, REQ-015, REQ-016, REQ-017, REQ-023, REQ-024, REQ-027, REQ-028, REQ-029, REQ-030, REQ-031, REQ-032, REQ-033, REQ-034, REQ-035, REQ-036.
+39 requirements, listed in [requirements.md](requirements.md#requirements). 27 aren't referenced by any item yet: REQ-002, REQ-003, REQ-004, REQ-005, REQ-006, REQ-007, REQ-008, REQ-009, REQ-010, REQ-011, REQ-014, REQ-015, REQ-016, REQ-017, REQ-023, REQ-024, REQ-027, REQ-028, REQ-029, REQ-030, REQ-031, REQ-032, REQ-033, REQ-034, REQ-035, REQ-036, REQ-039.
 
 ## Decisions
 
-13 ADRs (12 accepted, 1 superseded), listed in [docs/adr](../docs/adr/_index.md).
+15 ADRs (13 accepted, 2 superseded), listed in [docs/adr](../docs/adr/_index.md).

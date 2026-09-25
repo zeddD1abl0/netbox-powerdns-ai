@@ -27,9 +27,11 @@ IaC-driven configuration.
 ## Development
 
 Claude develops this project from start to finish, following
-[`CLAUDE.md`](CLAUDE.md). The only prerequisites are Go, Docker, make, and a C
-compiler ([ADR-0013](docs/adr/0013-toolchain-per-tool-modules-and-c-compiler.md)).
-Every other tool is pinned in the repository and fetched on first use.
+[`CLAUDE.md`](CLAUDE.md). Development and CI run on glibc Linux amd64 (Debian
+or Ubuntu). The only prerequisites are Go, Docker, make, curl, tar, and
+sha256sum ([ADR-0014](docs/adr/0014-toolchain-pinned-release-binaries-on-glibc-linux.md)).
+Every other tool is pinned in the repository and fetched on first use. On
+other platforms, `make shell` runs everything inside the CI image.
 
 ```shell
 make            # list every target

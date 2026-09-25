@@ -96,3 +96,36 @@ supported on NetBox 3.6. nbpdns is built as a separate service because:
   in NetBox to every PowerDNS write, and it's exported to a SIEM.
 - **Topologies and change safety.** Server groups, catalog zones, a drift
   policy per zone, change limits, and verification after every apply.
+
+## Answers, 2026-09-25 (after the first GitLab pipeline)
+
+The first GitLab job was evicted when the node ran out of ephemeral storage.
+Measurement showed that building the eight tools from source needed about
+6.5 GB. The user then said:
+
+> Why are we building the tooling from scratch? Do these tools provide
+> binaries that could save us a significant amount of bandwidth if we used
+> them?
+
+> I'd also like the CI process to be split sometime. The whole concept of the
+> CI pipeline is that it should consist of multiple stages, through linting,
+> building, testing, etc. Having a single command is a bit odd. I don't mind if
+> the Makefile itself has a default "Just do everything". But the CI pipelines
+> should definitely have stages, especially when we eventually build in
+> security scanning, point testing, SBOM regression, etc.
+
+> Before you change things, please note that I have no problem switching to a
+> Ubuntu base image, or a Debian base image, or similar. There's no constraints
+> that require an Alpine image at this point in time. The same is true of the
+> base image that we use for Docker builds. While I would prefer to keep the
+> attack surface small, I would also prefer to make things simpler for the
+> future. Building 5 different tooling sets on 3 different OSes just to get
+> around a security issue is not a good plan. Far better to default to a Ubuntu
+> image which uses libc, and deal with the security vulnerability another way.
+
+| Question | Answer |
+|---|---|
+| Which platforms should the pinned tool binaries cover? | "Linux amd64 only for the time being. As the project matures, we'll add arm64. We may even consider Mac and Windows builds, but Linux would be the expected deployment for the moment." |
+
+These are recorded in ADR-0014 (tool binaries), ADR-0015 (glibc images) and
+ADR-0016 (CI stages), and as REQ-038 and REQ-039.

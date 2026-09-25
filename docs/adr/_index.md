@@ -26,6 +26,8 @@ from [`template.md`](template.md).
 | [0010](0010-claude-commits-per-item-on-milestone-branches.md) | Claude commits per item on milestone branches | accepted |
 | [0011](0011-documentation-platform-hugo.md) | Documentation platform — Hugo | accepted |
 | [0012](0012-api-standard.md) | API standard — OpenAPI 3.1 spec-first, Zalando guidelines | accepted |
-| [0013](0013-toolchain-per-tool-modules-and-c-compiler.md) | Self-contained toolchain, revised — per-tool modules and a C compiler | accepted |
+| [0013](0013-toolchain-per-tool-modules-and-c-compiler.md) | Self-contained toolchain, revised — per-tool modules and a C compiler | superseded by ADR-0014 |
+| [0014](0014-toolchain-pinned-release-binaries-on-glibc-linux.md) | Toolchain: pinned release binaries on glibc Linux | accepted |
+| [0015](0015-glibc-based-debian-or-ubuntu-images-for-ci-and-con.md) | glibc-based Debian or Ubuntu images for CI and containers | accepted |
 
 <!-- projctl:adr-index:end -->

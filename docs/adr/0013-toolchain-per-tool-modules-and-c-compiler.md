@@ -1,6 +1,6 @@
 ---
 title: "0013: Self-contained toolchain, revised — per-tool modules and a C compiler"
-status: accepted
+status: superseded by ADR-0014
 date: 2026-09-25
 decision-makers: [jordan]
 requirements: [REQ-022, REQ-026]

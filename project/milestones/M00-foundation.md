@@ -41,7 +41,7 @@ expandable, before writing any product code:
 - [x] `CLAUDE.md`, `project/`, `docs/adr/` and the docs skeleton exist (ITEM-0001).
 - [x] Every blocking question in `requirements.md` is answered (ITEM-0002; Q-055 answered 2026-09-25).
 - [x] ADRs exist for the docs platform, the API standard, and persistence and HA (ITEM-0009: ADR-0011, ADR-0012, ADR-0009).
-- [x] `make check` and `make ci` pass locally with only Go, Docker, make and a C compiler installed (ADR-0013), and in the pinned CI image.
+- [x] `make check` and `make ci` pass locally with only the ADR-0014 prerequisites installed, and in the pinned CI image.
 - [ ] The GitLab CI pipeline passes by calling make targets only.
 - [x] `projctl lint` fails on a deliberately broken item and passes on a clean tree (26 lint cases in `tools/projctl`; `make project-lint` is clean).
 - [ ] The docs site builds. An alert and a Mermaid block render on the site (verified) and raw on GitLab (after the branch is pushed).
@@ -113,9 +113,11 @@ Q-005 to Q-051.
 >   item.
 > - **API versioning:** paths carry no version, not `/api/v1`
 >   ([ADR-0012](../../docs/adr/0012-api-standard.md)).
-> - **Prerequisites and tools:** Go, Docker, make and a C compiler; one module
->   per tool under `tools/`
->   ([ADR-0013](../../docs/adr/0013-toolchain-per-tool-modules-and-c-compiler.md)).
+> - **Prerequisites and tools:** glibc Linux amd64 with Go, Docker, make,
+>   curl, tar and sha256sum; tools pinned as release binaries by SHA-256 in
+>   `tools/tools.mk`
+>   ([ADR-0014](../../docs/adr/0014-toolchain-pinned-release-binaries-on-glibc-linux.md),
+>   which superseded ADR-0013 and ADR-0003).
 > - **Docs platform:** Hugo with the Hextra theme
 >   ([ADR-0011](../../docs/adr/0011-documentation-platform-hugo.md), ITEM-0008).
 
