@@ -37,7 +37,7 @@ VACUUM = $(call tool,vacuum) lint --no-update-check -r api/ruleset.yaml -b -q -d
 check: vet lint test vuln secrets docs-lint api-lint project-lint ## Everything CI checks (formatting is checked by lint)
 
 .PHONY: ci
-ci: check ## The full CI pipeline; CI runs exactly this
+ci: check docs docs-links ## The full CI pipeline; CI runs exactly this
 
 ##@ Go
 
@@ -102,6 +102,28 @@ api-lint: ## Lint api/openapi.yaml against the Zalando ruleset, and self-test th
 .PHONY: vale-sync
 vale-sync: ## Refresh the vendored Vale style packages (needs network)
 	$(call tool,vale) sync
+
+##@ Documentation site
+
+HUGO = $(call tool,hugo) --source site
+
+.PHONY: docs
+docs: ## Build the docs site into site/public (offline: the theme is vendored)
+	$(HUGO) --minify --cleanDestinationDir
+
+.PHONY: docs-serve
+docs-serve: ## Preview the docs site at http://localhost:1313
+	$(HUGO) server
+
+.PHONY: docs-links
+docs-links: ## Check internal links and anchors in the built site (run make docs first)
+	$(call tool,htmltest) -c site/htmltest.yml
+
+.PHONY: docs-theme-update
+docs-theme-update: ## Update the vendored Hextra theme to its latest release (needs network)
+	$(HUGO) mod get -u github.com/imfing/hextra
+	$(HUGO) mod vendor
+	@echo "Update the version in site/Hextra.LICENSE if the license changed."
 
 ##@ Project tracking
 

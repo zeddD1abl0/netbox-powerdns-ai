@@ -1,0 +1,36 @@
+# Hugo site for docs/ (ADR-0011). `make docs` builds it into site/public;
+# `make docs-serve` previews it. The Hextra theme is vendored in site/_vendor,
+# so builds need no network.
+baseURL = "/"
+title = "nbpdns"
+disableKinds = ["taxonomy", "term"]
+
+[module]
+  [module.hugoVersion]
+    min = "0.146.0"
+  [[module.imports]]
+    path = "github.com/imfing/hextra"
+  # The docs stay in docs/; the site only mounts them.
+  [[module.mounts]]
+    source = "../docs"
+    target = "content"
+    files = ["! adr/template.md"]
+
+# Every page uses Hextra's docs layout, with the sidebar.
+[[cascade]]
+  type = "docs"
+
+[markup.goldmark.parser]
+  # Heading IDs match GitHub's, so #anchors work on the site and on the forge.
+  autoHeadingIDType = "github"
+
+[params]
+  # Links to repository files outside docs/ point here (layouts/_markup/render-link.html).
+  sourceURL = "https://github.com/zeddD1abl0/netbox-powerdns-ai/blob/main/"
+  [params.navbar]
+    displayTitle = true
+  [params.search]
+    enable = true
+    type = "flexsearch"
+  [params.editURL]
+    enable = false

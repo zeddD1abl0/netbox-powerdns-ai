@@ -1,0 +1,13 @@
+{{- /*
+  Hextra's heading hook, except that level 1 is dropped: every page starts
+  with its own "# Title" so the raw Markdown reads well (ADR-0011), and the
+  theme already shows the title.
+*/ -}}
+{{- if gt .Level 1 -}}
+<h{{ .Level }} {{- with .Attributes.class }} class="{{ . }}" {{- end }}>
+  {{- .Text | safeHTML -}}
+  <span class="hx:absolute hx:-mt-20" id="{{ .Anchor | safeURL }}"></span>
+  <a href="#{{ .Anchor | safeURL }}" class="subheading-anchor" aria-label="{{ (T "permalinkLabel") | default "Permalink for this section" }}"></a>
+</h{{ .Level }}>
+{{- end -}}
+{{- /* Drop trailing newlines */ -}}

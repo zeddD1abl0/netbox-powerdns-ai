@@ -122,6 +122,7 @@ defaults.
 | `make check` | Everything CI checks: vet, lint (including formatting), tests with `-race`, vulnerability and secrets scans, docs lint, API lint, project lint |
 | `make ci` | Exactly what CI runs |
 | `make fmt` | Format Go code |
+| `make docs`, `make docs-serve` | Build or preview the documentation site |
 | `make project` | Regenerate the board and the ADR index |
 | `make item TITLE="…"`, `make adr TITLE="…"` | Create the next work item or ADR |
 

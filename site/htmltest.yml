@@ -1,0 +1,6 @@
+# htmltest settings for the built docs site (make docs-links).
+DirectoryPath: site/public
+# Offline and deterministic: internal links and #anchors only.
+CheckExternal: false
+IgnoreDirectoryMissingTrailingSlash: true
+OutputDir: site/.htmltest

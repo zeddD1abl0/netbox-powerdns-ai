@@ -1,0 +1,39 @@
+{{- /*
+  Resolves links written for the repository, so the same Markdown works on the
+  forge and on the site:
+  - a relative link to a page in docs/ becomes that page's URL (keeping any
+    #anchor);
+  - a relative link to a file outside docs/ becomes a link to its source
+    (params.sourceURL);
+  - anything else (absolute, external, #anchor-only) is left as written.
+  Markup otherwise follows Hextra's link hook.
+*/ -}}
+{{- $dest := .Destination -}}
+{{- $url := urls.Parse $dest -}}
+{{- $fragment := cond (ne $url.Fragment "") (printf "#%s" $url.Fragment) "" -}}
+{{- if and $url.Path (not $url.Scheme) (not (hasPrefix $dest "/")) -}}
+  {{- $dir := "" -}}
+  {{- with .PageInner.File }}{{ $dir = path.Dir .Path }}{{ end -}}
+  {{- $repoPath := path.Clean (path.Join "docs" $dir $url.Path) -}}
+  {{- if hasPrefix $repoPath "docs/" -}}
+    {{- $contentPath := strings.TrimPrefix "docs/" $repoPath -}}
+    {{- with site.GetPage (printf "/%s" $contentPath) -}}
+      {{- $dest = printf "%s%s" .RelPermalink $fragment -}}
+    {{- else -}}
+      {{- $dest = printf "%s%s%s" site.Params.sourceURL $repoPath $fragment -}}
+    {{- end -}}
+  {{- else -}}
+    {{- $dest = printf "%s%s%s" site.Params.sourceURL $repoPath $fragment -}}
+  {{- end -}}
+{{- end -}}
+{{- $isExternal := hasPrefix $dest "http" -}}
+<a href="{{ $dest | safeURL }}"
+   {{- with .Title }} title="{{ . }}"{{ end -}}
+   {{- if $isExternal }} target="_blank" rel="noopener"{{ end -}}
+>
+  {{- .Text | safeHTML -}}
+  {{- if and site.Params.externalLinkDecoration $isExternal -}}
+    {{- partial "utils/icon.html" (dict "name" "arrow-up-right" "attributes" `class="hx:inline hx:rtl:rotate-270 hx:align-baseline" height="1em" aria-hidden="true"`) -}}
+  {{- end -}}
+</a>
+{{- /* Drop trailing newlines */ -}}
