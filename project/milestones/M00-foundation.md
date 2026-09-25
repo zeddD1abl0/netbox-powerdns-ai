@@ -41,10 +41,10 @@ expandable, before writing any product code:
 - [x] `CLAUDE.md`, `project/`, `docs/adr/` and the docs skeleton exist (ITEM-0001).
 - [x] Every blocking question in `requirements.md` is answered (ITEM-0002; Q-055 answered 2026-09-25).
 - [x] ADRs exist for the docs platform, the API standard, and persistence and HA (ITEM-0009: ADR-0011, ADR-0012, ADR-0009).
-- [ ] `make check` and `make ci` pass locally with only Go, Docker and make installed.
+- [x] `make check` and `make ci` pass locally with only Go, Docker, make and a C compiler installed (ADR-0013), and in the pinned CI image.
 - [ ] The GitLab CI pipeline passes by calling make targets only.
-- [ ] `projctl lint` fails on a deliberately broken item and passes on a clean tree.
-- [ ] The docs site builds. An alert and a Mermaid block render on the site and raw on GitLab.
+- [x] `projctl lint` fails on a deliberately broken item and passes on a clean tree (26 lint cases in `tools/projctl`; `make project-lint` is clean).
+- [ ] The docs site builds. An alert and a Mermaid block render on the site (verified) and raw on GitLab (after the branch is pushed).
 - [ ] Cold-start test passed (ITEM-0011).
 - [x] The milestone list M1 to M8 is finalised, with stub files for M01 to M08 (ITEM-0010).
 - [ ] The user has merged `m00-foundation` (creating `main` from it, since `main` is unborn).
@@ -63,6 +63,21 @@ Append-only and dated. Record what was run and what was seen.
   compound `cd && git commit`, and `git -C … commit`. It allowed `git status`
   and `echo git committed`, and allowed `git commit` on `m00-foundation`. A
   temporary sentinel confirmed it fires live on every Bash call.
+- 2026-09-25: M0c toolchain verified.
+  - `make ci` passes on the host. It also passes inside the pinned CI image
+    (`golang:1.27.1@sha256:3680233e…`), run as a non-root user with
+    `GOTOOLCHAIN=local`: 1m49s with cold caches, 41s with warm ones. It covers
+    vet, lint, test, vuln, secrets, docs-lint, api-lint, project-lint, and the
+    docs build with its link check.
+  - The first cold-cache run found a bug, since fixed: `docs-lint` counted
+    stderr build output as findings.
+  - Negative checks pass:
+    - a banned word fails `docs-lint`;
+    - a broken Zalando rule fails `api-lint`;
+    - a broken anchor and a missing page fail `docs-links`;
+    - 26 broken-fixture cases fail `projctl lint`.
+  - The docs site builds offline, with `GOPROXY=off` and an empty Hugo cache.
+  - The goimports format hook was proven live.
 
 ## Approved design
 
