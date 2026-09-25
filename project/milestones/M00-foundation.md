@@ -102,6 +102,9 @@ Append-only and dated. Record what was run and what was seen.
   - Node sizing advice given to the user: more ephemeral storage for CI
     nodes, and ephemeral-storage requests and limits on build pods. M1's
     container lab will need more disk than lint jobs.
+- 2026-09-25: The user pushed `1a68497` to both remotes, and the first staged
+  pipelines are running. The results, and the next steps for closing M00, are
+  in ITEM-0011's notes.
 
 ## Approved design
 

@@ -51,3 +51,33 @@ the repo alone.
   - The rest were cosmetic or already handled: the M0/M00 naming, the
     one-off M00 branch origin, "about 5" vs "5 or fewer", and the question
     count, which is correct because Q-056 exists.
+- 2026-09-25: **Session ended here. State for the next session:**
+  - `m00-foundation` is at `1a68497` on both `origin` (GitLab) and `github`,
+    and the tree is clean. `make ci` is green locally, and each CI job passed
+    cold in the pinned image (ITEM-0015 notes).
+  - **Waiting on the user.** They'll report:
+    - the GitLab and GitHub pipeline results for `1a68497`, the first run of
+      the staged pipelines;
+    - whether GitLab's file view renders the NOTE alert in `docs/_index.md`
+      and the Mermaid diagram in ADR-0007.
+
+    If a pipeline fails, fix it on this branch: under a new M00 item, or
+    here if it's small. Then ask the user to push again. Claude never pushes.
+  - **Before closing M00, re-run `/code-review high`.** The first review
+    (ITEM-0013) came before ITEM-0014 and ITEM-0015 added `tools/fetch.sh`,
+    `tools/update.sh`, `tools/tools.mk`, `tools/projctl/makefile.go`, the
+    reworked Makefile and the staged CI files. Review those, and fix any
+    findings under a new item.
+  - **Then close:**
+    - tick the two remaining M00 criteria (the GitLab pipeline, and raw
+      rendering on GitLab);
+    - run the `close-milestone` skill;
+    - hand over. The user creates `main` with
+      `git branch main m00-foundation`, pushes it to both remotes, and sets
+      it as the default branch. This is a fast-forward, which keeps the
+      per-item commits.
+  - **Open on the user's side:** runner and node sizing (M00 verification log,
+    and the advice in this session). The lint pipeline now needs under 200 MB
+    per job, but M1's container lab will need much more ephemeral storage.
+  - **After the merge,** M01 starts with a plan-mode design session.
+    13 open questions are needed by M1, plus Q-025; the board groups them.
