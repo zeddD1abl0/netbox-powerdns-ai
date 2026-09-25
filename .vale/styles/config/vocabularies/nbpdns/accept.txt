@@ -79,3 +79,5 @@ blockquote
 auditable
 allowlist
 ArnesSI
+glibc
+musl

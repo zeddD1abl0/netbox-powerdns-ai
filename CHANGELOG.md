@@ -20,7 +20,7 @@ All notable changes to this project are recorded here. The format follows
 - Apache-2.0 license.
 - Decision records ADR-0011 (Hugo for documentation) and ADR-0012 (API
   standard: OpenAPI 3.1 spec-first, Zalando guidelines with no URI versioning).
-- Go module `github.com/zeddD1abl0/netbox-powerdns-ai` on Go 1.27.1. Dev tools
+- Go module `github.com/zeddD1abl0/netbox-powerdns-ai` on Go 1.27.1. Development tools
   are pinned as release binaries by SHA-256 in `tools/tools.mk` (ADR-0014),
   except govulncheck and goimports, which are built from `tools/<name>/go.mod`.
 - Documentation site built with Hugo and the vendored Hextra theme
