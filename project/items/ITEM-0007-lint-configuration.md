@@ -56,3 +56,6 @@ checked rather than remembered.
   - breaking zalando-115 made `make api-lint` fail ("bad.yaml doesn't trigger
     zalando-115-no-version-in-path");
   - adding "simply" to a doc made `make docs-lint` fail.
+- 2026-09-25: The vendored Google style package is MIT-licensed, and the sync
+  didn't include its license. The notice is kept in `.vale/Google.LICENSE`,
+  outside the styles folder so `make vale-sync` can't remove it.
