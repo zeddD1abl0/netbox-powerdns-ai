@@ -2,7 +2,7 @@
 id: ITEM-0005
 title: projctl — scaffold, index and lint the project tracking files
 type: feature
-status: blocked
+status: open
 milestone: M00
 requirements: [REQ-012, REQ-025]
 depends_on: [ITEM-0004]

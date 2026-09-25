@@ -2,7 +2,7 @@
 id: ITEM-0006
 title: Makefile and thin CI wrappers for GitLab and GitHub
 type: task
-status: blocked
+status: open
 milestone: M00
 requirements: [REQ-026]
 depends_on: [ITEM-0004]

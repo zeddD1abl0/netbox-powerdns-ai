@@ -41,7 +41,7 @@ When a question is answered:
 | REQ-023 | v1 manages PowerDNS Authoritative. | Q-001, [ADR-0004](../docs/adr/0004-v1-scope-netbox-source-of-truth-powerdns-auth.md) |
 | REQ-024 | NetBox is the source of truth for DNS data. | Q-002, [ADR-0004](../docs/adr/0004-v1-scope-netbox-source-of-truth-powerdns-auth.md) |
 | REQ-025 | Project work is tracked in the repo, in Markdown. | Q-003, [ADR-0002](../docs/adr/0002-track-work-in-repo.md) |
-| REQ-026 | The project is self-contained and not tied to any forge. | Q-004, [ADR-0003](../docs/adr/0003-self-contained-forge-neutral-toolchain.md) |
+| REQ-026 | The project is self-contained and not tied to any forge. | Q-004, [ADR-0003](../docs/adr/0003-self-contained-forge-neutral-toolchain.md), superseded by [ADR-0013](../docs/adr/0013-toolchain-per-tool-modules-and-c-compiler.md) |
 | REQ-027 | DNS data is read from the NetBox DNS plugin. | Q-006, [ADR-0006](../docs/adr/0006-integrations-netbox-dns-plugin-and-powerdns-api.md) |
 | REQ-028 | The app reaches PowerDNS only through its HTTP API, never through backend databases or zone files. | Q-008, [ADR-0006](../docs/adr/0006-integrations-netbox-dns-plugin-and-powerdns-api.md) |
 | REQ-029 | v1 supports primary → secondaries topologies, including hidden primaries. | Q-009, [ADR-0007](../docs/adr/0007-server-groups-and-catalog-zones.md) |

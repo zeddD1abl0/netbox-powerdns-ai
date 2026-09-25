@@ -16,7 +16,7 @@ from [`template.md`](template.md).
 |---|---|---|
 | [0001](0001-record-architecture-decisions.md) | Record architecture decisions | accepted |
 | [0002](0002-track-work-in-repo.md) | Track work in the repo as small files with generated indexes | accepted |
-| [0003](0003-self-contained-forge-neutral-toolchain.md) | Self-contained, forge-neutral toolchain | accepted |
+| [0003](0003-self-contained-forge-neutral-toolchain.md) | Self-contained, forge-neutral toolchain | superseded by ADR-0013 |
 | [0004](0004-v1-scope-netbox-source-of-truth-powerdns-auth.md) | v1 scope: NetBox is the source of truth, PowerDNS Authoritative is the target | accepted |
 | [0005](0005-project-identity.md) | Project identity: name, module path, env prefix, license | accepted |
 | [0006](0006-integrations-netbox-dns-plugin-and-powerdns-api.md) | Integrations: read the NetBox DNS plugin, write through the PowerDNS API only | accepted |
@@ -26,3 +26,4 @@ from [`template.md`](template.md).
 | [0010](0010-claude-commits-per-item-on-milestone-branches.md) | Claude commits per item on milestone branches | accepted |
 | [0011](0011-documentation-platform-hugo.md) | Documentation platform: Hugo | accepted |
 | [0012](0012-api-standard.md) | API standard: OpenAPI 3.1 spec-first, Zalando guidelines | accepted |
+| [0013](0013-toolchain-per-tool-modules-and-c-compiler.md) | Self-contained toolchain, revised: per-tool modules and a C compiler | accepted |

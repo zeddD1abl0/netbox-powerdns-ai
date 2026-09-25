@@ -27,6 +27,6 @@ IaC-driven configuration.
 ## Development
 
 Claude develops this project from start to finish, following
-[`CLAUDE.md`](CLAUDE.md). The only prerequisites are Go, Docker and make
-([ADR-0003](docs/adr/0003-self-contained-forge-neutral-toolchain.md)). Build
+[`CLAUDE.md`](CLAUDE.md). The only prerequisites are Go, Docker, make and a C compiler
+([ADR-0013](docs/adr/0013-toolchain-per-tool-modules-and-c-compiler.md)). Build
 commands arrive with the M0 toolchain work.

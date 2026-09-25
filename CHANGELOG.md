@@ -20,5 +20,7 @@ All notable changes to this project are recorded here. The format follows
 - Apache-2.0 license.
 - Decision records ADR-0011 (Hugo for documentation) and ADR-0012 (API
   standard: OpenAPI 3.1 spec-first, Zalando guidelines with no URI versioning).
+- Go module `github.com/zeddD1abl0/netbox-powerdns-ai` on Go 1.27.1, with dev
+  tools pinned one module per tool under `tools/` (ADR-0013).
 - Per-item commits on milestone branches (ADR-0010), with a hook that blocks
   commits on `main`.

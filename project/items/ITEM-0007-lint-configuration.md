@@ -2,7 +2,7 @@
 id: ITEM-0007
 title: Lint configuration for Go, OpenAPI and documentation
 type: task
-status: blocked
+status: open
 milestone: M00
 requirements: [REQ-019, REQ-020, REQ-021]
 depends_on: [ITEM-0004]

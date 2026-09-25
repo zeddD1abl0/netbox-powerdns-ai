@@ -5,6 +5,7 @@ date: YYYY-MM-DD
 decision-makers: []
 requirements: [] # REQ-nnn this decision serves
 questions: [] # Q-nnn this decision answers
+supersedes: # ADR-NNNN this replaces, if any
 ---
 
 # NNNN: Short title of the decision

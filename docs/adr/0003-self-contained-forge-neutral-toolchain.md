@@ -1,6 +1,6 @@
 ---
 title: "0003: Self-contained, forge-neutral toolchain"
-status: accepted
+status: superseded by ADR-0013
 date: 2026-09-25
 decision-makers: [jordan]
 requirements: [REQ-022, REQ-026]

@@ -62,8 +62,9 @@ lives in `project/`, and decisions live in `docs/adr/`.
 
 ## Principles
 
-1. **Self-contained and not tied to a forge** ([ADR-0003](docs/adr/0003-self-contained-forge-neutral-toolchain.md)).
-   The only prerequisites are Go, Docker and make. Pin every tool in the repo.
+1. **Self-contained and not tied to a forge** ([ADR-0013](docs/adr/0013-toolchain-per-tool-modules-and-c-compiler.md)).
+   The only prerequisites are Go, Docker, make and a C compiler. Pin every tool
+   in the repo, one module per tool under `tools/`.
    CI files only call make targets. Vendor UI assets; no CDNs. Don't rely on
    forge features (issues, wiki, Pages).
 2. **One source, generated references.** Config keys, metrics, audit events and

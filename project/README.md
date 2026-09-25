@@ -27,16 +27,16 @@ that. Until then, update it by hand in the same change as the items it lists.
 
 | Item | Title | Status | Waiting on |
 |---|---|---|---|
-| [ITEM-0004](items/ITEM-0004-go-modules-and-pinned-tools.md) | Go module, pinned tools module and license | open | — |
-| [ITEM-0008](items/ITEM-0008-docs-site.md) | Documentation site build and theme spike | open | ITEM-0004 |
+| [ITEM-0008](items/ITEM-0008-docs-site.md) | Documentation site build and theme spike | open | — |
 | [ITEM-0011](items/ITEM-0011-cold-start-test.md) | Cold-start test and M0 close | open | all other M00 items |
-| [ITEM-0005](items/ITEM-0005-projctl.md) | projctl: scaffold, index and lint the tracking files | blocked | ITEM-0004 |
-| [ITEM-0006](items/ITEM-0006-makefile-and-ci-wrappers.md) | Makefile and thin CI wrappers for GitLab and GitHub | blocked | ITEM-0004 |
-| [ITEM-0007](items/ITEM-0007-lint-configuration.md) | Lint configuration for Go, OpenAPI and documentation | blocked | ITEM-0004 |
+| [ITEM-0005](items/ITEM-0005-projctl.md) | projctl: scaffold, index and lint the tracking files | open | — |
+| [ITEM-0006](items/ITEM-0006-makefile-and-ci-wrappers.md) | Makefile and thin CI wrappers for GitLab and GitHub | open | — |
+| [ITEM-0007](items/ITEM-0007-lint-configuration.md) | Lint configuration for Go, OpenAPI and documentation | open | — |
 | [ITEM-0001](items/ITEM-0001-process-scaffolding.md) | Process scaffolding (M0a) | done 2026-09-25 | — |
 | [ITEM-0002](items/ITEM-0002-answer-blocking-questions.md) | Answer the questions that block M1 | done 2026-09-25 | — |
 | [ITEM-0003](items/ITEM-0003-triage-remaining-questions.md) | Settle the non-blocking questions that M0 needs | done 2026-09-25 | — |
 | [ITEM-0009](items/ITEM-0009-foundation-adrs.md) | ADRs: docs platform, API standard, persistence and HA | done 2026-09-25 | — |
+| [ITEM-0004](items/ITEM-0004-go-modules-and-pinned-tools.md) | Go module, pinned tools and license | done 2026-09-25 | — |
 | [ITEM-0010](items/ITEM-0010-finalise-milestones.md) | Finalise the milestone list and write the milestone stubs | done 2026-09-25 | — |
 | [ITEM-0012](items/ITEM-0012-per-item-commit-model.md) | Adopt per-item commits on milestone branches | done 2026-09-25 | — |
 
@@ -53,5 +53,5 @@ here once `projctl` exists.
 
 ## Decisions
 
-ADR-0001 to ADR-0012, all accepted, are listed in
-[docs/adr](../docs/adr/_index.md).
+ADR-0001 to ADR-0013 are listed in [docs/adr](../docs/adr/_index.md). All are
+accepted except ADR-0003, which ADR-0013 supersedes.
