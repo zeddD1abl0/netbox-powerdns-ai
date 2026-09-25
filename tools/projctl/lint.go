@@ -358,6 +358,8 @@ func scriptLines(n *yaml.Node, keys []string) []string {
 			for _, c := range v.Content {
 				scalars(c)
 			}
+		default:
+			// Mappings and documents hold no commands at this level.
 		}
 	}
 	var walk func(*yaml.Node)
@@ -375,6 +377,8 @@ func scriptLines(n *yaml.Node, keys []string) []string {
 					walk(v.Content[i+1])
 				}
 			}
+		default:
+			// Scalars and aliases outside a script key hold no commands.
 		}
 	}
 	walk(n)

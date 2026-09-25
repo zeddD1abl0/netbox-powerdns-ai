@@ -17,4 +17,4 @@ by hand:
 | Metrics | the metrics registry | M1 |
 | Audit events | the audit event registry | M1 |
 | Permissions | the permission registry | M2 |
-| Command line | the CLI definitions | M1 |
+| Command line | the command-line definitions | M1 |

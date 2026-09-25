@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -113,8 +114,7 @@ func writeNew(root, rel, content string) error {
 		return err
 	}
 	if _, err := f.WriteString(content); err != nil {
-		f.Close()
-		return err
+		return errors.Join(err, f.Close())
 	}
 	return f.Close()
 }

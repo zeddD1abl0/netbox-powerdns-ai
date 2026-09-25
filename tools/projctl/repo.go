@@ -114,7 +114,7 @@ func Load(root string) (*Repo, []Problem, error) {
 	}
 	r.Reqs, probs = reqs, append(probs, rp...)
 
-	err = eachFile(root, itemsDir, func(rel string, name string, src []byte) {
+	err = eachFile(root, itemsDir, func(rel, _ string, src []byte) {
 		it := &Item{Path: rel}
 		if p := decode(rel, src, &it.FM, &it.H1); p != nil {
 			probs = append(probs, *p)
@@ -126,7 +126,7 @@ func Load(root string) (*Repo, []Problem, error) {
 		return nil, nil, err
 	}
 
-	err = eachFile(root, milestonesDir, func(rel string, name string, src []byte) {
+	err = eachFile(root, milestonesDir, func(rel, _ string, src []byte) {
 		m := &Milestone{Path: rel}
 		if p := decode(rel, src, &m.FM, &m.H1); p != nil {
 			probs = append(probs, *p)
@@ -138,7 +138,7 @@ func Load(root string) (*Repo, []Problem, error) {
 		return nil, nil, err
 	}
 
-	err = eachFile(root, adrDir, func(rel string, name string, src []byte) {
+	err = eachFile(root, adrDir, func(rel, name string, src []byte) {
 		if name == "_index.md" || name == "template.md" {
 			return
 		}

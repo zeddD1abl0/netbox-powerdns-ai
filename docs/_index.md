@@ -16,7 +16,7 @@ page belongs to exactly one section.
 |---|---|---|
 | [Tutorials](tutorials/) | learn by doing, start to finish | New operators |
 | [How-to guides](how-to/) | complete a specific task | Operators, IaC authors |
-| [Reference](reference/) | look up a fact: API, config keys, metrics, audit events | Everyone |
+| [Reference](reference/) | look up a fact, such as an API endpoint, config key, metric, or audit event | Everyone |
 | [Explanation](explanation/) | understand how and why it works | Operators, security reviewers |
 | [Decision records](adr/) | see why a design choice was made | Contributors, reviewers |
 | [Contributing](contributing/) | change the project or its docs | Contributors |

@@ -1,0 +1,105 @@
+openapi: 3.1.0
+info:
+  title: Ruleset self-test (good)
+  version: 1.0.0
+  description: A small spec that follows every rule in api/ruleset.yaml.
+  contact:
+    name: nbpdns
+    url: https://github.com/zeddD1abl0/netbox-powerdns-ai
+servers:
+  - url: https://nbpdns.example.com/api
+security:
+  - bearer: []
+tags:
+  - name: server-groups
+    description: PowerDNS server groups.
+paths:
+  /server-groups/{group_id}:
+    get:
+      operationId: getServerGroup
+      summary: Get a server group
+      description: Returns one server group.
+      tags: [server-groups]
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          description: The server group's ID.
+          schema:
+            type: string
+        - name: include_members
+          in: query
+          description: Whether to include member servers.
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: The server group.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerGroup"
+              example:
+                group_id: site-a
+                display_name: Site A
+        "404":
+          description: No such server group.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: about:blank
+                title: Not Found
+                status: 404
+                detail: No server group has the ID site-z.
+        default:
+          description: Any other error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: about:blank
+                title: Internal Server Error
+                status: 500
+components:
+  securitySchemes:
+    bearer:
+      description: An API token, sent as a bearer token.
+      type: http
+      scheme: bearer
+  schemas:
+    ServerGroup:
+      description: A PowerDNS primary and its secondaries.
+      type: object
+      example:
+        group_id: site-a
+        display_name: Site A
+      properties:
+        group_id:
+          type: string
+          example: site-a
+        display_name:
+          type: string
+          example: Site A
+    Problem:
+      description: An RFC 9457 problem detail.
+      type: object
+      example:
+        type: about:blank
+        title: Not Found
+        status: 404
+      properties:
+        type:
+          type: string
+          example: about:blank
+        title:
+          type: string
+          example: Not Found
+        status:
+          type: integer
+          example: 404
+        detail:
+          type: string
+          example: No server group has the ID site-z.

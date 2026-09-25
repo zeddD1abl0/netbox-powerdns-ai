@@ -1,0 +1,101 @@
+# The Zalando RESTful API Guidelines as vacuum/Spectral rules (ADR-0012).
+# Numbers in brackets are Zalando rule numbers:
+# https://opensource.zalando.com/restful-api-guidelines/
+#
+# Keys are selected with JSONPath's "~" (vacuum doesn't support field: "@key").
+#
+# `make api-lint` runs these against api/openapi.yaml, and self-tests them
+# against api/testdata/: good.yaml must pass, and bad.yaml must break every
+# zalando-* rule below.
+#
+# Not expressible with core functions, so enforced in review instead:
+# [134] pluralized resource names, [110] compatible evolution (a spec diff
+# check is planned before v1.0), [181] Idempotency-Key semantics, [182] ETag
+# and If-Match semantics.
+extends: [[spectral:oas, recommended]]
+
+rules:
+  # Meta information [218]: the recommended rules are raised to errors.
+  info-contact: error
+  info-description: error
+  # vacuum's recommended set expects camelCase properties; Zalando [118]
+  # requires snake_case, which zalando-118-snake-case-properties enforces.
+  camel-case-properties: off
+
+  zalando-104-secure-endpoints:
+    description: "MUST secure endpoints [104]: define global security."
+    severity: error
+    given: $
+    then:
+      field: security
+      function: truthy
+
+  zalando-115-no-version-in-path:
+    description: "MUST not use URI versioning [115]."
+    severity: error
+    given: $.paths[*]~
+    then:
+      function: pattern
+      functionOptions:
+        notMatch: "/v[0-9]+(/|$)"
+
+  zalando-116-semantic-version:
+    description: "MUST use semantic versioning [116] in info.version."
+    severity: error
+    given: $.info
+    then:
+      field: version
+      function: pattern
+      functionOptions:
+        match: "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+
+  zalando-118-snake-case-properties:
+    description: "MUST use snake_case for property names [118]."
+    severity: error
+    given: $..properties[*]~
+    then:
+      function: pattern
+      functionOptions:
+        match: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"
+
+  zalando-129-kebab-case-paths:
+    description: "MUST use lowercase words separated by hyphens in path segments [129]."
+    severity: error
+    given: $.paths[*]~
+    then:
+      function: pattern
+      functionOptions:
+        match: "^(/([a-z0-9]+(-[a-z0-9]+)*|\\{[a-z][a-z0-9_]*\\}))+$"
+
+  zalando-130-snake-case-query-parameters:
+    description: "MUST use snake_case for query parameters [130]."
+    severity: error
+    given: $..parameters[?(@.in == 'query')]
+    then:
+      field: name
+      function: pattern
+      functionOptions:
+        match: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"
+
+  zalando-176-problem-json:
+    description: "MUST use problem JSON (RFC 9457) for error responses [176]."
+    severity: error
+    given: "$.paths[*][*].responses[?(match(@property, '^([45][0-9][0-9]|default)$'))]"
+    then:
+      field: content
+      function: schema
+      functionOptions:
+        schema:
+          type: object
+          required: ["application/problem+json"]
+
+  zalando-243-official-status-codes:
+    description: "MUST use official HTTP status codes [243]."
+    severity: error
+    given: $.paths[*][*].responses[*]~
+    then:
+      function: enumeration
+      functionOptions:
+        values: ["default", "200", "201", "202", "204", "207", "301", "303", "304", "307", "308",
+                 "400", "401", "403", "404", "405", "406", "408", "409", "410", "412", "415",
+                 "422", "423", "428", "429", "500", "501", "502", "503", "504"]

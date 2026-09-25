@@ -1,0 +1,11 @@
+# Words the documentation style guide says to leave out.
+extends: existence
+message: "Leave out '%s' (docs/contributing/documentation-style.md)."
+level: error
+ignorecase: true
+tokens:
+  - simply
+  - easily
+  - powerful
+  - seamless
+  - seamlessly

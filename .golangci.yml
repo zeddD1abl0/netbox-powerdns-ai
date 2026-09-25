@@ -1,0 +1,57 @@
+# golangci-lint v2 configuration for every Go module in the repository.
+# Run it with `make lint`. Each exclusion below says why it exists.
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  # standard = errcheck, govet, ineffassign, staticcheck, unused.
+  default: standard
+  enable:
+    - bodyclose # unclosed HTTP response bodies leak connections
+    - contextcheck # functions that should pass a context along
+    - copyloopvar # redundant loop-variable copies (Go 1.22+ semantics)
+    - errname # sentinel errors named errFoo / ErrFoo, error types named FooError
+    - errorlint # compare and wrap errors with errors.Is/As and %w
+    - exhaustive # switches over enums cover every value
+    - gocritic # a broad set of correctness and style checks
+    - gosec # security problems
+    - misspell # common misspellings in comments and strings
+    - noctx # HTTP requests built without a context
+    - nolintlint # //nolint directives must be specific and explained
+    - revive # the successor to golint
+    - rowserrcheck # sql.Rows.Err is checked
+    - sqlclosecheck # sql.Rows and sql.Stmt are closed
+    - unconvert # unnecessary type conversions
+    - unparam # unused function parameters and results
+    - usestdlibvars # use net/http constants instead of literals
+  settings:
+    misspell:
+      locale: US # the Google developer documentation style guide uses US spelling
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    exhaustive:
+      default-signifies-exhaustive: true
+  exclusions:
+    presets:
+      - comments # revive's exported-comment rules; doc comments are reviewed, not linted
+      - std-error-handling # unchecked fmt.Fprint*, Close and os.Remove where failure can't be acted on
+      - common-false-positives
+    rules:
+      # projctl is a dev tool that reads and writes files in its own repository:
+      # paths come from the repo, written files are normal 0644 repo files, and
+      # there is no untrusted party to race a symlink against.
+      - path: tools/projctl/
+        linters: [gosec]
+        text: "G122|G301|G302|G304|G306"
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/zeddD1abl0/netbox-powerdns-ai

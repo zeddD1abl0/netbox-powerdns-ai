@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"maps"
 	"os"
@@ -31,7 +32,7 @@ var baseRepo = map[string]string{
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
 | Q-001 | **Blocking.** Which thing? | This one. | M01 |
-| Q-003 | Which colour? | Blue. | M01 |
+| Q-003 | Which color? | Blue. | M01 |
 
 ## Answered
 
@@ -179,7 +180,9 @@ func writeRepo(t *testing.T, overrides map[string]string, generateFirst bool) st
 		for p, c := range files {
 			full := filepath.Join(dir, filepath.FromSlash(p))
 			if c == "" {
-				os.Remove(full)
+				if err := os.Remove(full); err != nil && !errors.Is(err, os.ErrNotExist) {
+					t.Fatal(err)
+				}
 				continue
 			}
 			if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
@@ -309,7 +312,7 @@ func TestLinksIgnoreCodeAndComments(t *testing.T) {
 func TestSlugify(t *testing.T) {
 	tests := map[string]string{
 		"0005: Project identity — name, module path":                       "0005-project-identity--name-module-path",
-		"4. Proposed milestones (provisional, finalised at the end of M0)": "4-proposed-milestones-provisional-finalised-at-the-end-of-m0",
+		"4. Proposed milestones (provisional, finalized at the end of M0)": "4-proposed-milestones-provisional-finalized-at-the-end-of-m0",
 		"Answers, 2026-09-25 (M0b discovery, continued)":                   "answers-2026-09-25-m0b-discovery-continued",
 		"`code` and [a link](x.md)":                                        "code-and-a-link",
 		"snake_case stays":                                                 "snake_case-stays",

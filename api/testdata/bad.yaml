@@ -1,0 +1,44 @@
+openapi: 3.1.0
+info:
+  title: Ruleset self-test (bad)
+  version: v1
+  description: Breaks every zalando-* rule in api/ruleset.yaml.
+  contact:
+    name: nbpdns
+    url: https://github.com/zeddD1abl0/netbox-powerdns-ai
+servers:
+  - url: https://nbpdns.example.com/api
+tags:
+  - name: groups
+    description: Groups.
+paths:
+  /v1/serverGroups:
+    get:
+      operationId: listServerGroups
+      summary: List server groups
+      description: Lists server groups.
+      tags: [groups]
+      parameters:
+        - name: pageSize
+          in: query
+          description: Page size.
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: The server groups.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  groupList:
+                    type: array
+                    items:
+                      type: string
+        "418":
+          description: A teapot.
+          content:
+            application/json:
+              schema:
+                type: object

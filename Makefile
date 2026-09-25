@@ -13,6 +13,50 @@ tool = go tool -modfile=$(ROOT)/tools/$(1)/go.mod $(1)
 
 PROJCTL := go -C tools/projctl run . -root $(ROOT)
 
+# Go modules that fmt, vet, lint, test and vuln cover. A module with no
+# packages yet (the root, until M1) is skipped.
+GO_MODULES := . tools/projctl
+
+# $(call each_module,COMMAND) runs COMMAND inside every Go module with packages.
+define each_module
+	@for m in $(GO_MODULES); do \
+		if [ -z "$$(go -C $$m list ./... 2>/dev/null)" ]; then echo "$$m: no packages yet, skipped"; continue; fi; \
+		echo "$$m: $(1)"; \
+		( cd $$m && $(1) ); \
+	done
+endef
+
+# Prose that Vale checks (docs/contributing/documentation-style.md).
+VALE_FILES := docs README.md CHANGELOG.md
+
+VACUUM = $(call tool,vacuum) lint --no-update-check -r api/ruleset.yaml -b -q -d --no-clip
+
+##@ Checks
+
+.PHONY: lint
+lint: ## Lint Go code with golangci-lint
+	$(call each_module,$(call tool,golangci-lint) run --config $(ROOT)/.golangci.yml ./...)
+
+.PHONY: docs-lint
+docs-lint: ## Lint prose with Vale; any finding fails (Vale needs a C compiler, ADR-0013)
+	@out=$$($(call tool,vale) --output=line --glob='!**/template.md' $(VALE_FILES) 2>&1) || true; \
+	if [ -n "$$out" ]; then echo "$$out"; exit 1; fi; \
+	echo "vale: no findings in $(VALE_FILES)"
+
+.PHONY: api-lint
+api-lint: ## Lint api/openapi.yaml against the Zalando ruleset, and self-test the ruleset
+	@$(VACUUM) api/testdata/good.yaml > /dev/null || { $(VACUUM) api/testdata/good.yaml; echo "api/testdata/good.yaml should pass"; exit 1; }
+	@out=$$($(VACUUM) api/testdata/bad.yaml 2>&1) && { echo "api/testdata/bad.yaml passed; the ruleset has stopped catching problems"; exit 1; }; \
+	for rule in $$(grep -oE '^  zalando-[a-z0-9-]+' api/ruleset.yaml); do \
+		grep -q -- "$$rule" <<< "$$out" || { echo "api/testdata/bad.yaml doesn't trigger $$rule"; exit 1; }; \
+	done; \
+	echo "api ruleset: self-test passed"
+	@if [ -f api/openapi.yaml ]; then $(VACUUM) api/openapi.yaml; else echo "api/openapi.yaml doesn't exist yet (M1)"; fi
+
+.PHONY: vale-sync
+vale-sync: ## Refresh the vendored Vale style packages (needs network)
+	$(call tool,vale) sync
+
 ##@ Project tracking
 
 .PHONY: project
