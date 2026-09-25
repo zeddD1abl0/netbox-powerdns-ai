@@ -87,6 +87,23 @@ the live state of the open questions, see
 [requirements.md](../requirements.md), which numbers the gaps below as
 Q-005 to Q-051.
 
+> [!IMPORTANT]
+> These points in the snapshot have since been superseded. Follow the ADRs:
+>
+> - **Commits:** Claude commits each item on the milestone branch, and the
+>   user merges ([ADR-0010](../../docs/adr/0010-claude-commits-per-item-on-milestone-branches.md)).
+>   The user no longer commits, and `git commit` isn't set to ask. `git push`
+>   still asks.
+> - **CHANGELOG:** only user-facing changes get a line (`CLAUDE.md`), not every
+>   item.
+> - **API versioning:** paths carry no version, not `/api/v1`
+>   ([ADR-0012](../../docs/adr/0012-api-standard.md)).
+> - **Prerequisites and tools:** Go, Docker, make and a C compiler; one module
+>   per tool under `tools/`
+>   ([ADR-0013](../../docs/adr/0013-toolchain-per-tool-modules-and-c-compiler.md)).
+> - **Docs platform:** Hugo with the Hextra theme
+>   ([ADR-0011](../../docs/adr/0011-documentation-platform-hugo.md), ITEM-0008).
+
 ### netbox-powerdns-ai: project foundation plan
 
 #### Context

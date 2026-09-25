@@ -18,7 +18,7 @@ lives in `project/`, and decisions live in `docs/adr/`.
 |---|---|
 | The original brief and dated answers (append-only) | [`project/brief.md`](project/brief.md) |
 | Requirements (`REQ-nnn`) and open questions (`Q-nnn`) | [`project/requirements.md`](project/requirements.md) |
-| Milestones: goal, non-goals, approved design, acceptance, verification log | `project/milestones/Mnn-*.md` |
+| Milestones: goal, non-goals, approved design (a snapshot: where it disagrees with an ADR or this file, they win), acceptance, verification log | `project/milestones/Mnn-*.md` |
 | Work items: features, bugs, debt, tasks | `project/items/ITEM-nnnn-*.md` |
 | Decisions and their rationale | `docs/adr/nnnn-*.md` |
 | Product documentation (Diátaxis) | `docs/tutorials/`, `docs/how-to/`, `docs/reference/`, `docs/explanation/` |

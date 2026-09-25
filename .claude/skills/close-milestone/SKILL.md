@@ -18,7 +18,9 @@ and report what's outstanding. Don't mark the milestone done.
    ticked, and each tick is backed by evidence you can point to.
 3. **Checks.** Run `make check`, and `make test-integration` if the milestone
    touched NetBox, PowerDNS or the database. Both must be green. Paste the
-   summary into the milestone's **Verification log**, with the date.
+   summary into the milestone's **Verification log**, with the date. Forge
+   pipeline results come from the user: ask them to push the milestone branch
+   and report the GitLab and GitHub results. Claude never pushes.
 4. **Reviews.** Run `/code-review high`. Also run `/security-review` if the
    milestone touched authentication, authorisation, audit, secrets or crypto.
    Fix what they find, or record each finding as an item with a reason.

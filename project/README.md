@@ -23,7 +23,7 @@
 
 | Item | Title | Type | Status | Waiting on |
 |---|---|---|---|---|
-| [ITEM-0011](items/ITEM-0011-cold-start-test.md) | Cold-start test and M0 close | task | open | — |
+| [ITEM-0011](items/ITEM-0011-cold-start-test.md) | Cold-start test and M0 close | task | in-progress | — |
 | [ITEM-0001](items/ITEM-0001-process-scaffolding.md) | Process scaffolding (M0a) | task | done 2026-09-25 | — |
 | [ITEM-0002](items/ITEM-0002-answer-blocking-questions.md) | Answer the questions that block M1 | task | done 2026-09-25 | — |
 | [ITEM-0003](items/ITEM-0003-triage-remaining-questions.md) | Settle the non-blocking questions that M0 needs | task | done 2026-09-25 | — |
