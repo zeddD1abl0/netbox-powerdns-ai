@@ -31,7 +31,51 @@ VALE_FILES := docs README.md CHANGELOG.md
 
 VACUUM = $(call tool,vacuum) lint --no-update-check -r api/ruleset.yaml -b -q -d --no-clip
 
-##@ Checks
+##@ Pipeline
+
+.PHONY: check
+check: vet lint test vuln secrets docs-lint api-lint project-lint ## Everything CI checks (formatting is checked by lint)
+
+.PHONY: ci
+ci: check ## The full CI pipeline; CI runs exactly this
+
+##@ Go
+
+.PHONY: fmt
+fmt: ## Format Go code with the configured formatters (gofmt, goimports)
+	$(call each_module,$(call tool,golangci-lint) fmt --config $(ROOT)/.golangci.yml ./...)
+
+.PHONY: vet
+vet: ## Run go vet
+	$(call each_module,go vet ./...)
+
+.PHONY: test
+test: ## Run unit tests with the race detector
+	$(call each_module,go test -race ./...)
+
+.PHONY: test-integration
+test-integration: ## Run integration tests (build tag "integration") against the container lab
+	$(call each_module,go test -race -tags integration ./...)
+
+.PHONY: vuln
+vuln: ## Check dependencies for known vulnerabilities (needs network for the vuln DB)
+	$(call each_module,$(call tool,govulncheck) ./...)
+
+.PHONY: secrets
+secrets: ## Scan the git history for committed secrets
+	$(call tool,gitleaks) git --no-banner --redact .
+
+.PHONY: tools-update
+tools-update: ## Update every pinned tool and projctl's dependencies to their latest versions
+	@for d in tools/*/; do \
+		t=$$(basename $$d); \
+		if [ "$$t" = projctl ]; then go -C $$d get -u ./... && go -C $$d mod tidy; continue; fi; \
+		pkg=$$(awk '/^tool /{print $$2}' $$d/go.mod); \
+		echo "$$t: $$pkg@latest"; \
+		go -C $$d get -tool $$pkg@latest && go -C $$d mod tidy; \
+	done
+
+##@ Linters
 
 .PHONY: lint
 lint: ## Lint Go code with golangci-lint
@@ -39,8 +83,10 @@ lint: ## Lint Go code with golangci-lint
 
 .PHONY: docs-lint
 docs-lint: ## Lint prose with Vale; any finding fails (Vale needs a C compiler, ADR-0013)
-	@out=$$($(call tool,vale) --output=line --glob='!**/template.md' $(VALE_FILES) 2>&1) || true; \
+	@# Findings go to stdout; build output and errors go to stderr and stay visible.
+	@rc=0; out=$$($(call tool,vale) --output=line --glob='!**/template.md' $(VALE_FILES)) || rc=$$?; \
 	if [ -n "$$out" ]; then echo "$$out"; exit 1; fi; \
+	if [ $$rc -ne 0 ]; then echo "vale failed (exit $$rc)"; exit $$rc; fi; \
 	echo "vale: no findings in $(VALE_FILES)"
 
 .PHONY: api-lint

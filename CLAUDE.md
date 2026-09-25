@@ -115,17 +115,14 @@ defaults.
 
 ## Commands
 
-The toolchain arrives in M0 (ITEM-0004 to ITEM-0008). Until then there are no
-build commands. The planned targets:
+`make` lists every target. The ones used most:
 
 | Command | Does |
 |---|---|
-| `make check` | Everything CI checks: fmt, lint, vet, tests with `-race`, vuln scan, OpenAPI lint, docs lint, `projctl lint` |
-| `make ci` | The full CI pipeline, run locally |
-| `make test-integration` | Integration tests against containerised NetBox and PowerDNS |
-| `make docs` | Build the documentation site |
+| `make check` | Everything CI checks: vet, lint (including formatting), tests with `-race`, vulnerability and secrets scans, docs lint, API lint, project lint |
+| `make ci` | Exactly what CI runs |
+| `make fmt` | Format Go code |
 | `make project` | Regenerate the board and the ADR index |
-| `make project-lint` | Check tracking files, Markdown links and CI files |
 | `make item TITLE="…"`, `make adr TITLE="…"` | Create the next work item or ADR |
 
 ## Definition of Done

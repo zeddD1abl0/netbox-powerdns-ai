@@ -1,0 +1,32 @@
+# CI for nbpdns on GitLab. All logic lives in the Makefile (ADR-0013); this file
+# only picks the image and runs `make ci`. `make project-lint` rejects any
+# script line that isn't a make target.
+#
+# The image is the official Go image, pinned by digest. It ships Go 1.27.1 (the
+# toolchain in go.mod), gcc (Vale needs cgo), make and git.
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+
+variables:
+  GIT_DEPTH: "0" # gitleaks scans the whole history
+  GOTOOLCHAIN: local # the image must match go.mod's toolchain; never download one
+  GOMODCACHE: $CI_PROJECT_DIR/.cache/gomod
+  GOCACHE: $CI_PROJECT_DIR/.cache/gobuild
+  GOLANGCI_LINT_CACHE: $CI_PROJECT_DIR/.cache/golangci-lint
+
+ci:
+  image: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
+  cache:
+    key:
+      files:
+        - go.mod
+        - tools/projctl/go.sum
+    paths:
+      - .cache/
+  script:
+    - make ci

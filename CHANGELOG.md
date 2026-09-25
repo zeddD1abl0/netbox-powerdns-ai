@@ -22,6 +22,8 @@ All notable changes to this project are recorded here. The format follows
   standard: OpenAPI 3.1 spec-first, Zalando guidelines with no URI versioning).
 - Go module `github.com/zeddD1abl0/netbox-powerdns-ai` on Go 1.27.1, with dev
   tools pinned one module per tool under `tools/` (ADR-0013).
+- `make` as the single entry point (`make help` lists the targets), and CI for
+  GitLab and GitHub that runs only `make ci` in a digest-pinned Go image.
 - Linting: golangci-lint (`make lint`), Vale with the vendored Google style
   (`make docs-lint`), and a self-tested Zalando ruleset for OpenAPI
   (`make api-lint`).
