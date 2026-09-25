@@ -17,5 +17,6 @@ All notable changes to this project are recorded here. The format follows
   NetBox DNS plugin and PowerDNS-API-only integrations, server groups with
   catalog zones, drift policy per zone, and PostgreSQL/SQLite persistence with
   HA.
+- Apache-2.0 license.
 - Per-item commits on milestone branches (ADR-0010), with a hook that blocks
   commits on `main`.
