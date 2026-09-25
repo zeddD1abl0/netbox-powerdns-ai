@@ -25,8 +25,10 @@ All notable changes to this project are recorded here. The format follows
   except govulncheck and goimports, which are built from `tools/<name>/go.mod`.
 - Documentation site built with Hugo and the vendored Hextra theme
   (`make docs`, `make docs-serve`), with internal links checked by htmltest.
-- `make` as the single entry point (`make help` lists the targets), and CI for
-  GitLab and GitHub that runs only `make ci` in a digest-pinned Go image.
+- `make` as the single entry point (`make help` lists the targets). CI for
+  GitLab and GitHub runs in stages (lint, test, build, security). Each job runs
+  make targets in a digest-pinned Go image, and `make project-lint` keeps the
+  jobs in step with `make ci`.
 - Linting: golangci-lint (`make lint`), Vale with the vendored Google style
   (`make docs-lint`), and a self-tested Zalando ruleset for OpenAPI
   (`make api-lint`).

@@ -1,6 +1,7 @@
-# CI for nbpdns on GitHub. All logic lives in the Makefile (ADR-0013); this
-# workflow only checks out the code in the pinned Go image and runs `make ci`.
-# `make project-lint` rejects any run line that isn't a make target.
+# CI for nbpdns on GitHub, mirroring .gitlab-ci.yml's stages with `needs`
+# (ADR-0016): lint, then test, then build, then security. Every job only runs
+# make targets (ADR-0014). `make project-lint` checks that together the jobs
+# run exactly what `make ci` runs, in the Makefile's CI_IMAGE.
 name: ci
 
 on:
@@ -10,20 +11,91 @@ on:
 permissions:
   contents: read
 
+env:
+  GOTOOLCHAIN: local
+  # The checkout is owned by the runner's user, not the container's root.
+  GIT_CONFIG_COUNT: "1"
+  GIT_CONFIG_KEY_0: safe.directory
+  GIT_CONFIG_VALUE_0: "*"
+
 jobs:
-  ci:
+  # Stage: lint
+  go-lint:
     runs-on: ubuntu-latest
-    # The official Go image, pinned by digest: Go 1.27.1, gcc, make and git.
     container: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
-    env:
-      GOTOOLCHAIN: local
-      # The checkout is owned by the runner's user, not the container's root.
-      GIT_CONFIG_COUNT: "1"
-      GIT_CONFIG_KEY_0: safe.directory
-      GIT_CONFIG_VALUE_0: "*"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: make vet lint
+
+  docs-lint:
+    runs-on: ubuntu-latest
+    container: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: make docs-lint
+
+  api-lint:
+    runs-on: ubuntu-latest
+    container: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: make api-lint
+
+  project-lint:
+    runs-on: ubuntu-latest
+    container: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: make project-lint
+
+  # Stage: test
+  unit-test:
+    needs: [go-lint, docs-lint, api-lint, project-lint]
+    runs-on: ubuntu-latest
+    container: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: make test
+
+  # Stage: build
+  docs-site:
+    needs: [unit-test]
+    runs-on: ubuntu-latest
+    container: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: make docs-links
+
+  # Stage: security
+  vuln:
+    needs: [docs-site]
+    runs-on: ubuntu-latest
+    container: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: make vuln
+
+  secrets:
+    needs: [docs-site]
+    runs-on: ubuntu-latest
+    container: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # gitleaks scans the whole history
           persist-credentials: false
-      - run: make ci
+      - run: make secrets

@@ -1,5 +1,5 @@
 # The single entry point for building, checking and tracking nbpdns.
-# CI jobs run these targets and nothing else (ADR-0015). Run `make` for the list.
+# CI jobs run these targets and nothing else (ADR-0016). Run `make` for the list.
 
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
@@ -9,7 +9,7 @@ MAKEFLAGS += --no-print-directory
 ROOT := $(CURDIR)
 
 # The image CI runs in, pinned by digest. `make project-lint` checks that both
-# forges' CI files use exactly this image (ADR-0015).
+# forges' CI files use exactly this image (ADR-0016).
 CI_IMAGE := golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
 
 ##@ Tools

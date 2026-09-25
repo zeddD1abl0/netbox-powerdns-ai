@@ -93,6 +93,15 @@ Append-only and dated. Record what was run and what was seen.
     1,549 third-party `.md` files in `.cache/` correctly ignored.
   - **Still waiting on the user:** the real GitLab and GitHub pipeline results,
     and the raw-rendering check on GitLab, both after the branch is pushed.
+- 2026-09-25: The first real GitLab job was **evicted**: the node ran out of
+  ephemeral storage. Building eight tools from source needed about 6.5 GB.
+  - Fixed by ITEM-0014 (pinned release binaries, ADR-0014) and ITEM-0015
+    (staged CI, ADR-0016).
+  - Each of the eight jobs now passes cold in the pinned image in 22–182 MB
+    and 2–14 seconds.
+  - Node sizing advice given to the user: more ephemeral storage for CI
+    nodes, and ephemeral-storage requests and limits on build pods. M1's
+    container lab will need more disk than lint jobs.
 
 ## Approved design
 

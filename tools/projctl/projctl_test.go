@@ -166,8 +166,41 @@ closed:
 
 # ITEM-nnnn: Short, specific title
 `,
-	".gitlab-ci.yml":           "ci:\n  image: golang\n  script:\n    - make ci\n",
-	".github/workflows/ci.yml": "jobs:\n  ci:\n    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n      - run: make ci\n",
+	"Makefile": "CI_IMAGE := golang:1@sha256:abc\n" +
+		"check: vet lint ## Checks\n" +
+		"ci: check docs ## Everything\n" +
+		"vet: ## Vet\n\tgo vet ./...\n" +
+		"lint: $(GOLANGCI_LINT) ## Lint\n\t$(GOLANGCI_LINT) run\n" +
+		"docs: $(HUGO) ## Docs\n\t$(HUGO)\n" +
+		"test-integration: ## Not part of ci\n\tgo test -tags integration ./...\n",
+	".gitlab-ci.yml": `stages: [lint, build]
+.go:
+  image: golang:1@sha256:abc
+go-lint:
+  extends: .go
+  stage: lint
+  script:
+    - make vet lint
+docs:
+  extends: .go
+  stage: build
+  script:
+    - make docs
+`,
+	".github/workflows/ci.yml": `jobs:
+  go-lint:
+    container: golang:1@sha256:abc
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - run: make vet lint
+  docs:
+    needs: [go-lint]
+    container:
+      image: golang:1@sha256:abc
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - run: make docs
+`,
 }
 
 // writeRepo writes files into a temp dir, applying overrides (an empty string
@@ -307,6 +340,18 @@ func TestLintCatches(t *testing.T) {
 			`uses "actions/checkout@v7"`},
 		{"GitHub shell override", map[string]string{".github/workflows/ci.yml": "defaults:\n  run:\n    shell: python\njobs:\n  ci:\n    steps:\n      - run: make ci\n"},
 			"overrides shell:"},
+		{"GitLab jobs miss a make ci target", map[string]string{".gitlab-ci.yml": ".go:\n  image: golang:1@sha256:abc\nlint:\n  extends: .go\n  script:\n    - make vet lint\n"},
+			".gitlab-ci.yml: doesn't run docs, which `make ci` runs"},
+		{"GitLab jobs run a target outside make ci", map[string]string{".gitlab-ci.yml": ".go:\n  image: golang:1@sha256:abc\nall:\n  extends: .go\n  script:\n    - make ci test-integration\n"},
+			".gitlab-ci.yml: runs test-integration, which `make ci` doesn't"},
+		{"GitLab image differs from CI_IMAGE", map[string]string{".gitlab-ci.yml": "all:\n  image: golang:latest\n  script:\n    - make ci\n"},
+			"image golang:latest isn't the Makefile's CI_IMAGE golang:1@sha256:abc"},
+		{"GitLab names no image", map[string]string{".gitlab-ci.yml": "all:\n  script:\n    - make ci\n"},
+			".gitlab-ci.yml: names no image"},
+		{"GitHub jobs miss a make ci target", map[string]string{".github/workflows/ci.yml": "jobs:\n  lint:\n    container: golang:1@sha256:abc\n    steps:\n      - run: make lint\n"},
+			".github/workflows/ci.yml: doesn't run docs, vet, which `make ci` runs"},
+		{"GitHub container image differs from CI_IMAGE", map[string]string{".github/workflows/ci.yml": "jobs:\n  all:\n    container:\n      image: golang:1.26\n    steps:\n      - run: make ci\n"},
+			"image golang:1.26 isn't the Makefile's CI_IMAGE"},
 		{"broken link under .claude is still checked", map[string]string{".claude/skills/x/SKILL.md": "See [gone](gone.md).\n"},
 			".claude/skills/x/SKILL.md: broken link gone.md"},
 	}

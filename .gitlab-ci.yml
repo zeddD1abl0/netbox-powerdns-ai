@@ -1,9 +1,14 @@
-# CI for nbpdns on GitLab. All logic lives in the Makefile (ADR-0013); this file
-# only picks the image and runs `make ci`. `make project-lint` rejects any
-# script line that isn't a make target.
-#
-# The image is the official Go image, pinned by digest. It ships Go 1.27.1 (the
-# toolchain in go.mod), gcc (Vale needs cgo), make and git.
+# CI for nbpdns on GitLab, in stages (ADR-0016). Every job only runs make
+# targets (ADR-0014). `make project-lint` checks that together the jobs run
+# exactly what `make ci` runs, in the Makefile's CI_IMAGE. To add a check, add
+# a make target, add it to `ci`, and add a job here and in
+# .github/workflows/ci.yml.
+
+stages:
+  - lint
+  - test
+  - build
+  - security
 
 workflow:
   rules:
@@ -12,21 +17,59 @@ workflow:
       when: never
     - if: $CI_COMMIT_BRANCH
 
-variables:
-  GIT_DEPTH: "0" # gitleaks scans the whole history
-  GOTOOLCHAIN: local # the image must match go.mod's toolchain; never download one
-  GOMODCACHE: $CI_PROJECT_DIR/.cache/gomod
-  GOCACHE: $CI_PROJECT_DIR/.cache/gobuild
-  GOLANGCI_LINT_CACHE: $CI_PROJECT_DIR/.cache/golangci-lint
-
-ci:
+# Every job: the official Go image (Debian, glibc: ADR-0015), pinned by digest.
+# It ships Go 1.27.1, go.mod's toolchain, so no other Go is ever downloaded.
+.go:
   image: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
-  cache:
-    key:
-      files:
-        - go.mod
-        - tools/projctl/go.sum
-    paths:
-      - .cache/
+  variables:
+    GOTOOLCHAIN: local
+
+go-lint:
+  extends: .go
+  stage: lint
   script:
-    - make ci
+    - make vet lint
+
+docs-lint:
+  extends: .go
+  stage: lint
+  script:
+    - make docs-lint
+
+api-lint:
+  extends: .go
+  stage: lint
+  script:
+    - make api-lint
+
+project-lint:
+  extends: .go
+  stage: lint
+  script:
+    - make project-lint
+
+unit-test:
+  extends: .go
+  stage: test
+  script:
+    - make test
+
+docs-site:
+  extends: .go
+  stage: build
+  script:
+    - make docs-links
+
+vuln:
+  extends: .go
+  stage: security
+  script:
+    - make vuln
+
+secrets:
+  extends: .go
+  stage: security
+  variables:
+    GIT_DEPTH: "0" # gitleaks scans the whole history
+  script:
+    - make secrets

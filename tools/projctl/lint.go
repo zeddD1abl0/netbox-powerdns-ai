@@ -321,11 +321,16 @@ func lintLinks(root string) ([]Problem, error) {
 	return probs, err
 }
 
-// lintCI checks that forge CI files only run make targets (ADR-0013), and
-// don't pull CI logic in any other way.
+// lintCI checks that forge CI files only run make targets, don't pull CI
+// logic in any other way (ADR-0014), and together run exactly what `make ci`
+// runs, in the Makefile's CI_IMAGE (ADR-0016).
 func lintCI(root string) ([]Problem, error) {
 	var probs []Problem
-	check := func(rel string, keys []string, extra func(rel string, doc *yaml.Node)) error {
+	mk, err := loadMakefile(root)
+	if err != nil {
+		return nil, err
+	}
+	check := func(rel string, keys []string, imageKey string, extra func(rel string, doc *yaml.Node)) error {
 		src, err := os.ReadFile(filepath.Join(root, rel))
 		if errors.Is(err, os.ErrNotExist) {
 			return nil
@@ -338,12 +343,16 @@ func lintCI(root string) ([]Problem, error) {
 			probs = append(probs, Problem{rel, "invalid YAML: " + err.Error()})
 			return nil
 		}
-		for _, cmd := range scriptLines(&doc, keys) {
+		cmds := scriptLines(&doc, keys)
+		for _, cmd := range cmds {
 			if !makeOnlyRE.MatchString(cmd) {
 				probs = append(probs, Problem{rel, fmt.Sprintf("runs %q; CI files may only run `make <target>…`", cmd)})
 			}
 		}
 		extra(rel, &doc)
+		if mk != nil {
+			probs = append(probs, mk.lintCoverage(rel, cmds, imageValues(&doc, imageKey))...)
+		}
 		return nil
 	}
 	gitlab := func(rel string, doc *yaml.Node) {
@@ -362,13 +371,13 @@ func lintCI(root string) ([]Problem, error) {
 		}
 	}
 	gitlabScripts := []string{"script", "before_script", "after_script", "pre_get_sources_script"}
-	if err := check(".gitlab-ci.yml", gitlabScripts, gitlab); err != nil {
+	if err := check(".gitlab-ci.yml", gitlabScripts, "image", gitlab); err != nil {
 		return nil, err
 	}
 	workflows, _ := filepath.Glob(filepath.Join(root, ".github", "workflows", "*.y*ml"))
 	for _, wf := range workflows {
 		rel, _ := filepath.Rel(root, wf)
-		if err := check(filepath.ToSlash(rel), []string{"run"}, github); err != nil {
+		if err := check(filepath.ToSlash(rel), []string{"run"}, "container", github); err != nil {
 			return nil, err
 		}
 	}
