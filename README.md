@@ -1,4 +1,7 @@
-# netbox-powerdns-ai
+# nbpdns
+
+> This repository is named `netbox-powerdns-ai`; the product and its binary are
+> **`nbpdns`** ([ADR-0005](docs/adr/0005-project-identity.md)).
 
 A control plane that takes DNS data from **NetBox** (the source of truth) and
 applies it to **PowerDNS Authoritative** servers. It verifies each change,

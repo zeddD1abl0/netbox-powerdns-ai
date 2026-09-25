@@ -39,7 +39,7 @@ expandable, before writing any product code:
 ## Acceptance criteria
 
 - [x] `CLAUDE.md`, `project/`, `docs/adr/` and the docs skeleton exist (ITEM-0001).
-- [ ] Every blocking question in `requirements.md` is answered (ITEM-0002).
+- [ ] Every blocking question in `requirements.md` is answered (ITEM-0002 done; Q-055 remains).
 - [ ] ADRs exist for the docs platform, the API standard, and persistence and HA (ITEM-0009).
 - [ ] `make check` and `make ci` pass locally with only Go, Docker and make installed.
 - [ ] The GitLab CI pipeline passes by calling make targets only.

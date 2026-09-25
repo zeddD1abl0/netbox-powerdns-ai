@@ -42,6 +42,16 @@ When a question is answered:
 | REQ-024 | NetBox is the source of truth for DNS data. | Q-002, [ADR-0004](../docs/adr/0004-v1-scope-netbox-source-of-truth-powerdns-auth.md) |
 | REQ-025 | Project work is tracked in the repo, in Markdown. | Q-003, [ADR-0002](../docs/adr/0002-track-work-in-repo.md) |
 | REQ-026 | The project is self-contained and not tied to any forge. | Q-004, [ADR-0003](../docs/adr/0003-self-contained-forge-neutral-toolchain.md) |
+| REQ-027 | DNS data is read from the NetBox DNS plugin. | Q-006, [ADR-0006](../docs/adr/0006-integrations-netbox-dns-plugin-and-powerdns-api.md) |
+| REQ-028 | The app reaches PowerDNS only through its HTTP API, never through backend databases or zone files. | Q-008, [ADR-0006](../docs/adr/0006-integrations-netbox-dns-plugin-and-powerdns-api.md) |
+| REQ-029 | v1 supports primary → secondaries topologies, including hidden primaries. | Q-009, [ADR-0007](../docs/adr/0007-server-groups-and-catalog-zones.md) |
+| REQ-030 | v1 supports independent sites and clusters, each managed as a separate server group. | Q-009, [ADR-0007](../docs/adr/0007-server-groups-and-catalog-zones.md) |
+| REQ-031 | Drift handling is set per zone: enforce, report or ignore. New zones default to report. | Q-010, [ADR-0008](../docs/adr/0008-per-zone-drift-policy.md) |
+| REQ-032 | Data is stored in PostgreSQL or in embedded SQLite. | Q-019, [ADR-0009](../docs/adr/0009-persistence-and-high-availability.md) |
+| REQ-033 | On PostgreSQL, several replicas can run at once, with exactly one active sync worker. SQLite runs as a single instance. | Q-020, [ADR-0009](../docs/adr/0009-persistence-and-high-availability.md) |
+| REQ-034 | Secondaries learn about zones through catalog zones (RFC 9432). | Q-052, [ADR-0007](../docs/adr/0007-server-groups-and-catalog-zones.md) |
+| REQ-035 | The project is licensed under Apache-2.0. | Q-005, [ADR-0005](../docs/adr/0005-project-identity.md) |
+| REQ-036 | End-to-end tests run against a containerised lab: NetBox with the DNS plugin, a PowerDNS primary, and secondaries. | Q-048 |
 
 ## Open questions
 
@@ -53,12 +63,7 @@ in [M00](milestones/M00-foundation.md).
 
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
-| Q-005 | **Blocking.** What are the product name, binary name, Go module path, env var prefix and license? Does "ai" in the repo name mean "built by AI" or "AI features in the product"? | To be decided. The module path is painful to change later. "ai" means built by AI. | M0 |
-| Q-006 | **Blocking.** Where does NetBox hold DNS data: the NetBox DNS plugin (zones, records, views, nameservers, DNSSEC policies, IPAM DNSsync), core IPAM `dns_name`, or both? | The NetBox DNS plugin. IPAM-derived records come through the plugin's DNSsync, not logic of our own. | M1 |
 | Q-007 | Which NetBox and plugin versions are supported, and how does the app authenticate to NetBox? | Current NetBox 4.x plus the previous minor, with a read-only API token. | M3 |
-| Q-008 | **Blocking.** Which PowerDNS Authoritative versions and backends are in use (gpgsql/gmysql, LMDB with LightningStream, bind)? | 4.9 and 5.x. The backend decides where writes go. | M1 |
-| Q-009 | **Blocking.** Which topologies must be supported: primary/secondary (AXFR/NOTIFY), DB replication, LightningStream, hidden primary, multi-site, split-horizon (NetBox DNS views mapped to server groups or PowerDNS 5 views), catalog zones? | A **server group** model: one write endpoint and N verify endpoints per group, with a view→group mapping. | M1 |
-| Q-010 | **Blocking.** What are the sync semantics? Trigger, direction, drift policy, records in PowerDNS but not in NetBox, and importing existing PowerDNS zones into NetBox (brownfield). | A NetBox event-rule webhook plus a periodic full reconcile. One-way. Drift policy per zone: enforce, report or ignore. An import tool for first adoption. | M1 |
 | Q-011 | Where does data that NetBox doesn't model live: TSIG keys, zone metadata (ALLOW-AXFR-FROM, ALSO-NOTIFY, SOA-EDIT-API), serial policy, DNSSEC key rollover? | In NetBox wherever the plugin models it. Everything else is per-zone or per-group config in this app. | M4 |
 | Q-012 | Does "change settings" mean this app's settings only, or PowerDNS server config (`pdns.conf`) too? | This app's settings plus per-zone PowerDNS metadata. `pdns.conf` stays with Ansible. | M1 |
 | Q-013 | What change safety is needed: dry-run diff, four-eyes approval, change windows, blast-radius limits, rollback? | Every sync computes a plan and auto-applies below thresholds. Above a threshold (such as more than N deletes, or NS/SOA changes) it needs approval. | M4 |
@@ -67,13 +72,14 @@ in [M00](milestones/M00-foundation.md).
 | Q-016 | What is the web UI's scope? | Settings, ops dashboard (sync status, drift, per-server health), approvals, audit viewer, users and roles. **No record editor**, since NetBox is the editor. | M1 |
 | Q-017 | What are the scale targets: servers, zones, records, change rate, propagation latency from NetBox to servers? | Needs an answer. A possible design target is 50 servers, 10k zones, 1M records, and under 60 s propagation. | M3 |
 | Q-018 | Why build this rather than extend an existing tool? Prior art: ArnesSI/netbox-powerdns-sync, a NetBox plugin last supported on NetBox 3.6. | Record the differentiators in the brief: standalone, audit and SIEM, multiple topologies, API and IaC. | M0 |
+| Q-053 | Which PowerDNS Authoritative versions must be supported? Catalog zones (Q-052) need 4.7 or later. | 4.9 and 5.x. | M3 |
+| Q-054 | The parts of Q-010 not yet answered: how is a sync triggered, and how are existing PowerDNS zones adopted into NetBox (brownfield import)? | A NetBox event-rule webhook plus a periodic full reconcile. An import tool for first adoption, with imported zones starting in report mode. | M3 |
+| Q-055 | **Blocking.** Which GitHub owner (user or organisation) goes in the module path `github.com/<owner>/netbox-powerdns-ai`? | Needs an answer. It blocks `go.mod` (ITEM-0004). | M0 |
 
 ### Architecture and deployment
 
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
-| Q-019 | **Blocking.** Persistence: SQLite, PostgreSQL, or both? | PostgreSQL for containers and HA. Embedded SQLite for the single binary. One migration set, and CI runs against both. | M1 |
-| Q-020 | **Blocking.** Is HA with multiple replicas required? | Active-active API with a leader-elected sync worker (Postgres advisory lock). SQLite mode is single-instance. | M1 |
 | Q-021 | How does the app reach PowerDNS: direct push, or agents on the DNS hosts? | Direct HTTPS push. An agent mode is a later extension point. | M3 |
 | Q-022 | How is the PowerDNS API secured in transit? Its built-in webserver has no native TLS. | A TLS proxy in front of it, with mTLS optional. Document the reference setup. | M3 |
 | Q-023 | How are secrets stored at rest (PowerDNS API keys, TSIG, OIDC client secrets)? | Envelope encryption with a master key from env or file. Vault/OpenBao later. | M1 |
@@ -130,8 +136,6 @@ in [M00](milestones/M00-foundation.md).
 
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
-| Q-047 | **Blocking.** What is the commit model? | Same as go-redbarkwebhook: **the user commits at milestone boundaries**, with Conventional Commit messages that Claude drafts. | M0 |
-| Q-048 | **Blocking.** Is there a real NetBox and PowerDNS lab that Claude may reach, and with what credentials? | `deploy/dev/compose.yaml` with NetBox, the DNS plugin, and a three-node PowerDNS (primary, secondary, LightningStream pair) for local end-to-end tests. | M1 |
 | Q-049 | Which CI runners? | The existing self-hosted GitLab Kubernetes privileged runners, with Docker-in-Docker for integration tests. A GitHub Actions wrapper is kept ready but unused. | M0 |
 | Q-050 | Which UI technology? | Server-rendered templ + htmx with vendored assets and no Node build, embedded in the binary. | M1 |
 | Q-051 | What accessibility and localisation level? | WCAG 2.2 AA. English only. | M1 |
@@ -144,3 +148,13 @@ in [M00](milestones/M00-foundation.md).
 | Q-002 | What is NetBox's role relative to this application? | NetBox is the source of truth. | 2026-09-25 | REQ-024, [ADR-0004](../docs/adr/0004-v1-scope-netbox-source-of-truth-powerdns-auth.md) |
 | Q-003 | Where should the project's work be tracked? | In-repo Markdown only. | 2026-09-25 | REQ-025, [ADR-0002](../docs/adr/0002-track-work-in-repo.md) |
 | Q-004 | Which documentation platform? | Platform not chosen; the answer set a constraint instead. The project must not be GitLab-only and should be as self-contained as possible. The platform question continues as Q-044. | 2026-09-25 | REQ-026, [ADR-0003](../docs/adr/0003-self-contained-forge-neutral-toolchain.md) |
+| Q-005 | Product name, binary name, Go module path, env var prefix, license; the meaning of "ai" in the repo name. | Product and binary `nbpdns`, env prefix `NBPDNS_`. Module path `github.com/<owner>/netbox-powerdns-ai`, keeping the repo name; the owner is split out as Q-055. License Apache-2.0. The product name drops "ai", so the repo name's meaning no longer matters to users. | 2026-09-25 | REQ-035, [ADR-0005](../docs/adr/0005-project-identity.md) |
+| Q-006 | Where does NetBox hold DNS data? | The NetBox DNS plugin. | 2026-09-25 | REQ-027, [ADR-0006](../docs/adr/0006-integrations-netbox-dns-plugin-and-powerdns-api.md) |
+| Q-008 | Which PowerDNS Authoritative versions and backends are in use? | "Ideally, we'll use the PowerDNS API rather than direct interaction with zone information." The app is backend-agnostic and uses only the API. Versions are split out as Q-053. | 2026-09-25 | REQ-028, [ADR-0006](../docs/adr/0006-integrations-netbox-dns-plugin-and-powerdns-api.md) |
+| Q-009 | Which topologies must be supported? | Primary → secondaries (including hidden primaries), and independent sites/clusters. Not in v1: shared-storage multi-writer, split-horizon views. | 2026-09-25 | REQ-029, REQ-030, [ADR-0007](../docs/adr/0007-server-groups-and-catalog-zones.md) |
+| Q-010 | What are the sync semantics? | Drift policy per zone: enforce, report or ignore. Trigger and brownfield import are split out as Q-054. | 2026-09-25 | REQ-031, [ADR-0008](../docs/adr/0008-per-zone-drift-policy.md) |
+| Q-019 | Persistence: SQLite, PostgreSQL, or both? | Both: PostgreSQL, and embedded SQLite for the single binary. | 2026-09-25 | REQ-032, [ADR-0009](../docs/adr/0009-persistence-and-high-availability.md) |
+| Q-020 | Is HA with multiple replicas required? | Yes, on PostgreSQL: multiple replicas with one leader-elected sync worker. SQLite is single-instance. | 2026-09-25 | REQ-033, [ADR-0009](../docs/adr/0009-persistence-and-high-availability.md) |
+| Q-047 | What is the commit model? | Claude commits per item on a milestone branch. The user reviews, merges and pushes. | 2026-09-25 | [ADR-0010](../docs/adr/0010-claude-commits-per-item-on-milestone-branches.md) |
+| Q-048 | Is there a real lab Claude may reach? | No. The container lab only. | 2026-09-25 | REQ-036 |
+| Q-052 | How do secondaries learn about zones created or deleted on the primary? | Catalog zones (RFC 9432). | 2026-09-25 | REQ-034, [ADR-0007](../docs/adr/0007-server-groups-and-catalog-zones.md) |

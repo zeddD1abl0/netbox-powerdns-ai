@@ -51,3 +51,24 @@ The planning session also produced these, recorded as ADRs:
 - [ADR-0002](../docs/adr/0002-track-work-in-repo.md): in-repo tracking;
 - [ADR-0003](../docs/adr/0003-self-contained-forge-neutral-toolchain.md): the self-contained rule;
 - [ADR-0004](../docs/adr/0004-v1-scope-netbox-source-of-truth-powerdns-auth.md): v1 scope.
+
+## Answers, 2026-09-25 (M0b discovery)
+
+These were given in the M0b discovery session. Where the user typed their own
+answer rather than choosing an option, it's quoted verbatim.
+
+| Question | Answer |
+|---|---|
+| Q-006: Where does NetBox hold the DNS data? | The NetBox DNS plugin. |
+| Q-008: Which PowerDNS Authoritative backends are in use? | "Ideally, we'll use the PowerDNS API rather than direct interaction with zone information." |
+| Q-009: Which topologies must v1 handle? | Primary → secondaries, and independent sites/clusters. |
+| Q-010: What happens when PowerDNS differs from NetBox? | A drift policy per zone. |
+| Q-005a: Product and binary name? | `nbpdns` (the short form). |
+| Q-005b: Go module path? | A GitHub path, then `github.com/<owner>/netbox-powerdns-ai`, keeping the current repo name. The owner wasn't given. |
+| Q-005c: License? | Apache-2.0. |
+| Q-019/Q-020: Persistence and high availability? | PostgreSQL + SQLite. |
+| Q-047: Who commits? | Claude, per item, on a branch. |
+| Q-048: What can Claude test against? | The container lab only. |
+| Q-052: How do secondaries learn about new or deleted zones? | Catalog zones. |
+
+The resulting decisions are recorded in ADR-0005 to ADR-0010.
