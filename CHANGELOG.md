@@ -13,3 +13,5 @@ All notable changes to this project are recorded here. The format follows
   - in-repo work tracking (`project/`);
   - architecture decision records ADR-0001 to ADR-0004;
   - the documentation skeleton and style guide.
+- Per-item commits on milestone branches (ADR-0010), with a hook that blocks
+  commits on `main`.

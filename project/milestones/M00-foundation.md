@@ -31,10 +31,10 @@ expandable, before writing any product code:
 
 | Phase | Scope | Items |
 |---|---|---|
-| M0a | Process scaffolding (no Go code) | ITEM-0001 |
+| M0a | Process scaffolding (no Go code), commit model | ITEM-0001, ITEM-0012 |
 | M0b | Discovery: answer the blocking questions and record ADRs | ITEM-0002, ITEM-0003, ITEM-0009, ITEM-0010 |
 | M0c | Toolchain: needs the module path from Q-005 | ITEM-0004 to ITEM-0008 |
-| Close | Cold-start test, review, user commit | ITEM-0011 |
+| Close | Cold-start test, review, user merges the branch | ITEM-0011 |
 
 ## Acceptance criteria
 
@@ -47,7 +47,8 @@ expandable, before writing any product code:
 - [ ] The docs site builds. An alert and a Mermaid block render on the site and raw on GitLab.
 - [ ] Cold-start test passed (ITEM-0011).
 - [ ] The milestone list M1 to M8 is finalised, with a file for M01 (ITEM-0010).
-- [ ] The user has committed M0.
+- [ ] The user has merged `m00-foundation` (creating `main` from it, since `main` is unborn).
+- [x] Per-item commit model adopted (ITEM-0012, ADR-0010).
 
 ## Verification log
 
@@ -57,6 +58,11 @@ Append-only and dated. Record what was run and what was seen.
   file was reformatted, a `.md` file was left untouched) and confirmed live in
   session: a badly formatted `.go` file was reformatted immediately after being
   written.
+- 2026-09-25: The `.claude/hooks/guard-main-commit.sh` PreToolUse guard was
+  pipe-tested against a scratch repo on `main`. It denied `git commit -m`, a
+  compound `cd && git commit`, and `git -C … commit`. It allowed `git status`
+  and `echo git committed`, and allowed `git commit` on `m00-foundation`. A
+  temporary sentinel confirmed it fires live on every Bash call.
 
 ## Approved design
 

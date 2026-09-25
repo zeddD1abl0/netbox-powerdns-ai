@@ -22,6 +22,6 @@ the repo alone.
 - [ ] A fresh Claude session is given only "Read CLAUDE.md, then tell me the current status and the next item." It answers correctly after reading 5 or fewer files.
 - [ ] Any confusion it shows is fixed in `CLAUDE.md` or the board, and the test re-run.
 - [ ] The `close-milestone` skill has run for M00.
-- [ ] A Conventional Commit message is drafted for the user.
+- [ ] The branch is handed over for the user to review and merge (ADR-0010).
 
 ## Notes

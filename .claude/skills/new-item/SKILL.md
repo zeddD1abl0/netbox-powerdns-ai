@@ -29,6 +29,14 @@ work.
 6. If the item came from a problem found during other work, add a dated note to
    the item that was being worked on, linking to the new one.
 
-Status changes during the work: set `in-progress` when starting. At the end,
-set `done` with `closed:` set to the date, or `wontfix` with a note explaining
-why. **Never move or rename the file.**
+## Working the item
+
+1. **Start.** Make sure you're on the milestone branch (`mNN-short-title`), not
+   `main`. Set `status: in-progress`.
+2. **Finish.** Tick the acceptance criteria. Set `status: done` and `closed:`
+   to the date, or `wontfix` with a note explaining why. Update the board.
+3. **Commit** (ADR-0010). Use a Conventional Commit whose last trailers are
+   `Refs: ITEM-nnnn`, then the attribution trailer. Checkpoint commits during a
+   long item are fine; each one carries the same `Refs` trailer.
+
+**Never move or rename the file.**

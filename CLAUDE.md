@@ -32,12 +32,17 @@ lives in `project/`, and decisions live in `docs/adr/`.
   milestone file under **Approved design**.
 - Implement in auto mode. When the implementation is done and verified, return
   to plan mode.
-- **The user commits.** Don't run `git commit` or `git push` unless asked. At
-  the end of a milestone, draft a Conventional Commit message for the user.
+- **Commits** ([ADR-0010](docs/adr/0010-claude-commits-per-item-on-milestone-branches.md)):
+  - Work on the milestone branch `mNN-short-title`, created from `main` when
+    the milestone starts.
+  - Commit when each item is done. Checkpoint commits are fine.
+  - Use Conventional Commits, with a `Refs: ITEM-nnnn` trailer on every commit.
+  - Never commit to `main`, merge into `main`, or push. A hook blocks commits on
+    `main`.
+  - The user reviews the branch, merges it (not a squash merge) and pushes.
 - Don't implement milestone N until milestone N-1 is **complete** (every item
-  done, `make check` green) **and committed** (`git status` clean for that
-  work). If asked to start early, warn and list what's outstanding. The user may
-  override.
+  done, `make check` green) **and merged** (its branch is in `main`). If asked
+  to start early, warn and list what's outstanding. The user may override.
 
 ## Tracking rules
 
@@ -54,7 +59,6 @@ lives in `project/`, and decisions live in `docs/adr/`.
   in `project/requirements.md` with the date. Link the ADR or REQ it produced.
 - `project/README.md` is generated. Until `projctl` exists (ITEM-0005), update it
   by hand in the same change as the items it lists.
-- Reference items in commit messages with a trailer: `Refs: ITEM-0012`.
 
 ## Principles
 
@@ -127,13 +131,14 @@ build commands. The planned targets:
 - the relevant docs page is updated;
 - `CHANGELOG.md` has a line, if it's user-facing;
 - its status is `done` with a `closed:` date;
-- the board is updated.
+- the board is updated;
+- it's committed on the milestone branch with its `Refs` trailer.
 
 **A milestone** is done when:
 - every item in it is done;
 - `/code-review high` has run, plus `/security-review` if auth, audit or secrets
   changed;
 - the manual verification steps are recorded in the milestone file;
-- the user has committed it.
+- the user has merged its branch into `main`.
 
 Use the `close-milestone` skill.

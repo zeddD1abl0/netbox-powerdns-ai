@@ -6,7 +6,7 @@ that. Until then, update it by hand in the same change as the items it lists.
 -->
 
 **Updated:** 2026-09-25
-**Current milestone:** [M00 Foundation](milestones/M00-foundation.md), in progress (phase M0b: discovery)
+**Current milestone:** [M00 Foundation](milestones/M00-foundation.md), in progress (phase M0b: discovery), on branch `m00-foundation`
 **Next action:** answer the blocking questions (ITEM-0002), then settle the
 questions M0 still needs (ITEM-0003)
 
@@ -41,6 +41,7 @@ M01 to M08 are provisional until ITEM-0010. Their scope is in [M00 §4](mileston
 | [ITEM-0006](items/ITEM-0006-makefile-and-ci-wrappers.md) | Makefile and thin CI wrappers for GitLab and GitHub | blocked | ITEM-0004 |
 | [ITEM-0007](items/ITEM-0007-lint-configuration.md) | Lint configuration for Go, OpenAPI and documentation | blocked | ITEM-0004 |
 | [ITEM-0001](items/ITEM-0001-process-scaffolding.md) | Process scaffolding (M0a) | done 2026-09-25 | — |
+| [ITEM-0012](items/ITEM-0012-per-item-commit-model.md) | Adopt per-item commits on milestone branches | done 2026-09-25 | — |
 
 ## Open questions
 

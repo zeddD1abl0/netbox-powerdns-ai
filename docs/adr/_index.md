@@ -18,3 +18,4 @@ from [`template.md`](template.md).
 | [0002](0002-track-work-in-repo.md) | Track work in the repo as small files with generated indexes | accepted |
 | [0003](0003-self-contained-forge-neutral-toolchain.md) | Self-contained, forge-neutral toolchain | accepted |
 | [0004](0004-v1-scope-netbox-source-of-truth-powerdns-auth.md) | v1 scope: NetBox is the source of truth, PowerDNS Authoritative is the target | accepted |
+| [0010](0010-claude-commits-per-item-on-milestone-branches.md) | Claude commits per item on milestone branches | accepted |

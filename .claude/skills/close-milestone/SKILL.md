@@ -5,12 +5,15 @@ description: Run the Definition of Done checks and close a milestone (Mnn) when 
 
 # Close a milestone
 
-The user commits; this skill never does. Work through every step in order. If
-any step fails, stop and report what's outstanding. Don't mark the milestone
-done.
+Claude commits on the milestone branch. The user merges into `main` and
+pushes (ADR-0010). Work through every step in order. If any step fails, stop
+and report what's outstanding. Don't mark the milestone done.
 
 1. **Items.** Every item with `milestone: Mnn` is `done` (with a `closed:` date)
-   or `wontfix` (with a note). List any that aren't.
+   or `wontfix` (with a note). List any that aren't. Every done item has at
+   least one commit on the branch with its `Refs` trailer:
+   `git log main..HEAD --grep 'ITEM-nnnn'`. Before `main` exists, use
+   `git log --grep`.
 2. **Acceptance criteria.** Every checkbox in `project/milestones/Mnn-*.md` is
    ticked, and each tick is backed by evidence you can point to.
 3. **Checks.** Run `make check`, and `make test-integration` if the milestone
@@ -31,9 +34,11 @@ done.
    - Set the milestone's `status: done` and `closed:` date.
    - Update `project/README.md`: the current milestone moves to the next one.
    - Run `go run ./tools/projctl lint` once it exists.
+   - Commit these changes on the branch.
 8. **Hand over.** Show the user:
-   - `git status`;
-   - a Conventional Commit message for the milestone, with a body summarising
-     it and `Refs:` trailers for its items;
-   - a reminder that the next milestone won't start until this one is
-     committed.
+   - a clean `git status`;
+   - the branch's commit list (`git log --oneline main..HEAD`) and a short
+     summary of what the milestone delivered;
+   - how to finish: review the branch, merge it into `main` with a merge
+     commit (not a squash, which would lose the per-item commits), then push;
+   - a reminder that the next milestone won't start until the branch is merged.
