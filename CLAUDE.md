@@ -52,6 +52,7 @@ lives in `project/`, and decisions live in `docs/adr/`.
   `wontfix`. Set `closed:` when an item is done or dropped.
 - **Files never move or get renamed.** Closing an item changes its status only.
 - Item notes are append-only and dated (`YYYY-MM-DD`).
+- Before a session ends, append the state and next steps to the in-progress item's notes.
 - A decision with lasting consequences gets an ADR (`new-adr` skill,
   `make adr TITLE="…"`). Accepted ADRs aren't edited: a new ADR supersedes
   them.
