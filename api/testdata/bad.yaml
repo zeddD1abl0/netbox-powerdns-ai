@@ -36,6 +36,8 @@ paths:
                     type: array
                     items:
                       type: string
+        "404":
+          description: Not found, with no body at all.
         "418":
           description: A teapot.
           content:

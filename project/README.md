@@ -9,7 +9,7 @@
 
 | Milestone | Title | Status | Items closed |
 |---|---|---|---|
-| [M00](milestones/M00-foundation.md) | Foundation | in-progress | 11 of 12 |
+| [M00](milestones/M00-foundation.md) | Foundation | in-progress | 12 of 13 |
 | [M01](milestones/M01-service-skeleton.md) | Service skeleton | planned | — |
 | [M02](milestones/M02-identity.md) | Identity | planned | — |
 | [M03](milestones/M03-read-path-drift-report.md) | Read path and drift report | planned | — |
@@ -35,6 +35,7 @@
 | [ITEM-0009](items/ITEM-0009-foundation-adrs.md) | ADRs: docs platform, API standard, persistence and HA | task | done 2026-09-25 | — |
 | [ITEM-0010](items/ITEM-0010-finalise-milestones.md) | Finalise the milestone list and write the milestone stubs | task | done 2026-09-25 | — |
 | [ITEM-0012](items/ITEM-0012-per-item-commit-model.md) | Adopt per-item commits on milestone branches | task | done 2026-09-25 | — |
+| [ITEM-0013](items/ITEM-0013-fix-the-m0-code-review-findings.md) | Fix the M0 code-review findings | bug | done 2026-09-25 | — |
 
 ## Open questions
 
@@ -52,7 +53,7 @@
 
 ## Requirements
 
-37 requirements, listed in [requirements.md](requirements.md#requirements). 27 aren't referenced by any item yet: REQ-002, REQ-003, REQ-004, REQ-005, REQ-006, REQ-007, REQ-008, REQ-009, REQ-010, REQ-011, REQ-014, REQ-015, REQ-016, REQ-017, REQ-023, REQ-024, REQ-027, REQ-028, REQ-029, REQ-030, REQ-031, REQ-032, REQ-033, REQ-034, REQ-035, REQ-036, REQ-037.
+37 requirements, listed in [requirements.md](requirements.md#requirements). 26 aren't referenced by any item yet: REQ-002, REQ-003, REQ-004, REQ-005, REQ-006, REQ-007, REQ-008, REQ-009, REQ-010, REQ-011, REQ-014, REQ-015, REQ-016, REQ-017, REQ-023, REQ-024, REQ-027, REQ-028, REQ-029, REQ-030, REQ-031, REQ-032, REQ-033, REQ-034, REQ-035, REQ-036.
 
 ## Decisions
 

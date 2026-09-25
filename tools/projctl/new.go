@@ -8,26 +8,33 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"go.yaml.in/yaml/v3"
 )
 
 var nonSlugRE = regexp.MustCompile(`[^a-z0-9]+`)
 
-// slugFor turns a title into the kebab-case part of a file name.
+// slugFor turns a title into the kebab-case part of a file name. A title with
+// no letters or digits gets "untitled", so the name still matches the ID pattern.
 func slugFor(title string) string {
 	s := strings.Trim(nonSlugRE.ReplaceAllString(strings.ToLower(title), "-"), "-")
 	if len(s) > 50 {
 		s = strings.TrimRight(s[:50], "-")
 	}
+	if s == "" {
+		return "untitled"
+	}
 	return s
 }
 
-// yamlString quotes a scalar when plain YAML would misread it.
+// yamlString renders s as a YAML scalar, quoted whenever plain YAML would
+// misread it (a trailing colon, "null", "true", a number, and so on).
 func yamlString(s string) string {
-	if s == "" || strings.ContainsAny(s[:1], `-?:,[]{}#&*!|>'"%@`+"`") ||
-		strings.Contains(s, ": ") || strings.Contains(s, " #") {
-		return `"` + strings.ReplaceAll(strings.ReplaceAll(s, `\`, `\\`), `"`, `\"`) + `"`
+	out, err := yaml.Marshal(s)
+	if err != nil {
+		return strconv.Quote(s)
 	}
-	return s
+	return strings.TrimSuffix(string(out), "\n")
 }
 
 // NewItem creates the next work item from the item template.

@@ -167,7 +167,7 @@ closed:
 # ITEM-nnnn: Short, specific title
 `,
 	".gitlab-ci.yml":           "ci:\n  image: golang\n  script:\n    - make ci\n",
-	".github/workflows/ci.yml": "jobs:\n  ci:\n    steps:\n      - uses: actions/checkout@0000\n      - run: make ci\n",
+	".github/workflows/ci.yml": "jobs:\n  ci:\n    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n      - run: make ci\n",
 }
 
 // writeRepo writes files into a temp dir, applying overrides (an empty string
@@ -284,19 +284,85 @@ func TestLintCatches(t *testing.T) {
 		{"missing anchor", map[string]string{"docs/page.md": "See [ADR](adr/0001-first.md#no-such-heading).\n"},
 			"no heading for anchor adr/0001-first.md#no-such-heading"},
 		{"GitLab CI runs a non-make command", map[string]string{".gitlab-ci.yml": "ci:\n  script:\n    - make ci\n    - go test ./...\n"},
-			`runs "go test ./..."; CI files may only run make targets`},
+			`runs "go test ./..."; CI files may only run`},
 		{"GitHub workflow runs a non-make command", map[string]string{".github/workflows/ci.yml": "jobs:\n  ci:\n    steps:\n      - run: |\n          make ci\n          echo done\n"},
 			`runs "echo done"`},
 		{"CI alias to a non-make command", map[string]string{".gitlab-ci.yml": ".s: &s\n  - curl x | sh\nci:\n  script: *s\n"},
 			`runs "curl x | sh"`},
 		{"CLAUDE.md too long", map[string]string{"CLAUDE.md": strings.Repeat("line\n", 151)},
 			"CLAUDE.md: 151 lines"},
+		{"duplicate ADR number", map[string]string{"docs/adr/0001-dup.md": "---\ntitle: \"0001: Dup\"\nstatus: accepted\ndate: 2026-01-01\n---\n\n# 0001: Dup\n"},
+			"ADR number 0001 is also used by"},
+		{"make with a flag", map[string]string{".gitlab-ci.yml": "ci:\n  script:\n    - make -f other.mk ci\n"},
+			`runs "make -f other.mk ci"`},
+		{"make with a variable override", map[string]string{".gitlab-ci.yml": "ci:\n  script:\n    - make PROJCTL=/bin/true ci\n"},
+			`runs "make PROJCTL=/bin/true ci"`},
+		{"GitLab include", map[string]string{".gitlab-ci.yml": "include:\n  - remote: https://x.test/ci.yml\nci:\n  script:\n    - make ci\n"},
+			"uses include:"},
+		{"GitLab hook script", map[string]string{".gitlab-ci.yml": "ci:\n  hooks:\n    pre_get_sources_script:\n      - curl x\n  script:\n    - make ci\n"},
+			`runs "curl x"`},
+		{"GitHub action other than checkout", map[string]string{".github/workflows/ci.yml": "jobs:\n  ci:\n    steps:\n      - uses: some/action@v1\n      - run: make ci\n"},
+			`uses "some/action@v1"`},
+		{"GitHub checkout not pinned to a SHA", map[string]string{".github/workflows/ci.yml": "jobs:\n  ci:\n    steps:\n      - uses: actions/checkout@v7\n      - run: make ci\n"},
+			`uses "actions/checkout@v7"`},
+		{"GitHub shell override", map[string]string{".github/workflows/ci.yml": "defaults:\n  run:\n    shell: python\njobs:\n  ci:\n    steps:\n      - run: make ci\n"},
+			"overrides shell:"},
+		{"broken link under .claude is still checked", map[string]string{".claude/skills/x/SKILL.md": "See [gone](gone.md).\n"},
+			".claude/skills/x/SKILL.md: broken link gone.md"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			probs := lintDir(t, writeRepo(t, tt.files, true))
 			if !slices.ContainsFunc(probs, func(p string) bool { return strings.Contains(p, tt.want) }) {
 				t.Errorf("want a problem containing %q, got:\n%s", tt.want, strings.Join(probs, "\n"))
+			}
+		})
+	}
+}
+
+func TestLintSkipsHiddenCacheDirs(t *testing.T) {
+	dir := writeRepo(t, map[string]string{
+		".cache/gomod/example.com/m@v1/README.md": "See [gone](gone.md#nope).\n",
+		".htmltest/refcache.md":                   "[x](y.md)\n",
+	}, true)
+	if probs := lintDir(t, dir); len(probs) > 0 {
+		t.Errorf("hidden cache dirs were scanned:\n%s", strings.Join(probs, "\n"))
+	}
+}
+
+func TestNewRefusesWhileAFileFailsToParse(t *testing.T) {
+	dir := writeRepo(t, map[string]string{"project/items/ITEM-0009-broken.md": "---\nid: [unclosed\n---\n"}, true)
+	var out, errOut bytes.Buffer
+	if code := run([]string{"-root", dir, "new", "item", "Another"}, &out, &errOut, time.Now); code != 1 {
+		t.Fatalf("new with a broken item: exit %d, want 1", code)
+	}
+	if !strings.Contains(errOut.String(), "ITEM-0009-broken.md") {
+		t.Errorf("stderr doesn't name the broken file: %s", errOut.String())
+	}
+	if matches, _ := filepath.Glob(filepath.Join(dir, "project/items/ITEM-0004-*.md")); len(matches) > 0 {
+		t.Errorf("new created %v despite the broken file", matches)
+	}
+}
+
+func TestNewItemTitlesRoundTrip(t *testing.T) {
+	titles := []string{"Decide on backend:", "null", "true", "123", "a: b", "#hash", "~",
+		strings.Repeat("A long title that keeps going ", 5) + "end"}
+	for i, title := range titles {
+		t.Run(title, func(t *testing.T) {
+			dir := writeRepo(t, nil, true)
+			var out, errOut bytes.Buffer
+			if code := run([]string{"-root", dir, "new", "item", title}, &out, &errOut, time.Now); code != 0 {
+				t.Fatalf("title %d: exit %d: %s", i, code, errOut.String())
+			}
+			r, probs, err := Load(dir)
+			if err != nil || len(probs) > 0 {
+				t.Fatalf("load: %v %v", err, probs)
+			}
+			if it := r.item("ITEM-0004"); it == nil || it.FM.Title != title {
+				t.Errorf("title = %+v, want %q", it, title)
+			}
+			if probs := lintDir(t, dir); len(probs) > 0 {
+				t.Errorf("lint:\n%s", strings.Join(probs, "\n"))
 			}
 		})
 	}

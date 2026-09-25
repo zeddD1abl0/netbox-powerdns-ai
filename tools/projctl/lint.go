@@ -27,11 +27,24 @@ var (
 	questionIDRE  = regexp.MustCompile(`^Q-\d{3}$`)
 	dateRE        = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 	supersededRE  = regexp.MustCompile(`^superseded by ADR-(\d{4})$`)
-	makeOnlyRE    = regexp.MustCompile(`^make( [A-Za-z0-9_.=/-]+)+$`)
+	// makeOnlyRE allows `make` with target names only: no flags, variables or paths.
+	makeOnlyRE = regexp.MustCompile(`^make( [a-z0-9][a-z0-9-]*)+$`)
+	// checkoutRE is the only action a GitHub workflow may use, pinned to a commit.
+	checkoutRE = regexp.MustCompile(`^actions/checkout@[0-9a-f]{40}$`)
 
-	// skipDirs are never searched for Markdown links.
-	skipDirs = []string{".git", "node_modules", "_vendor", "public", "resources", "testdata"}
+	// skipDirs are never searched for Markdown links. Hidden directories are
+	// skipped too (CI keeps its caches in .cache/), except hiddenAllow, which
+	// hold tracked Markdown.
+	skipDirs    = []string{"node_modules", "_vendor", "public", "resources", "testdata"}
+	hiddenAllow = []string{".claude", ".github"}
 )
+
+func skipDir(name string) bool {
+	if strings.HasPrefix(name, ".") {
+		return !slices.Contains(hiddenAllow, name)
+	}
+	return slices.Contains(skipDirs, name)
+}
 
 // Lint runs every check and returns the problems, sorted.
 func Lint(r *Repo) ([]Problem, error) {
@@ -191,12 +204,17 @@ func lintItems(r *Repo, add func(string, string, ...any)) {
 }
 
 func lintADRs(r *Repo, add func(string, string, ...any)) {
+	numbers := map[string]string{}
 	for _, a := range r.ADRs {
 		p, fm := a.Path, a.FM
 		if a.Number == "" {
 			add(p, "file name isn't of the form NNNN-short-title.md")
 			continue
 		}
+		if prev, dup := numbers[a.Number]; dup {
+			add(p, "ADR number %s is also used by %s", a.Number, prev)
+		}
+		numbers[a.Number] = p
 		if !strings.HasPrefix(fm.Title, a.Number+": ") {
 			add(p, "title %q doesn't start with %q", fm.Title, a.Number+": ")
 		}
@@ -257,7 +275,7 @@ func lintLinks(root string) ([]Problem, error) {
 			return err
 		}
 		if d.IsDir() {
-			if p != root && slices.Contains(skipDirs, d.Name()) {
+			if p != root && skipDir(d.Name()) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -303,10 +321,11 @@ func lintLinks(root string) ([]Problem, error) {
 	return probs, err
 }
 
-// lintCI checks that forge CI files only run make targets (ADR-0013).
+// lintCI checks that forge CI files only run make targets (ADR-0013), and
+// don't pull CI logic in any other way.
 func lintCI(root string) ([]Problem, error) {
 	var probs []Problem
-	check := func(rel string, keys []string) error {
+	check := func(rel string, keys []string, extra func(rel string, doc *yaml.Node)) error {
 		src, err := os.ReadFile(filepath.Join(root, rel))
 		if errors.Is(err, os.ErrNotExist) {
 			return nil
@@ -321,22 +340,60 @@ func lintCI(root string) ([]Problem, error) {
 		}
 		for _, cmd := range scriptLines(&doc, keys) {
 			if !makeOnlyRE.MatchString(cmd) {
-				probs = append(probs, Problem{rel, fmt.Sprintf("runs %q; CI files may only run make targets", cmd)})
+				probs = append(probs, Problem{rel, fmt.Sprintf("runs %q; CI files may only run `make <target>…`", cmd)})
 			}
 		}
+		extra(rel, &doc)
 		return nil
 	}
-	if err := check(".gitlab-ci.yml", []string{"script", "before_script", "after_script"}); err != nil {
+	gitlab := func(rel string, doc *yaml.Node) {
+		if hasKey(doc, "include") {
+			probs = append(probs, Problem{rel, "uses include:; all CI logic must live in the Makefile"})
+		}
+	}
+	github := func(rel string, doc *yaml.Node) {
+		for _, uses := range scriptLines(doc, []string{"uses"}) {
+			if !checkoutRE.MatchString(uses) {
+				probs = append(probs, Problem{rel, fmt.Sprintf("uses %q; only actions/checkout pinned to a commit SHA is allowed", uses)})
+			}
+		}
+		if hasKey(doc, "shell") {
+			probs = append(probs, Problem{rel, "overrides shell:; run lines must use the default shell"})
+		}
+	}
+	gitlabScripts := []string{"script", "before_script", "after_script", "pre_get_sources_script"}
+	if err := check(".gitlab-ci.yml", gitlabScripts, gitlab); err != nil {
 		return nil, err
 	}
 	workflows, _ := filepath.Glob(filepath.Join(root, ".github", "workflows", "*.y*ml"))
 	for _, wf := range workflows {
 		rel, _ := filepath.Rel(root, wf)
-		if err := check(filepath.ToSlash(rel), []string{"run"}); err != nil {
+		if err := check(filepath.ToSlash(rel), []string{"run"}, github); err != nil {
 			return nil, err
 		}
 	}
 	return probs, nil
+}
+
+// hasKey reports whether any mapping in the document has the key.
+func hasKey(n *yaml.Node, key string) bool {
+	switch n.Kind {
+	case yaml.MappingNode:
+		for i := 0; i+1 < len(n.Content); i += 2 {
+			if n.Content[i].Value == key || hasKey(n.Content[i+1], key) {
+				return true
+			}
+		}
+	case yaml.DocumentNode, yaml.SequenceNode:
+		for _, c := range n.Content {
+			if hasKey(c, key) {
+				return true
+			}
+		}
+	default:
+		// Scalars and aliases have no keys.
+	}
+	return false
 }
 
 // scriptLines collects every non-empty command line under the given keys,

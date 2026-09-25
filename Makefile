@@ -20,7 +20,8 @@ GO_MODULES := . tools/projctl
 # $(call each_module,COMMAND) runs COMMAND inside every Go module with packages.
 define each_module
 	@for m in $(GO_MODULES); do \
-		if [ -z "$$(go -C $$m list ./... 2>/dev/null)" ]; then echo "$$m: no packages yet, skipped"; continue; fi; \
+		pkgs=$$(go -C $$m list ./... 2>/dev/null) || { echo "$$m: go list failed:"; go -C $$m list ./...; exit 1; }; \
+		if [ -z "$$pkgs" ]; then echo "$$m: no packages yet, skipped"; continue; fi; \
 		echo "$$m: $(1)"; \
 		( cd $$m && $(1) ); \
 	done
@@ -116,7 +117,7 @@ docs-serve: ## Preview the docs site at http://localhost:1313
 	$(HUGO) server
 
 .PHONY: docs-links
-docs-links: ## Check internal links and anchors in the built site (run make docs first)
+docs-links: docs ## Build the site, then check its internal links and anchors
 	$(call tool,htmltest) -c site/htmltest.yml
 
 .PHONY: docs-theme-update
@@ -126,6 +127,13 @@ docs-theme-update: ## Update the vendored Hextra theme to its latest release (ne
 	@echo "Update the version in site/Hextra.LICENSE if the license changed."
 
 ##@ Project tracking
+
+# Titles reach projctl through the environment, taken literally: make doesn't
+# expand them and the shell doesn't run them, whatever quotes or $(…) they hold.
+override TITLE := $(value TITLE)
+override TYPE := $(value TYPE)
+override MILESTONE := $(value MILESTONE)
+export TITLE TYPE MILESTONE
 
 .PHONY: project
 project: ## Regenerate the project board and the ADR index
@@ -137,13 +145,13 @@ project-lint: ## Check tracking files, Markdown links and CI files
 
 .PHONY: item
 item: ## New work item: make item TITLE="…" [TYPE=task] [MILESTONE=Mnn]
-	@test -n "$(TITLE)" || { echo 'usage: make item TITLE="…" [TYPE=feature|bug|debt|task] [MILESTONE=Mnn]'; exit 2; }
-	$(PROJCTL) new item -type $(or $(TYPE),task) $(if $(MILESTONE),-milestone $(MILESTONE)) "$(TITLE)"
+	@test -n "$$TITLE" || { echo 'usage: make item TITLE="…" [TYPE=feature|bug|debt|task] [MILESTONE=Mnn]'; exit 2; }
+	$(PROJCTL) new item -type "$${TYPE:-task}" $${MILESTONE:+-milestone "$$MILESTONE"} "$$TITLE"
 
 .PHONY: adr
 adr: ## New architecture decision record: make adr TITLE="…"
-	@test -n "$(TITLE)" || { echo 'usage: make adr TITLE="…"'; exit 2; }
-	$(PROJCTL) new adr "$(TITLE)"
+	@test -n "$$TITLE" || { echo 'usage: make adr TITLE="…"'; exit 2; }
+	$(PROJCTL) new adr "$$TITLE"
 
 ##@ Help
 

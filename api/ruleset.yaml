@@ -82,12 +82,15 @@ rules:
     severity: error
     given: "$.paths[*][*].responses[?(match(@property, '^([45][0-9][0-9]|default)$'))]"
     then:
-      field: content
-      function: schema
-      functionOptions:
-        schema:
-          type: object
-          required: ["application/problem+json"]
+      # An error response with no body at all is flagged too.
+      - field: content
+        function: truthy
+      - field: content
+        function: schema
+        functionOptions:
+          schema:
+            type: object
+            required: ["application/problem+json"]
 
   zalando-243-official-status-codes:
     description: "MUST use official HTTP status codes [243]."

@@ -61,10 +61,7 @@ func run(args []string, stdout, stderr io.Writer, now func() time.Time) int {
 		return 0
 
 	case "index":
-		if len(loadProbs) > 0 {
-			for _, p := range loadProbs {
-				fmt.Fprintln(stderr, p)
-			}
+		if reportLoad(loadProbs, stderr) {
 			return 1
 		}
 		if err := writeGenerated(r); err != nil {
@@ -74,7 +71,7 @@ func run(args []string, stdout, stderr io.Writer, now func() time.Time) int {
 		return 0
 
 	case "new":
-		return runNew(r, rest, stdout, stderr, now().Format(time.DateOnly))
+		return runNew(r, loadProbs, rest, stdout, stderr, now().Format(time.DateOnly))
 
 	default:
 		fs.Usage()
@@ -82,7 +79,7 @@ func run(args []string, stdout, stderr io.Writer, now func() time.Time) int {
 	}
 }
 
-func runNew(r *Repo, args []string, stdout, stderr io.Writer, today string) int {
+func runNew(r *Repo, loadProbs []Problem, args []string, stdout, stderr io.Writer, today string) int {
 	if len(args) == 0 || (args[0] != "item" && args[0] != "adr") {
 		fmt.Fprint(stderr, usage)
 		return 2
@@ -101,6 +98,12 @@ func runNew(r *Repo, args []string, stdout, stderr io.Writer, today string) int 
 	}
 	title := fs.Arg(0)
 
+	// A file that doesn't parse is left out of the load, so its ID could be
+	// handed out again. Refuse until it's fixed.
+	if reportLoad(loadProbs, stderr) {
+		return 1
+	}
+
 	var path string
 	var err error
 	if kind == "item" {
@@ -113,8 +116,11 @@ func runNew(r *Repo, args []string, stdout, stderr io.Writer, today string) int 
 		return 1
 	}
 	// Keep the board and ADR index current.
-	r2, _, err := Load(r.Root)
+	r2, probs, err := Load(r.Root)
 	if err == nil {
+		if reportLoad(probs, stderr) {
+			return 1
+		}
 		err = writeGenerated(r2)
 	}
 	if err != nil {
@@ -123,4 +129,12 @@ func runNew(r *Repo, args []string, stdout, stderr io.Writer, today string) int 
 	}
 	fmt.Fprintln(stdout, path)
 	return 0
+}
+
+// reportLoad prints load problems and reports whether there were any.
+func reportLoad(probs []Problem, stderr io.Writer) bool {
+	for _, p := range probs {
+		fmt.Fprintln(stderr, p)
+	}
+	return len(probs) > 0
 }
