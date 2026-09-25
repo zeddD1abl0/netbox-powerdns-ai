@@ -45,7 +45,7 @@ expandable, before writing any product code:
 - [ ] The GitLab CI pipeline passes by calling make targets only.
 - [x] `projctl lint` fails on a deliberately broken item and passes on a clean tree (26 lint cases in `tools/projctl`; `make project-lint` is clean).
 - [ ] The docs site builds. An alert and a Mermaid block render on the site (verified) and raw on GitLab (after the branch is pushed).
-- [ ] Cold-start test passed (ITEM-0011).
+- [x] Cold-start test passed (ITEM-0011): two runs, 4 files read each.
 - [x] The milestone list M1 to M8 is finalised, with stub files for M01 to M08 (ITEM-0010).
 - [ ] The user has merged `m00-foundation` (creating `main` from it, since `main` is unborn).
 - [x] Per-item commit model adopted (ITEM-0012, ADR-0010).
@@ -78,6 +78,21 @@ Append-only and dated. Record what was run and what was seen.
     - 26 broken-fixture cases fail `projctl lint`.
   - The docs site builds offline, with `GOPROXY=off` and an empty Hugo cache.
   - The goimports format hook was proven live.
+- 2026-09-25: M0 close checks.
+  - **Cold-start test (ITEM-0011): passed twice.** Fresh read-only subagents
+    read 4 files in `CLAUDE.md`'s order and named M00, 11 of 12 items closed,
+    and ITEM-0011 as next. Their confusion points were fixed: a superseded-rules
+    callout above the approved design, and a precedence rule in `CLAUDE.md`.
+  - **`/code-review high`:** 10 findings, each checked against the code and all
+    fixed in ITEM-0013. One of them (projctl scanning GitLab's in-checkout
+    `.cache/`) would have failed every GitLab pipeline.
+  - **`/security-review`: not run.** M0 added no authentication, audit, secrets
+    or crypto code, which is the Definition of Done's trigger.
+  - **GitLab job emulated:** the pinned image, caches under `/src/.cache` as
+    `.gitlab-ci.yml` sets them, cold start. `make ci` passed in 3m30s, with
+    1,549 third-party `.md` files in `.cache/` correctly ignored.
+  - **Still waiting on the user:** the real GitLab and GitHub pipeline results,
+    and the raw-rendering check on GitLab, both after the branch is pushed.
 
 ## Approved design
 
