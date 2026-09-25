@@ -46,19 +46,21 @@ lives in `project/`, and decisions live in `docs/adr/`.
 
 ## Tracking rules
 
-- Every piece of work has an item. Create one with the `new-item` skill before
-  starting.
+- Every piece of work has an item. Create one with the `new-item` skill
+  (`make item TITLE="…"`) before starting.
 - Status lives in front matter: `open` → `in-progress` → `done`, or `blocked` or
   `wontfix`. Set `closed:` when an item is done or dropped.
 - **Files never move or get renamed.** Closing an item changes its status only.
 - Item notes are append-only and dated (`YYYY-MM-DD`).
-- A decision with lasting consequences gets an ADR (`new-adr` skill). Accepted
-  ADRs aren't edited: a new ADR supersedes them.
+- A decision with lasting consequences gets an ADR (`new-adr` skill,
+  `make adr TITLE="…"`). Accepted ADRs aren't edited: a new ADR supersedes
+  them.
 - A problem found while working becomes an item, not a code comment or a TODO.
 - When a question is answered, move it from **Open questions** to **Answered**
   in `project/requirements.md` with the date. Link the ADR or REQ it produced.
-- `project/README.md` is generated. Until `projctl` exists (ITEM-0005), update it
-  by hand in the same change as the items it lists.
+- `project/README.md` and the ADR table in `docs/adr/_index.md` are
+  **generated**. After changing any front matter, run `make project`. Never
+  edit them by hand; `make project-lint` fails when they're stale.
 
 ## Principles
 
@@ -122,7 +124,9 @@ build commands. The planned targets:
 | `make ci` | The full CI pipeline, run locally |
 | `make test-integration` | Integration tests against containerised NetBox and PowerDNS |
 | `make docs` | Build the documentation site |
-| `make project` | Regenerate `project/README.md` |
+| `make project` | Regenerate the board and the ADR index |
+| `make project-lint` | Check tracking files, Markdown links and CI files |
+| `make item TITLE="…"`, `make adr TITLE="…"` | Create the next work item or ADR |
 
 ## Definition of Done
 

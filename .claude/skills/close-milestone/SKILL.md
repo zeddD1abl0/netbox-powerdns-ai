@@ -18,8 +18,7 @@ and report what's outstanding. Don't mark the milestone done.
    ticked, and each tick is backed by evidence you can point to.
 3. **Checks.** Run `make check`, and `make test-integration` if the milestone
    touched NetBox, PowerDNS or the database. Both must be green. Paste the
-   summary into the milestone's **Verification log**, with the date. (Until
-   ITEM-0006 exists, record the manual checks you ran instead.)
+   summary into the milestone's **Verification log**, with the date.
 4. **Reviews.** Run `/code-review high`. Also run `/security-review` if the
    milestone touched authentication, authorisation, audit, secrets or crypto.
    Fix what they find, or record each finding as an item with a reason.
@@ -32,8 +31,9 @@ and report what's outstanding. Don't mark the milestone done.
    would take to see the milestone working, and the result when you ran them.
 7. **Tracking.**
    - Set the milestone's `status: done` and `closed:` date.
-   - Update `project/README.md`: the current milestone moves to the next one.
-   - Run `go run ./tools/projctl lint` once it exists.
+   - Set the next milestone's `status: in-progress` only when the user says
+     to start it.
+   - Run `make project`, then `make project-lint`.
    - Commit these changes on the branch.
 8. **Hand over.** Show the user:
    - a clean `git status`;
