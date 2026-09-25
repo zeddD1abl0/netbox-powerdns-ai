@@ -1,6 +1,6 @@
 ---
 title: "0005: Project identity — name, module path, env prefix, license"
-status: proposed # accepted once Q-055 (the GitHub owner) is answered
+status: accepted
 date: 2026-09-25
 decision-makers: [jordan]
 requirements: [REQ-001, REQ-026, REQ-035]
@@ -45,11 +45,12 @@ The user chose these on 2026-09-25 (Q-005):
 | Product name | `nbpdns` |
 | Binary | `nbpdns`, built from `cmd/nbpdns` |
 | Env var prefix | `NBPDNS_`, for example `NBPDNS_DATABASE_URL` or `NBPDNS_LOG_LEVEL` |
-| Go module path | `github.com/<owner>/netbox-powerdns-ai`. The repo keeps its current name; **the owner is pending (Q-055)**. |
+| Go module path | `github.com/zeddD1abl0/netbox-powerdns-ai`. The repo keeps its current name; the owner comes from the `github` remote (Q-055). |
 | License | Apache-2.0 |
 
-This ADR stays `proposed` until Q-055 fills in the owner. It becomes
-`accepted` with that one value added.
+The owner's mixed casing (`zeddD1abl0`) is kept exactly as the GitHub remote
+shows it. Go module paths are case-sensitive. Every import must use this
+spelling, and the module cache stores it escaped as `zedd!d1abl0`.
 
 ### Consequences
 
@@ -62,8 +63,9 @@ This ADR stays `proposed` until Q-055 fills in the owner. It becomes
   - Building inside the repo works regardless, because the path is only a
     name.
   - **External** consumers (the Terraform provider in M7, or anyone importing
-    a client package) can't resolve it until a GitHub repository exists at
-    that path. A push mirror from GitLab to GitHub is enough.
+    a client package) resolve it from GitHub. The repository exists there as
+    the `github` remote, so the code must be pushed to it before anything
+    imports the module.
 - Bad: the repo name (`netbox-powerdns-ai`) and the product name (`nbpdns`)
   differ. The README says so up front.
 
@@ -76,4 +78,4 @@ This ADR stays `proposed` until Q-055 fills in the owner. It becomes
 
 ## More information
 
-- Q-055: the GitHub owner.
+- Q-055: the GitHub owner, answered 2026-09-25.

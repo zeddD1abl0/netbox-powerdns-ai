@@ -2,7 +2,7 @@
 id: ITEM-0004
 title: Go module, pinned tools module and license
 type: task
-status: blocked
+status: open
 milestone: M00
 requirements: [REQ-001, REQ-026]
 depends_on: [Q-055]
@@ -35,3 +35,4 @@ tools in their own module keeps their dependencies out of the product's
 - 2026-09-25: `LICENSE` added from `/usr/share/common-licenses/Apache-2.0`.
   Its SHA-256 `cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30`
   matches the canonical Apache-2.0 text. Still blocked on Q-055 for `go.mod`.
+- 2026-09-25: Unblocked. Q-055 answered: `github.com/zeddD1abl0/netbox-powerdns-ai`.

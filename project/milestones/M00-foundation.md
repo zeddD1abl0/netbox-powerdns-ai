@@ -33,14 +33,14 @@ expandable, before writing any product code:
 |---|---|---|
 | M0a | Process scaffolding (no Go code), commit model | ITEM-0001, ITEM-0012 |
 | M0b | Discovery: answer the blocking questions and record ADRs | ITEM-0002, ITEM-0003, ITEM-0009, ITEM-0010 |
-| M0c | Toolchain: needs the module path from Q-005 | ITEM-0004 to ITEM-0008 |
+| M0c | Toolchain | ITEM-0004 to ITEM-0008 |
 | Close | Cold-start test, review, user merges the branch | ITEM-0011 |
 
 ## Acceptance criteria
 
 - [x] `CLAUDE.md`, `project/`, `docs/adr/` and the docs skeleton exist (ITEM-0001).
-- [ ] Every blocking question in `requirements.md` is answered (ITEM-0002 done; Q-055 remains).
-- [ ] ADRs exist for the docs platform, the API standard, and persistence and HA (ITEM-0009).
+- [x] Every blocking question in `requirements.md` is answered (ITEM-0002; Q-055 answered 2026-09-25).
+- [x] ADRs exist for the docs platform, the API standard, and persistence and HA (ITEM-0009: ADR-0011, ADR-0012, ADR-0009).
 - [ ] `make check` and `make ci` pass locally with only Go, Docker and make installed.
 - [ ] The GitLab CI pipeline passes by calling make targets only.
 - [ ] `projctl lint` fails on a deliberately broken item and passes on a clean tree.

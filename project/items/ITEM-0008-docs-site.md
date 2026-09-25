@@ -19,7 +19,7 @@ render well on the site **and** raw on GitHub and GitLab.
 
 ## Acceptance criteria
 
-- [ ] Platform chosen and recorded in an ADR (Q-044, ITEM-0009).
+- [x] Platform chosen and recorded in an ADR: Hugo, [ADR-0011](../../docs/adr/0011-documentation-platform-hugo.md).
 - [ ] Spike comparing the two candidate themes (Hextra and hugo-book, if Hugo is chosen). Criteria: no Node build, GitHub alert rendering, Mermaid, offline search, accessibility. The result goes in the ADR.
 - [ ] The docs tool is pinned (ADR-0003).
 - [ ] Render hooks for GitHub alerts and Mermaid code blocks.

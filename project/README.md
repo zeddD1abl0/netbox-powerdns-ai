@@ -7,9 +7,8 @@ that. Until then, update it by hand in the same change as the items it lists.
 
 **Updated:** 2026-09-25
 **Current milestone:** [M00 Foundation](milestones/M00-foundation.md), in progress (phase M0b: discovery), on branch `m00-foundation`
-**Next action:** get the GitHub owner for the module path (Q-055), which
-unblocks the toolchain work. Then settle the docs platform and the other
-questions M0 needs (ITEM-0003), and write the API-standard ADR (ITEM-0009).
+**Next action:** finalise the milestone list (ITEM-0010), then build the
+toolchain (ITEM-0004 to ITEM-0008).
 
 ## Milestones
 
@@ -31,32 +30,31 @@ M01 to M08 are provisional until ITEM-0010. Their scope is in [M00 §4](mileston
 
 | Item | Title | Status | Waiting on |
 |---|---|---|---|
-| [ITEM-0003](items/ITEM-0003-triage-remaining-questions.md) | Settle the non-blocking questions that M0 needs | open | user answers |
-| [ITEM-0008](items/ITEM-0008-docs-site.md) | Documentation site build and theme spike | open | Q-044, ITEM-0004 |
-| [ITEM-0009](items/ITEM-0009-foundation-adrs.md) | ADRs: docs platform, API standard, persistence and HA | open | Q-044; API-standard ADR to write |
+| [ITEM-0004](items/ITEM-0004-go-modules-and-pinned-tools.md) | Go module, pinned tools module and license | open | — |
+| [ITEM-0008](items/ITEM-0008-docs-site.md) | Documentation site build and theme spike | open | ITEM-0004 |
 | [ITEM-0010](items/ITEM-0010-finalise-milestones.md) | Finalise the milestone list and write M01 | open | — |
 | [ITEM-0011](items/ITEM-0011-cold-start-test.md) | Cold-start test and M0 close | open | all other M00 items |
-| [ITEM-0004](items/ITEM-0004-go-modules-and-pinned-tools.md) | Go module, pinned tools module and license | blocked | Q-055 |
 | [ITEM-0005](items/ITEM-0005-projctl.md) | projctl: scaffold, index and lint the tracking files | blocked | ITEM-0004 |
 | [ITEM-0006](items/ITEM-0006-makefile-and-ci-wrappers.md) | Makefile and thin CI wrappers for GitLab and GitHub | blocked | ITEM-0004 |
 | [ITEM-0007](items/ITEM-0007-lint-configuration.md) | Lint configuration for Go, OpenAPI and documentation | blocked | ITEM-0004 |
 | [ITEM-0001](items/ITEM-0001-process-scaffolding.md) | Process scaffolding (M0a) | done 2026-09-25 | — |
 | [ITEM-0002](items/ITEM-0002-answer-blocking-questions.md) | Answer the questions that block M1 | done 2026-09-25 | — |
+| [ITEM-0003](items/ITEM-0003-triage-remaining-questions.md) | Settle the non-blocking questions that M0 needs | done 2026-09-25 | — |
+| [ITEM-0009](items/ITEM-0009-foundation-adrs.md) | ADRs: docs platform, API standard, persistence and HA | done 2026-09-25 | — |
 | [ITEM-0012](items/ITEM-0012-per-item-commit-model.md) | Adopt per-item commits on milestone branches | done 2026-09-25 | — |
 
 ## Open questions
 
-41 open, 1 of them blocking: **Q-055**, the GitHub owner for the module path.
-14 answered. All are listed in [requirements.md](requirements.md#open-questions).
+35 open, none blocking; each waits for the milestone in its **Needed by**
+column. 21 answered. All are listed in [requirements.md](requirements.md#open-questions).
 
 ## Requirements
 
-36 requirements (REQ-001 to REQ-036), listed in
+37 requirements (REQ-001 to REQ-037), listed in
 [requirements.md](requirements.md#requirements). Coverage by items is reported
 here once `projctl` exists.
 
 ## Decisions
 
-ADR-0001 to ADR-0010 are listed in [docs/adr](../docs/adr/_index.md).
-ADR-0005 (project identity) is `proposed` until Q-055 is answered; the rest are
-accepted.
+ADR-0001 to ADR-0012, all accepted, are listed in
+[docs/adr](../docs/adr/_index.md).

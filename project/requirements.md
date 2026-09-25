@@ -52,6 +52,7 @@ When a question is answered:
 | REQ-034 | Secondaries learn about zones through catalog zones (RFC 9432). | Q-052, [ADR-0007](../docs/adr/0007-server-groups-and-catalog-zones.md) |
 | REQ-035 | The project is licensed under Apache-2.0. | Q-005, [ADR-0005](../docs/adr/0005-project-identity.md) |
 | REQ-036 | End-to-end tests run against a containerised lab: NetBox with the DNS plugin, a PowerDNS primary, and secondaries. | Q-048 |
+| REQ-037 | The API follows the Zalando RESTful API Guidelines in full, with no version in URL paths. | Q-056, [ADR-0012](../docs/adr/0012-api-standard.md) |
 
 ## Open questions
 
@@ -71,10 +72,8 @@ in [M00](milestones/M00-foundation.md).
 | Q-015 | Is multi-tenancy needed: are permissions scoped to zone, NetBox tenant or server group? | Global roles in v1, scoped by server group. Tenant scoping is a later ADR. | M2 |
 | Q-016 | What is the web UI's scope? | Settings, ops dashboard (sync status, drift, per-server health), approvals, audit viewer, users and roles. **No record editor**, since NetBox is the editor. | M1 |
 | Q-017 | What are the scale targets: servers, zones, records, change rate, propagation latency from NetBox to servers? | Needs an answer. A possible design target is 50 servers, 10k zones, 1M records, and under 60 s propagation. | M3 |
-| Q-018 | Why build this rather than extend an existing tool? Prior art: ArnesSI/netbox-powerdns-sync, a NetBox plugin last supported on NetBox 3.6. | Record the differentiators in the brief: standalone, audit and SIEM, multiple topologies, API and IaC. | M0 |
 | Q-053 | Which PowerDNS Authoritative versions must be supported? Catalog zones (Q-052) need 4.7 or later. | 4.9 and 5.x. | M3 |
 | Q-054 | The parts of Q-010 not yet answered: how is a sync triggered, and how are existing PowerDNS zones adopted into NetBox (brownfield import)? | A NetBox event-rule webhook plus a periodic full reconcile. An import tool for first adoption, with imported zones starting in report mode. | M3 |
-| Q-055 | **Blocking.** Which GitHub owner (user or organisation) goes in the module path `github.com/<owner>/netbox-powerdns-ai`? | Needs an answer. It blocks `go.mod` (ITEM-0004). | M0 |
 
 ### Architecture and deployment
 
@@ -128,15 +127,11 @@ in [M00](milestones/M00-foundation.md).
 
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
-| Q-044 | Which documentation platform? | Hugo: a Go binary pinned like the other tools, with a theme that needs no Node build (Hextra or hugo-book, chosen by spike). GitHub alerts and Mermaid render on the site and raw on both forges. Alternative: Zensical, with a containerised Python toolchain. | M0 |
-| Q-045 | Who is the documentation for? | Operators, API and IaC consumers, security and audit reviewers, contributors (Claude). | M0 |
-| Q-046 | How are the docs hosted and versioned? | The site is a release artifact that can be hosted anywhere. The API docs are served by the binary. Versioned docs from v1.0. | M0 |
 
 ### Process and environment
 
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
-| Q-049 | Which CI runners? | The existing self-hosted GitLab Kubernetes privileged runners, with Docker-in-Docker for integration tests. A GitHub Actions wrapper is kept ready but unused. | M0 |
 | Q-050 | Which UI technology? | Server-rendered templ + htmx with vendored assets and no Node build, embedded in the binary. | M1 |
 | Q-051 | What accessibility and localisation level? | WCAG 2.2 AA. English only. | M1 |
 
@@ -158,3 +153,10 @@ in [M00](milestones/M00-foundation.md).
 | Q-047 | What is the commit model? | Claude commits per item on a milestone branch. The user reviews, merges and pushes. | 2026-09-25 | [ADR-0010](../docs/adr/0010-claude-commits-per-item-on-milestone-branches.md) |
 | Q-048 | Is there a real lab Claude may reach? | No. The container lab only. | 2026-09-25 | REQ-036 |
 | Q-052 | How do secondaries learn about zones created or deleted on the primary? | Catalog zones (RFC 9432). | 2026-09-25 | REQ-034, [ADR-0007](../docs/adr/0007-server-groups-and-catalog-zones.md) |
+| Q-018 | Why build this rather than extend an existing tool? | Independent of NetBox upgrades; audit, SIEM and traceability; topologies and change safety. Recorded in the brief. | 2026-09-25 | [brief](brief.md#answers-2026-09-25-m0b-discovery-continued) |
+| Q-044 | Which documentation platform? | Hugo. | 2026-09-25 | [ADR-0011](../docs/adr/0011-documentation-platform-hugo.md) |
+| Q-045 | Who is the documentation for? | Default accepted: operators, API and IaC consumers, security and audit reviewers, contributors (Claude). | 2026-09-25 | [docs index](../docs/_index.md) |
+| Q-046 | How are the docs hosted and versioned? | Default accepted: the site is a release artifact that can be hosted anywhere; the API docs are served by the binary; versioned docs from v1.0. | 2026-09-25 | [ADR-0011](../docs/adr/0011-documentation-platform-hugo.md) |
+| Q-049 | Which CI runners? | Default accepted: the self-hosted GitLab Kubernetes privileged runners. A GitHub Actions wrapper is kept ready. | 2026-09-25 | ITEM-0006 |
+| Q-055 | Which GitHub owner goes in the module path? | `zeddD1abl0`, from the `github` remote: `github.com/zeddD1abl0/netbox-powerdns-ai`. | 2026-09-25 | [ADR-0005](../docs/adr/0005-project-identity.md) |
+| Q-056 | Which API style guide, and are versions put in URL paths? | The Zalando RESTful API Guidelines, followed in full, including rule 115: no version in URL paths. | 2026-09-25 | REQ-037, [ADR-0012](../docs/adr/0012-api-standard.md) |

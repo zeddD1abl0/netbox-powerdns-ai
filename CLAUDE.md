@@ -83,10 +83,11 @@ defaults.
 - **Go:** Google Go Style Guide. Code goes under `internal/`. Stdlib first.
   Justify each new dependency in its item; a significant one gets an ADR.
   Allowed licenses: MIT, BSD, Apache-2.0, MPL-2.0.
-- **API:** OpenAPI 3.1 and the Zalando RESTful API Guidelines. Errors use RFC
-  9457 problem+json. Paths are versioned as `/api/v1`. Updates use
-  ETag/If-Match, lists use cursor pagination, and creates accept an
-  `Idempotency-Key`.
+- **API** ([ADR-0012](docs/adr/0012-api-standard.md)): OpenAPI 3.1 and the
+  Zalando RESTful API Guidelines in full. There's **no version in paths**, so
+  every change must stay backward compatible. Errors use RFC 9457
+  problem+json. Updates use ETag/If-Match, lists use cursor pagination, and
+  creates accept an `Idempotency-Key`.
 - **Config:** precedence is defaults < file < env < flags. Runtime settings live
   in the DB unless env or file pins them. Bootstrap keys are never editable from
   the web. Every secret has a `*_FILE` variant.

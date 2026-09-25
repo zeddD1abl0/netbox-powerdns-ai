@@ -18,9 +18,11 @@ from [`template.md`](template.md).
 | [0002](0002-track-work-in-repo.md) | Track work in the repo as small files with generated indexes | accepted |
 | [0003](0003-self-contained-forge-neutral-toolchain.md) | Self-contained, forge-neutral toolchain | accepted |
 | [0004](0004-v1-scope-netbox-source-of-truth-powerdns-auth.md) | v1 scope: NetBox is the source of truth, PowerDNS Authoritative is the target | accepted |
-| [0005](0005-project-identity.md) | Project identity: name, module path, env prefix, license | proposed (awaiting Q-055) |
+| [0005](0005-project-identity.md) | Project identity: name, module path, env prefix, license | accepted |
 | [0006](0006-integrations-netbox-dns-plugin-and-powerdns-api.md) | Integrations: read the NetBox DNS plugin, write through the PowerDNS API only | accepted |
 | [0007](0007-server-groups-and-catalog-zones.md) | Server groups, v1 topologies and catalog zones | accepted |
 | [0008](0008-per-zone-drift-policy.md) | Drift policy per zone | accepted |
 | [0009](0009-persistence-and-high-availability.md) | Persistence and high availability: PostgreSQL and SQLite | accepted |
 | [0010](0010-claude-commits-per-item-on-milestone-branches.md) | Claude commits per item on milestone branches | accepted |
+| [0011](0011-documentation-platform-hugo.md) | Documentation platform: Hugo | accepted |
+| [0012](0012-api-standard.md) | API standard: OpenAPI 3.1 spec-first, Zalando guidelines | accepted |
