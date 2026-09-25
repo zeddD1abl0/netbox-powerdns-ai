@@ -6,25 +6,22 @@ that. Until then, update it by hand in the same change as the items it lists.
 -->
 
 **Updated:** 2026-09-25
-**Current milestone:** [M00 Foundation](milestones/M00-foundation.md), in progress (phase M0b: discovery), on branch `m00-foundation`
-**Next action:** finalise the milestone list (ITEM-0010), then build the
-toolchain (ITEM-0004 to ITEM-0008).
+**Current milestone:** [M00 Foundation](milestones/M00-foundation.md), in progress (phase M0c: toolchain), on branch `m00-foundation`
+**Next action:** build the toolchain (ITEM-0004 to ITEM-0008).
 
 ## Milestones
 
 | ID | Title | Status |
 |---|---|---|
 | [M00](milestones/M00-foundation.md) | Foundation | in progress |
-| M01 | Service skeleton | planned (provisional) |
-| M02 | Identity | planned (provisional) |
-| M03 | Read path and drift report | planned (provisional) |
-| M04 | Write path | planned (provisional) |
-| M05 | SIEM export | planned (provisional) |
-| M06 | Production hardening | planned (provisional) |
-| M07 | Terraform/OpenTofu provider | planned (provisional) |
-| M08 | Ansible collection and v1.0 | planned (provisional) |
-
-M01 to M08 are provisional until ITEM-0010. Their scope is in [M00 §4](milestones/M00-foundation.md#4-proposed-milestones-provisional-finalised-at-the-end-of-m0).
+| [M01](milestones/M01-service-skeleton.md) | Service skeleton | planned |
+| [M02](milestones/M02-identity.md) | Identity | planned |
+| [M03](milestones/M03-read-path-drift-report.md) | Read path and drift report | planned |
+| [M04](milestones/M04-write-path.md) | Write path | planned |
+| [M05](milestones/M05-siem-export.md) | SIEM export | planned |
+| [M06](milestones/M06-production-hardening.md) | Production hardening | planned |
+| [M07](milestones/M07-terraform-provider.md) | Terraform/OpenTofu provider | planned |
+| [M08](milestones/M08-ansible-collection-v1.md) | Ansible collection and v1.0 | planned |
 
 ## Items: M00
 
@@ -32,7 +29,6 @@ M01 to M08 are provisional until ITEM-0010. Their scope is in [M00 §4](mileston
 |---|---|---|---|
 | [ITEM-0004](items/ITEM-0004-go-modules-and-pinned-tools.md) | Go module, pinned tools module and license | open | — |
 | [ITEM-0008](items/ITEM-0008-docs-site.md) | Documentation site build and theme spike | open | ITEM-0004 |
-| [ITEM-0010](items/ITEM-0010-finalise-milestones.md) | Finalise the milestone list and write M01 | open | — |
 | [ITEM-0011](items/ITEM-0011-cold-start-test.md) | Cold-start test and M0 close | open | all other M00 items |
 | [ITEM-0005](items/ITEM-0005-projctl.md) | projctl: scaffold, index and lint the tracking files | blocked | ITEM-0004 |
 | [ITEM-0006](items/ITEM-0006-makefile-and-ci-wrappers.md) | Makefile and thin CI wrappers for GitLab and GitHub | blocked | ITEM-0004 |
@@ -41,6 +37,7 @@ M01 to M08 are provisional until ITEM-0010. Their scope is in [M00 §4](mileston
 | [ITEM-0002](items/ITEM-0002-answer-blocking-questions.md) | Answer the questions that block M1 | done 2026-09-25 | — |
 | [ITEM-0003](items/ITEM-0003-triage-remaining-questions.md) | Settle the non-blocking questions that M0 needs | done 2026-09-25 | — |
 | [ITEM-0009](items/ITEM-0009-foundation-adrs.md) | ADRs: docs platform, API standard, persistence and HA | done 2026-09-25 | — |
+| [ITEM-0010](items/ITEM-0010-finalise-milestones.md) | Finalise the milestone list and write the milestone stubs | done 2026-09-25 | — |
 | [ITEM-0012](items/ITEM-0012-per-item-commit-model.md) | Adopt per-item commits on milestone branches | done 2026-09-25 | — |
 
 ## Open questions

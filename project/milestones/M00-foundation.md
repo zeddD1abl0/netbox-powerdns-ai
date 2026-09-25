@@ -46,7 +46,7 @@ expandable, before writing any product code:
 - [ ] `projctl lint` fails on a deliberately broken item and passes on a clean tree.
 - [ ] The docs site builds. An alert and a Mermaid block render on the site and raw on GitLab.
 - [ ] Cold-start test passed (ITEM-0011).
-- [ ] The milestone list M1 to M8 is finalised, with a file for M01 (ITEM-0010).
+- [x] The milestone list M1 to M8 is finalised, with stub files for M01 to M08 (ITEM-0010).
 - [ ] The user has merged `m00-foundation` (creating `main` from it, since `main` is unborn).
 - [x] Per-item commit model adopted (ITEM-0012, ADR-0010).
 
