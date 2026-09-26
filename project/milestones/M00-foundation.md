@@ -47,7 +47,7 @@ expandable, before writing any product code:
 - [x] The docs site builds. An alert and a Mermaid block render on the site (verified) and raw on GitLab (reported by the user 2026-09-26).
 - [x] Cold-start test passed (ITEM-0011): two runs, 4 files read each.
 - [x] The milestone list M1 to M8 is finalised, with stub files for M01 to M08 (ITEM-0010).
-- [ ] The user has merged `m00-foundation` (creating `main` from it, since `main` is unborn).
+- [x] The user has merged `m00-foundation` (creating `main` from it, since `main` is unborn): merge request completed 2026-09-26, `main` at `fcbdaeb`.
 - [x] Per-item commit model adopted (ITEM-0012, ADR-0010).
 
 ## Verification log
@@ -139,6 +139,10 @@ Append-only and dated. Record what was run and what was seen.
     both pipelines, then creates `main` from it. The criterion "The user has
     merged `m00-foundation`" is ticked, with the resulting commit, in the
     first commit on `m01-service-skeleton`.
+- 2026-09-26: **Merged.** The user merged `m00-foundation` through a GitLab
+  merge request and deleted the source branch. GitLab fast-forwarded `main`
+  to `fcbdaeb`, the branch tip, so there's no merge commit. `main` is at
+  `fcbdaeb` on both `origin` and `github`.
 
 ## Approved design
 

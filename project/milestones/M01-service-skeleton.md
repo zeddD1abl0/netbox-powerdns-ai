@@ -1,8 +1,8 @@
 ---
 id: M01
 title: Service skeleton
-status: planned # planned | in-progress | done
-started:
+status: in-progress # planned | in-progress | done
+started: 2026-09-26
 closed:
 ---
 
