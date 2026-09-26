@@ -22,9 +22,11 @@ PLATFORM := $(shell go env GOOS)-$(shell go env GOARCH)
 TOOLS_DIR := $(ROOT)/.cache/tools/$(PLATFORM)
 
 # $(call binary_tool,PREFIX,NAME) defines $(PREFIX) and the rule that fetches it.
+# A binary is fetched and verified again whenever tools.mk changes, so a new
+# pin never leaves an old binary in use.
 define binary_tool
 $(1) := $$(TOOLS_DIR)/$(2)-$$($(1)_VERSION)
-$$($(1)):
+$$($(1)): tools/tools.mk
 	@test -n "$$($(1)_SHA256_$$(PLATFORM))" || { echo "no pinned $(2) for $$(PLATFORM); run the tools in the CI image with 'make shell'"; exit 1; }
 	@tools/fetch.sh "https://github.com/$$($(1)_REPO)/releases/download/v$$($(1)_VERSION)/$$($(1)_ASSET_$$(PLATFORM))" \
 		"$$($(1)_SHA256_$$(PLATFORM))" "$$($(1)_MEMBER_$$(PLATFORM))" "$$@"
@@ -50,13 +52,14 @@ tools-update: ## Move every tool to its latest release (binaries, source-built t
 	go -C tools/projctl get -u ./... && go -C tools/projctl mod tidy
 
 .PHONY: tools-audit
-tools-audit: ## Check every pinned hash against its release's published checksums file
-	tools/update.sh --current
-	@git diff --exit-code -- tools/tools.mk || { echo "a pinned hash differs from the published checksums"; exit 1; }
+tools-audit: ## Check every pinned hash against its release's published checksums file (changes nothing)
+	tools/update.sh --check
 
 .PHONY: shell
-shell: ## Open a shell in the CI image with the repository mounted (for macOS and Windows)
-	docker run --rm -it --user "$$(id -u):$$(id -g)" -v "$(ROOT)":/src -w /src \
+# The image's digest names a multi-arch index, and only linux-amd64 tools are
+# pinned, so the shell always runs the amd64 variant (emulated on arm64 hosts).
+shell: ## Open a shell in the CI image with the repository mounted (for macOS, Windows and arm64 hosts)
+	docker run --rm -it --platform linux/amd64 --user "$$(id -u):$$(id -g)" -v "$(ROOT)":/src -w /src \
 		-e HOME=/tmp -e GOTOOLCHAIN=local -e GOFLAGS=-modcacherw \
 		-e GOMODCACHE=/src/.cache/gomod -e GOCACHE=/src/.cache/gobuild \
 		$(CI_IMAGE) bash

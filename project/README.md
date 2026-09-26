@@ -9,7 +9,7 @@
 
 | Milestone | Title | Status | Items closed |
 |---|---|---|---|
-| [M00](milestones/M00-foundation.md) | Foundation | in-progress | 14 of 15 |
+| [M00](milestones/M00-foundation.md) | Foundation | in-progress | 14 of 16 |
 | [M01](milestones/M01-service-skeleton.md) | Service skeleton | planned | — |
 | [M02](milestones/M02-identity.md) | Identity | planned | — |
 | [M03](milestones/M03-read-path-drift-report.md) | Read path and drift report | planned | — |
@@ -24,6 +24,7 @@
 | Item | Title | Type | Status | Waiting on |
 |---|---|---|---|---|
 | [ITEM-0011](items/ITEM-0011-cold-start-test.md) | Cold-start test and M0 close | task | in-progress | — |
+| [ITEM-0016](items/ITEM-0016-fix-the-second-m0-code-review-findings.md) | Fix the second M0 code-review findings | bug | in-progress | — |
 | [ITEM-0001](items/ITEM-0001-process-scaffolding.md) | Process scaffolding (M0a) | task | done 2026-09-25 | — |
 | [ITEM-0002](items/ITEM-0002-answer-blocking-questions.md) | Answer the questions that block M1 | task | done 2026-09-25 | — |
 | [ITEM-0003](items/ITEM-0003-triage-remaining-questions.md) | Settle the non-blocking questions that M0 needs | task | done 2026-09-25 | — |

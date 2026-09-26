@@ -33,8 +33,8 @@ var (
 	checkoutRE = regexp.MustCompile(`^actions/checkout@[0-9a-f]{40}$`)
 
 	// skipDirs are never searched for Markdown links. Hidden directories are
-	// skipped too (CI keeps its caches in .cache/), except hiddenAllow, which
-	// hold tracked Markdown.
+	// skipped too (.cache/ holds the fetched tools and, under `make shell`,
+	// Go's module cache), except hiddenAllow, which hold tracked Markdown.
 	skipDirs    = []string{"node_modules", "_vendor", "public", "resources", "testdata"}
 	hiddenAllow = []string{".claude", ".github"}
 )
@@ -323,14 +323,21 @@ func lintLinks(root string) ([]Problem, error) {
 
 // lintCI checks that forge CI files only run make targets, don't pull CI
 // logic in any other way (ADR-0014), and together run exactly what `make ci`
-// runs, in the Makefile's CI_IMAGE (ADR-0016).
+// runs, with every job in the Makefile's CI_IMAGE and none able to pass or be
+// skipped while its target fails (ADR-0016).
 func lintCI(root string) ([]Problem, error) {
 	var probs []Problem
 	mk, err := loadMakefile(root)
 	if err != nil {
 		return nil, err
 	}
-	check := func(rel string, keys []string, imageKey string, extra func(rel string, doc *yaml.Node)) error {
+	type forge struct {
+		scripts []string                 // keys that hold commands
+		env     string                   // the key that sets environment variables
+		jobs    func(*yaml.Node) []ciJob // the file's jobs
+		extra   func(rel string, doc *yaml.Node)
+	}
+	check := func(rel string, f forge) error {
 		src, err := os.ReadFile(filepath.Join(root, rel))
 		if errors.Is(err, os.ErrNotExist) {
 			return nil
@@ -343,41 +350,61 @@ func lintCI(root string) ([]Problem, error) {
 			probs = append(probs, Problem{rel, "invalid YAML: " + err.Error()})
 			return nil
 		}
-		cmds := scriptLines(&doc, keys)
+		cmds := scriptLines(&doc, f.scripts)
 		for _, cmd := range cmds {
 			if !makeOnlyRE.MatchString(cmd) {
 				probs = append(probs, Problem{rel, fmt.Sprintf("runs %q; CI files may only run `make <target>…`", cmd)})
 			}
 		}
-		extra(rel, &doc)
+		for _, v := range envNames(&doc, f.env) {
+			if slices.Contains(makeEnvVars, v) {
+				probs = append(probs, Problem{rel, "sets " + v + ", which changes what make runs"})
+			}
+		}
+		jobs := f.jobs(&doc)
+		for _, j := range jobs {
+			for _, k := range j.skips {
+				probs = append(probs, Problem{rel, "job " + j.name + " uses " + k + ":, which can let it pass or skip while its make target fails"})
+			}
+		}
+		f.extra(rel, &doc)
 		if mk != nil {
-			probs = append(probs, mk.lintCoverage(rel, cmds, imageValues(&doc, imageKey))...)
+			probs = append(probs, mk.lintCoverage(rel, cmds, jobs)...)
 		}
 		return nil
 	}
-	gitlab := func(rel string, doc *yaml.Node) {
-		if hasKey(doc, "include") {
-			probs = append(probs, Problem{rel, "uses include:; all CI logic must live in the Makefile"})
-		}
-	}
-	github := func(rel string, doc *yaml.Node) {
-		for _, uses := range scriptLines(doc, []string{"uses"}) {
-			if !checkoutRE.MatchString(uses) {
-				probs = append(probs, Problem{rel, fmt.Sprintf("uses %q; only actions/checkout pinned to a commit SHA is allowed", uses)})
+	gitlab := forge{
+		scripts: []string{"script", "before_script", "after_script", "pre_get_sources_script"},
+		env:     "variables",
+		jobs:    gitlabJobs,
+		extra: func(rel string, doc *yaml.Node) {
+			if hasKey(doc, "include") {
+				probs = append(probs, Problem{rel, "uses include:; all CI logic must live in the Makefile"})
 			}
-		}
-		if hasKey(doc, "shell") {
-			probs = append(probs, Problem{rel, "overrides shell:; run lines must use the default shell"})
-		}
+		},
 	}
-	gitlabScripts := []string{"script", "before_script", "after_script", "pre_get_sources_script"}
-	if err := check(".gitlab-ci.yml", gitlabScripts, "image", gitlab); err != nil {
+	github := forge{
+		scripts: []string{"run"},
+		env:     "env",
+		jobs:    githubJobs,
+		extra: func(rel string, doc *yaml.Node) {
+			for _, uses := range scriptLines(doc, []string{"uses"}) {
+				if !checkoutRE.MatchString(uses) {
+					probs = append(probs, Problem{rel, fmt.Sprintf("uses %q; only actions/checkout pinned to a commit SHA is allowed", uses)})
+				}
+			}
+			if hasKey(doc, "shell") {
+				probs = append(probs, Problem{rel, "overrides shell:; run lines must use the default shell"})
+			}
+		},
+	}
+	if err := check(".gitlab-ci.yml", gitlab); err != nil {
 		return nil, err
 	}
 	workflows, _ := filepath.Glob(filepath.Join(root, ".github", "workflows", "*.y*ml"))
 	for _, wf := range workflows {
 		rel, _ := filepath.Rel(root, wf)
-		if err := check(filepath.ToSlash(rel), []string{"run"}, "container", github); err != nil {
+		if err := check(filepath.ToSlash(rel), github); err != nil {
 			return nil, err
 		}
 	}

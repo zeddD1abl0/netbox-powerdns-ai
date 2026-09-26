@@ -7,8 +7,6 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-
-	"go.yaml.in/yaml/v3"
 )
 
 var (
@@ -111,8 +109,9 @@ func makeTargets(cmds []string) []string {
 }
 
 // lintCoverage checks that a CI file's jobs, together, run exactly the
-// targets `make ci` runs, and only in the Makefile's CI_IMAGE (ADR-0016).
-func (m *makefile) lintCoverage(rel string, cmds, images []string) []Problem {
+// targets `make ci` runs, and that each job runs in the Makefile's CI_IMAGE
+// (ADR-0016).
+func (m *makefile) lintCoverage(rel string, cmds []string, jobs []ciJob) []Problem {
 	var probs []Problem
 	want := m.work([]string{"ci"})
 	got := m.work(makeTargets(cmds))
@@ -135,57 +134,17 @@ func (m *makefile) lintCoverage(rel string, cmds, images []string) []Problem {
 	if len(extra) > 0 {
 		probs = append(probs, Problem{rel, "runs " + strings.Join(extra, ", ") + ", which `make ci` doesn't"})
 	}
-	if m.ciImage != "" {
-		if len(images) == 0 {
-			probs = append(probs, Problem{rel, "names no image; use the Makefile's CI_IMAGE"})
-		}
-		for _, img := range images {
-			if img != m.ciImage {
-				probs = append(probs, Problem{rel, "image " + img + " isn't the Makefile's CI_IMAGE " + m.ciImage})
-			}
+	if m.ciImage == "" {
+		return probs
+	}
+	for _, j := range jobs {
+		switch j.image {
+		case m.ciImage:
+		case "":
+			probs = append(probs, Problem{rel, "job " + j.name + " names no image; use the Makefile's CI_IMAGE"})
+		default:
+			probs = append(probs, Problem{rel, "job " + j.name + ": image " + j.image + " isn't the Makefile's CI_IMAGE " + m.ciImage})
 		}
 	}
 	return probs
-}
-
-// imageValues collects the images named under key anywhere in the document:
-// a plain scalar, or a mapping's name (GitLab) or image (GitHub).
-func imageValues(n *yaml.Node, key string) []string {
-	var out []string
-	var walk func(*yaml.Node)
-	walk = func(v *yaml.Node) {
-		switch v.Kind {
-		case yaml.DocumentNode, yaml.SequenceNode:
-			for _, c := range v.Content {
-				walk(c)
-			}
-		case yaml.MappingNode:
-			for i := 0; i+1 < len(v.Content); i += 2 {
-				k, val := v.Content[i], v.Content[i+1]
-				if val.Kind == yaml.AliasNode {
-					val = val.Alias
-				}
-				if k.Value != key {
-					walk(val)
-					continue
-				}
-				switch val.Kind {
-				case yaml.ScalarNode:
-					out = append(out, val.Value)
-				case yaml.MappingNode:
-					for j := 0; j+1 < len(val.Content); j += 2 {
-						if n := val.Content[j].Value; n == "name" || n == "image" {
-							out = append(out, val.Content[j+1].Value)
-						}
-					}
-				default:
-					// Other shapes name no image.
-				}
-			}
-		default:
-			// Scalars and aliases outside an image key name no image.
-		}
-	}
-	walk(n)
-	return out
 }

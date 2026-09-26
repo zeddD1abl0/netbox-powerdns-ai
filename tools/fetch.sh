@@ -5,7 +5,8 @@
 #
 # Downloads URL, checks it against SHA256 (the hash pinned in tools/tools.mk,
 # never a checksums file fetched at build time), extracts MEMBER from the
-# .tar.gz, and installs it at DEST. DEST appears only if everything succeeds.
+# .tar.gz, and installs it at DEST. DEST exists afterwards only if everything
+# succeeded: a binary from an earlier pin is removed first.
 set -eu
 
 if [ $# -ne 4 ]; then
@@ -19,6 +20,7 @@ if [ -z "$sha256" ]; then
 	exit 1
 fi
 
+rm -f "$dest"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
@@ -30,6 +32,9 @@ echo "$sha256  $tmp/archive.tar.gz" | sha256sum -c --quiet - || {
 }
 tar -xzf "$tmp/archive.tar.gz" -C "$tmp" "$member"
 chmod +x "$tmp/$member"
+# tar keeps the archive's mtime. Make compares DEST with tools.mk, so give it
+# the time of the fetch.
+touch "$tmp/$member"
 mkdir -p "$(dirname "$dest")"
 mv "$tmp/$member" "$dest.partial"
 mv "$dest.partial" "$dest"

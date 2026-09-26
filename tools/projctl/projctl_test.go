@@ -347,7 +347,27 @@ func TestLintCatches(t *testing.T) {
 		{"GitLab image differs from CI_IMAGE", map[string]string{".gitlab-ci.yml": "all:\n  image: golang:latest\n  script:\n    - make ci\n"},
 			"image golang:latest isn't the Makefile's CI_IMAGE golang:1@sha256:abc"},
 		{"GitLab names no image", map[string]string{".gitlab-ci.yml": "all:\n  script:\n    - make ci\n"},
-			".gitlab-ci.yml: names no image"},
+			".gitlab-ci.yml: job all names no image"},
+		{"GitLab job without an image beside one with it", map[string]string{".gitlab-ci.yml": baseRepo[".gitlab-ci.yml"] + "extra:\n  script:\n    - make docs\n"},
+			".gitlab-ci.yml: job extra names no image"},
+		{"GitLab later extends overrides the image", map[string]string{".gitlab-ci.yml": ".go:\n  image: golang:1@sha256:abc\n.other:\n  image: golang:latest\nall:\n  extends: [.go, .other]\n  script:\n    - make ci\n"},
+			"job all: image golang:latest isn't the Makefile's CI_IMAGE"},
+		{"GitLab allow_failure through a template", map[string]string{".gitlab-ci.yml": ".go:\n  image: golang:1@sha256:abc\n  allow_failure: true\nall:\n  extends: .go\n  script:\n    - make ci\n"},
+			"job all uses allow_failure:"},
+		{"GitLab manual job", map[string]string{".gitlab-ci.yml": "all:\n  image: golang:1@sha256:abc\n  when: manual\n  script:\n    - make ci\n"},
+			"job all uses when:"},
+		{"GitLab job rules", map[string]string{".gitlab-ci.yml": "all:\n  image: golang:1@sha256:abc\n  rules:\n    - when: never\n  script:\n    - make ci\n"},
+			"job all uses rules:"},
+		{"GitLab MAKEFLAGS", map[string]string{".gitlab-ci.yml": "variables:\n  MAKEFLAGS: -i\nall:\n  image: golang:1@sha256:abc\n  script:\n    - make ci\n"},
+			".gitlab-ci.yml: sets MAKEFLAGS"},
+		{"GitHub job without a container", map[string]string{".github/workflows/ci.yml": baseRepo[".github/workflows/ci.yml"] + "  extra:\n    steps:\n      - run: make docs\n"},
+			".github/workflows/ci.yml: job extra names no image"},
+		{"GitHub step continue-on-error", map[string]string{".github/workflows/ci.yml": "jobs:\n  all:\n    container: golang:1@sha256:abc\n    steps:\n      - run: make ci\n        continue-on-error: true\n"},
+			"job all uses continue-on-error:"},
+		{"GitHub job if", map[string]string{".github/workflows/ci.yml": "jobs:\n  all:\n    if: false\n    container: golang:1@sha256:abc\n    steps:\n      - run: make ci\n"},
+			"job all uses if:"},
+		{"GitHub MAKEFLAGS", map[string]string{".github/workflows/ci.yml": "jobs:\n  all:\n    container: golang:1@sha256:abc\n    steps:\n      - run: make ci\n        env:\n          MAKEFLAGS: -k\n"},
+			".github/workflows/ci.yml: sets MAKEFLAGS"},
 		{"GitHub jobs miss a make ci target", map[string]string{".github/workflows/ci.yml": "jobs:\n  lint:\n    container: golang:1@sha256:abc\n    steps:\n      - run: make lint\n"},
 			".github/workflows/ci.yml: doesn't run docs, vet, which `make ci` runs"},
 		{"GitHub container image differs from CI_IMAGE", map[string]string{".github/workflows/ci.yml": "jobs:\n  all:\n    container:\n      image: golang:1.26\n    steps:\n      - run: make ci\n"},
@@ -360,6 +380,30 @@ func TestLintCatches(t *testing.T) {
 			probs := lintDir(t, writeRepo(t, tt.files, true))
 			if !slices.ContainsFunc(probs, func(p string) bool { return strings.Contains(p, tt.want) }) {
 				t.Errorf("want a problem containing %q, got:\n%s", tt.want, strings.Join(probs, "\n"))
+			}
+		})
+	}
+}
+
+// TestLintCIAccepts checks CI files that are valid, though written
+// differently from the base repository's.
+func TestLintCIAccepts(t *testing.T) {
+	tests := []struct {
+		name  string
+		files map[string]string
+	}{
+		{"GitLab default image", map[string]string{".gitlab-ci.yml": "default:\n  image: golang:1@sha256:abc\nall:\n  script:\n    - make ci\n"}},
+		{"GitLab top-level image", map[string]string{".gitlab-ci.yml": "image: golang:1@sha256:abc\nall:\n  script:\n    - make ci\n"}},
+		{"GitLab image as a mapping", map[string]string{".gitlab-ci.yml": "all:\n  image:\n    name: golang:1@sha256:abc\n  script:\n    - make ci\n"}},
+		{"GitLab image through a merge key", map[string]string{".gitlab-ci.yml": ".go: &go\n  image: golang:1@sha256:abc\nall:\n  <<: *go\n  script:\n    - make ci\n"}},
+		{"GitLab image through nested extends", map[string]string{".gitlab-ci.yml": ".base:\n  image: golang:1@sha256:abc\n.go:\n  extends: .base\nall:\n  extends: .go\n  script:\n    - make ci\n"}},
+		{"GitLab workflow rules", map[string]string{".gitlab-ci.yml": "workflow:\n  rules:\n    - if: $CI_COMMIT_BRANCH\n      when: always\nvariables:\n  GOTOOLCHAIN: local\nall:\n  image: golang:1@sha256:abc\n  script:\n    - make ci\n"}},
+		{"GitHub env without make variables", map[string]string{".github/workflows/ci.yml": "env:\n  GOTOOLCHAIN: local\njobs:\n  all:\n    container:\n      image: golang:1@sha256:abc\n    steps:\n      - run: make ci\n"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if probs := lintDir(t, writeRepo(t, tt.files, true)); len(probs) > 0 {
+				t.Errorf("want no problems, got:\n%s", strings.Join(probs, "\n"))
 			}
 		})
 	}
