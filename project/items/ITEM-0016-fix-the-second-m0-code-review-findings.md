@@ -2,12 +2,12 @@
 id: ITEM-0016
 title: Fix the second M0 code-review findings
 type: bug # feature | bug | debt | task
-status: in-progress # open | in-progress | blocked | done | wontfix
+status: done # open | in-progress | blocked | done | wontfix
 milestone: M00
 requirements: [REQ-022, REQ-026]
 depends_on: []
 created: 2026-09-26
-closed:
+closed: 2026-09-26
 ---
 
 # ITEM-0016: Fix the second M0 code-review findings
@@ -26,7 +26,7 @@ what's found before M00 closes, so M01 starts on a clean base.
 - [x] A cached tool binary is fetched and verified again whenever `tools/tools.mk` changes.
 - [x] The main-branch guard also catches path-prefixed `git`, options with separate or quoted arguments, and merge, cherry-pick, revert, am, pull and rebase. Pipe-tested.
 - [x] `projctl lint` checks each CI job's own image, and rejects keys and variables that let a job pass or be skipped while its make target fails. Covered by tests.
-- [ ] ADR-0011's stale toolchain text is corrected by a superseding ADR.
+- [x] ADR-0011's stale toolchain text is corrected by a superseding ADR.
 - [x] `make ci` is green.
 
 ## Notes
@@ -107,3 +107,13 @@ what's found before M00 closes, so M01 starts on a clean base.
       runner time. Revisit if the project starts taking PRs on GitHub. The
       same finding noted that `lint.go`'s comment still said CI keeps its
       caches in `.cache/`. That comment was corrected.
+- 2026-09-26: ADR-0017 restates ADR-0011's Hugo decision with the toolchain
+  from ADR-0014: a release binary pinned in `tools/tools.mk`, not
+  `tools/go.mod`. The decision is unchanged. ADR-0011's status is now
+  `superseded by ADR-0017`, which `make project-lint` accepts as a pair. The
+  comments in `site/hugo.toml` and `render-heading.html`, and M00's
+  superseded-rules callout, now point to ADR-0017. Historical references
+  (Q-044, Q-046, the CHANGELOG, ITEM-0008, M00's ADR criterion) still name
+  ADR-0011, the ADR those answers produced at the time.
+- 2026-09-26: Done. `make ci` is green. CHANGELOG unchanged: its lines on the
+  toolchain, CI and the commit hook are still accurate.

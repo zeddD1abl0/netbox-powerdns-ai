@@ -1,4 +1,4 @@
-# Hugo site for docs/ (ADR-0011). `make docs` builds it into site/public;
+# Hugo site for docs/ (ADR-0017). `make docs` builds it into site/public;
 # `make docs-serve` previews it. The Hextra theme is vendored in site/_vendor,
 # so builds need no network.
 baseURL = "/"

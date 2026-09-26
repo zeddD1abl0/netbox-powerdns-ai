@@ -1,6 +1,6 @@
 ---
 title: "0011: Documentation platform — Hugo"
-status: accepted
+status: superseded by ADR-0017
 date: 2026-09-25
 decision-makers: [jordan]
 requirements: [REQ-018, REQ-020, REQ-021, REQ-026]

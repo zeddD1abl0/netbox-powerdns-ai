@@ -139,7 +139,8 @@ Q-005 to Q-051.
 >   ([ADR-0014](../../docs/adr/0014-toolchain-pinned-release-binaries-on-glibc-linux.md),
 >   which superseded ADR-0013 and ADR-0003).
 > - **Docs platform:** Hugo with the Hextra theme
->   ([ADR-0011](../../docs/adr/0011-documentation-platform-hugo.md), ITEM-0008).
+>   ([ADR-0017](../../docs/adr/0017-documentation-platform-hugo-restated-for-the-relea.md),
+>   which restated ADR-0011; ITEM-0008).
 
 ### netbox-powerdns-ai: project foundation plan
 

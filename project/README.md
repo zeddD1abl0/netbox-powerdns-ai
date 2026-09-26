@@ -9,7 +9,7 @@
 
 | Milestone | Title | Status | Items closed |
 |---|---|---|---|
-| [M00](milestones/M00-foundation.md) | Foundation | in-progress | 14 of 16 |
+| [M00](milestones/M00-foundation.md) | Foundation | in-progress | 15 of 16 |
 | [M01](milestones/M01-service-skeleton.md) | Service skeleton | planned | — |
 | [M02](milestones/M02-identity.md) | Identity | planned | — |
 | [M03](milestones/M03-read-path-drift-report.md) | Read path and drift report | planned | — |
@@ -24,7 +24,6 @@
 | Item | Title | Type | Status | Waiting on |
 |---|---|---|---|---|
 | [ITEM-0011](items/ITEM-0011-cold-start-test.md) | Cold-start test and M0 close | task | in-progress | — |
-| [ITEM-0016](items/ITEM-0016-fix-the-second-m0-code-review-findings.md) | Fix the second M0 code-review findings | bug | in-progress | — |
 | [ITEM-0001](items/ITEM-0001-process-scaffolding.md) | Process scaffolding (M0a) | task | done 2026-09-25 | — |
 | [ITEM-0002](items/ITEM-0002-answer-blocking-questions.md) | Answer the questions that block M1 | task | done 2026-09-25 | — |
 | [ITEM-0003](items/ITEM-0003-triage-remaining-questions.md) | Settle the non-blocking questions that M0 needs | task | done 2026-09-25 | — |
@@ -39,6 +38,7 @@
 | [ITEM-0013](items/ITEM-0013-fix-the-m0-code-review-findings.md) | Fix the M0 code-review findings | bug | done 2026-09-25 | — |
 | [ITEM-0014](items/ITEM-0014-pin-tool-release-binaries-instead-of-building-from.md) | Pin tool release binaries instead of building from source | task | done 2026-09-25 | — |
 | [ITEM-0015](items/ITEM-0015-split-ci-into-stages.md) | Split CI into stages | task | done 2026-09-25 | — |
+| [ITEM-0016](items/ITEM-0016-fix-the-second-m0-code-review-findings.md) | Fix the second M0 code-review findings | bug | done 2026-09-26 | — |
 
 ## Open questions
 
@@ -60,4 +60,4 @@
 
 ## Decisions
 
-16 ADRs (14 accepted, 2 superseded), listed in [docs/adr](../docs/adr/_index.md).
+17 ADRs (14 accepted, 3 superseded), listed in [docs/adr](../docs/adr/_index.md).
