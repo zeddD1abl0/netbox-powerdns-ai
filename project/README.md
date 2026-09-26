@@ -10,7 +10,7 @@
 | Milestone | Title | Status | Items closed |
 |---|---|---|---|
 | [M00](milestones/M00-foundation.md) | Foundation | in-progress | 15 of 16 |
-| [M01](milestones/M01-service-skeleton.md) | Service skeleton | planned | — |
+| [M01](milestones/M01-service-skeleton.md) | Service skeleton | planned | 0 of 1 |
 | [M02](milestones/M02-identity.md) | Identity | planned | — |
 | [M03](milestones/M03-read-path-drift-report.md) | Read path and drift report | planned | — |
 | [M04](milestones/M04-write-path.md) | Write path | planned | — |
@@ -39,6 +39,12 @@
 | [ITEM-0014](items/ITEM-0014-pin-tool-release-binaries-instead-of-building-from.md) | Pin tool release binaries instead of building from source | task | done 2026-09-25 | — |
 | [ITEM-0015](items/ITEM-0015-split-ci-into-stages.md) | Split CI into stages | task | done 2026-09-25 | — |
 | [ITEM-0016](items/ITEM-0016-fix-the-second-m0-code-review-findings.md) | Fix the second M0 code-review findings | bug | done 2026-09-26 | — |
+
+## Open items in other milestones
+
+| Item | Title | Type | Status | Waiting on |
+|---|---|---|---|---|
+| [ITEM-0017](items/ITEM-0017-run-the-claude-code-hook-pipe-tests-in-make-test.md) | Run the Claude Code hook pipe-tests in make test | debt | open | — |
 
 ## Open questions
 
