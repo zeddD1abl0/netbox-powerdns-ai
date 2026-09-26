@@ -1,9 +1,9 @@
 ---
 id: M00
 title: Foundation
-status: in-progress # planned | in-progress | done
+status: done # planned | in-progress | done
 started: 2026-09-25
-closed:
+closed: 2026-09-26
 ---
 
 # M00: Foundation
@@ -113,6 +113,32 @@ Append-only and dated. Record what was run and what was seen.
   - the GitHub Actions pipeline for `m00-foundation` passed;
   - GitLab's file view renders the NOTE alert in `docs/_index.md` as a styled
     callout, and draws the Mermaid diagram in ADR-0007.
+- 2026-09-26: **M0 close.**
+  - **Second `/code-review high`** on the ITEM-0014 and ITEM-0015 code: 10
+    findings. Nine were fixed in ITEM-0016, and one was deliberately left:
+    the GitHub workflow runs twice for a same-repo PR, but GitHub is a push
+    mirror. ADR-0017 restates ADR-0011 with the current toolchain.
+    ITEM-0017 (M01) will automate the hook pipe-tests.
+  - **`/security-review`: not run.** M00 added no authentication, audit,
+    secrets or crypto code. The tool fetcher checks SHA-256 pins with
+    `sha256sum`, but implements no crypto.
+  - **`make check`** on `0da571a`: vet, lint (0 issues), test, vuln (none),
+    secrets (no leaks), docs-lint (no findings), api-lint (ruleset self-test
+    passed) and project-lint all passed.
+  - **Manual verification**, in a fresh clone with an empty `.cache/` and
+    empty Go module and build caches:
+    1. `make help` lists the targets by group.
+    2. `make ci` passed in 41 s from fully cold, including downloading Go
+       1.27.1 and fetching the 6 pinned tools.
+    3. `make item TITLE="probe"`, then `make project` and
+       `make project-lint`: lint passed, and `git status` showed only the
+       new ITEM-0018 file and the regenerated board.
+  - **Integration tests:** none. M00 has no NetBox, PowerDNS or database
+    code.
+  - **Still to do after hand-over:** the user pushes the branch and confirms
+    both pipelines, then creates `main` from it. The criterion "The user has
+    merged `m00-foundation`" is ticked, with the resulting commit, in the
+    first commit on `m01-service-skeleton`.
 
 ## Approved design
 

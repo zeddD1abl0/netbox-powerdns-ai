@@ -2,12 +2,12 @@
 id: ITEM-0011
 title: Cold-start test and M0 close
 type: task
-status: in-progress
+status: done
 milestone: M00
 requirements: [REQ-022]
 depends_on: [ITEM-0002, ITEM-0003, ITEM-0004, ITEM-0005, ITEM-0006, ITEM-0007, ITEM-0008, ITEM-0009, ITEM-0010]
 created: 2026-09-25
-closed:
+closed: 2026-09-26
 ---
 
 # ITEM-0011: Cold-start test and M0 close
@@ -21,8 +21,8 @@ the repo alone.
 
 - [x] A fresh Claude session is given only "Read CLAUDE.md, then tell me the current status and the next item." It answers correctly after reading 5 or fewer files.
 - [x] Any confusion it shows is fixed in `CLAUDE.md` or the board, and the test re-run.
-- [ ] The `close-milestone` skill has run for M00.
-- [ ] The branch is handed over for the user to review and merge (ADR-0010).
+- [x] The `close-milestone` skill has run for M00.
+- [x] The branch is handed over for the user to review and merge (ADR-0010).
 
 ## Notes
 
@@ -98,3 +98,24 @@ the repo alone.
   criteria that were waiting on a push are now ticked. Next: the second
   `/code-review high` (ITEM-0016), then the `close-milestone` skill.
 
+- 2026-09-26: **Closed, and M00 handed over. State for the next session:**
+  - M00's `close-milestone` checks all passed:
+    - all 16 items are done, each with `Refs` commits;
+    - every criterion is ticked except the merge;
+    - `make check` is green, and a cold `make ci` passed in a fresh clone;
+    - the second review's findings were fixed (ITEM-0016).
+
+    The M00 verification log has the details.
+  - `m00-foundation` holds this session's commits, which haven't been pushed
+    yet. **Waiting on the user:**
+    1. push the branch to both remotes, and confirm both pipelines pass;
+    2. `git branch main m00-foundation`, push `main` to both remotes, and
+       set it as the default branch.
+  - **Then M01:**
+    1. Create `m01-service-skeleton` from `main`.
+    2. In its first commit, tick M00's merge criterion with the resulting
+       commit hash, and set M01 to `in-progress` once the user says to start.
+    3. Hold the plan-mode design session: Q-036, Q-025, Q-007 and Q-053 (lab
+       versions), CI capacity for the lab, Q-035, confirming the other M1
+       defaults, and the library choices deferred to M1. ITEM-0017 is already
+       filed for M01.
