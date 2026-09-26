@@ -10,7 +10,7 @@
 | Milestone | Title | Status | Items closed |
 |---|---|---|---|
 | [M00](milestones/M00-foundation.md) | Foundation | done | 16 of 16 |
-| [M01](milestones/M01-service-skeleton.md) | Service skeleton | in-progress | 0 of 1 |
+| [M01](milestones/M01-service-skeleton.md) | Service skeleton | in-progress | 0 of 8 |
 | [M02](milestones/M02-identity.md) | Identity | planned | — |
 | [M03](milestones/M03-read-path-drift-report.md) | Read path and drift report | planned | — |
 | [M04](milestones/M04-write-path.md) | Write path | planned | — |
@@ -24,6 +24,13 @@
 | Item | Title | Type | Status | Waiting on |
 |---|---|---|---|---|
 | [ITEM-0017](items/ITEM-0017-run-the-claude-code-hook-pipe-tests-in-make-test.md) | Run the Claude Code hook pipe-tests in make test | debt | open | — |
+| [ITEM-0018](items/ITEM-0018-record-the-merge-request-process.md) | Record the merge-request process | task | open | — |
+| [ITEM-0019](items/ITEM-0019-re-slice-the-milestones-into-smaller-steps.md) | Re-slice the milestones into smaller steps | task | open | — |
+| [ITEM-0020](items/ITEM-0020-command-line-config-registry-and-generated-referen.md) | Command line, config registry and generated references | feature | open | ITEM-0019 |
+| [ITEM-0021](items/ITEM-0021-logging-and-tracing-foundation.md) | Logging and tracing foundation | feature | open | ITEM-0020 |
+| [ITEM-0022](items/ITEM-0022-netbox-lab-and-integration-tests-in-ci.md) | NetBox lab and integration tests in CI | task | open | — |
+| [ITEM-0023](items/ITEM-0023-netbox-client-and-normalized-dns-model.md) | NetBox client and normalized DNS model | feature | open | ITEM-0020, ITEM-0021, ITEM-0022 |
+| [ITEM-0024](items/ITEM-0024-nbpdns-netbox-commands-and-docs.md) | nbpdns netbox commands and docs | feature | open | ITEM-0023 |
 
 ## Open questions
 
@@ -41,7 +48,7 @@
 
 ## Requirements
 
-39 requirements, listed in [requirements.md](requirements.md#requirements). 26 aren't referenced by any item yet: REQ-002, REQ-003, REQ-004, REQ-005, REQ-006, REQ-007, REQ-008, REQ-009, REQ-010, REQ-011, REQ-014, REQ-015, REQ-016, REQ-017, REQ-023, REQ-024, REQ-027, REQ-028, REQ-029, REQ-030, REQ-031, REQ-032, REQ-033, REQ-034, REQ-035, REQ-036.
+39 requirements, listed in [requirements.md](requirements.md#requirements). 20 aren't referenced by any item yet: REQ-003, REQ-004, REQ-007, REQ-008, REQ-009, REQ-010, REQ-011, REQ-014, REQ-015, REQ-016, REQ-017, REQ-023, REQ-028, REQ-029, REQ-030, REQ-031, REQ-032, REQ-033, REQ-034, REQ-035.
 
 ## Decisions
 
