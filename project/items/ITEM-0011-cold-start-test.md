@@ -93,4 +93,8 @@ the repo alone.
 
   Commits `b90b756` and later are documentation only, and go up with the
   user's next push.
+- 2026-09-26: The user reported that the GitHub pipeline passed, and that
+  GitLab's file view renders the alert and the Mermaid diagram. Both M00
+  criteria that were waiting on a push are now ticked. Next: the second
+  `/code-review high` (ITEM-0016), then the `close-milestone` skill.
 

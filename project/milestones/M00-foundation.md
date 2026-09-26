@@ -44,7 +44,7 @@ expandable, before writing any product code:
 - [x] `make check` and `make ci` pass locally with only the ADR-0014 prerequisites installed, and in the pinned CI image.
 - [x] The GitLab CI pipeline passes by calling make targets only (the staged pipeline at `1a68497`, reported by the user 2026-09-25).
 - [x] `projctl lint` fails on a deliberately broken item and passes on a clean tree (26 lint cases in `tools/projctl`; `make project-lint` is clean).
-- [ ] The docs site builds. An alert and a Mermaid block render on the site (verified) and raw on GitLab (after the branch is pushed).
+- [x] The docs site builds. An alert and a Mermaid block render on the site (verified) and raw on GitLab (reported by the user 2026-09-26).
 - [x] Cold-start test passed (ITEM-0011): two runs, 4 files read each.
 - [x] The milestone list M1 to M8 is finalised, with stub files for M01 to M08 (ITEM-0010).
 - [ ] The user has merged `m00-foundation` (creating `main` from it, since `main` is unborn).
@@ -109,6 +109,10 @@ Append-only and dated. Record what was run and what was seen.
   the GitLab runners, without changing the pods' disk size. That's the run
   that was evicted earlier as a single 6.5 GB job. No GitHub result was
   reported separately.
+- 2026-09-26: The user reported two results:
+  - the GitHub Actions pipeline for `m00-foundation` passed;
+  - GitLab's file view renders the NOTE alert in `docs/_index.md` as a styled
+    callout, and draws the Mermaid diagram in ADR-0007.
 
 ## Approved design
 
