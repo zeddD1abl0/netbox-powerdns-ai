@@ -21,12 +21,21 @@ linters:
     - noctx # HTTP requests built without a context
     - nolintlint # //nolint directives must be specific and explained
     - revive # the successor to golint
+    - sloglint # log/slog calls pass a context, so every line carries the trace and request IDs
     - rowserrcheck # sql.Rows.Err is checked
     - sqlclosecheck # sql.Rows and sql.Stmt are closed
     - unconvert # unnecessary type conversions
     - unparam # unused function parameters and results
     - usestdlibvars # use net/http constants instead of literals
   settings:
+    sloglint:
+      context: all # every call passes a context (CLAUDE.md: IDs on every line)
+      no-global: all # no package-level slog.Info: loggers are configured per run
+      static-msg: true
+      msg-style: lowercased
+      key-naming-case: snake
+      # Keys that slog or the logging handler sets on every line.
+      forbidden-keys: [time, level, msg, source, trace_id, span_id, request_id]
     misspell:
       locale: US # the Google developer documentation style guide uses US spelling
     nolintlint:

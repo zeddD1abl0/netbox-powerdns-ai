@@ -149,3 +149,56 @@ func TestReference(t *testing.T) {
 		t.Error("reference lists the help command")
 	}
 }
+
+// TestLogLinesCarryIDs runs a command at debug level and checks that every
+// log line on stderr carries the same trace, span and request IDs.
+func TestLogLinesCarryIDs(t *testing.T) {
+	for _, format := range []string{"json", "text"} {
+		t.Run(format, func(t *testing.T) {
+			env := map[string]string{"NBPDNS_LOG_LEVEL": "debug", "NBPDNS_NETBOX_TOKEN": "nbt_hunter2"}
+			code, stdout, stderr := run(t, env, "config", "show", "--log-format", format)
+			if code != exitOK {
+				t.Fatalf("exit %d: %s", code, stderr)
+			}
+			if strings.Contains(stderr, "hunter2") || strings.Contains(stdout, "hunter2") {
+				t.Error("the token leaked")
+			}
+			lines := strings.Split(strings.TrimSpace(stderr), "\n")
+			if len(lines) < 2 {
+				t.Fatalf("want the start and finish lines, got:\n%s", stderr)
+			}
+			ids := map[string]string{}
+			for _, line := range lines {
+				for _, key := range []string{"trace_id", "span_id", "request_id"} {
+					v := field(t, format, line, key)
+					if v == "" {
+						t.Errorf("line has no %s: %s", key, line)
+					}
+					if prev, ok := ids[key]; ok && prev != v {
+						t.Errorf("%s changed within one run: %s, then %s", key, prev, v)
+					}
+					ids[key] = v
+				}
+			}
+		})
+	}
+}
+
+// field returns key's value in one JSON or text log line.
+func field(t *testing.T, format, line, key string) string {
+	t.Helper()
+	if format == "json" {
+		var m map[string]any
+		if err := json.Unmarshal([]byte(line), &m); err != nil {
+			t.Fatalf("not JSON: %s", line)
+		}
+		s, _ := m[key].(string)
+		return s
+	}
+	for _, kv := range strings.Fields(line) {
+		if v, ok := strings.CutPrefix(kv, key+"="); ok {
+			return v
+		}
+	}
+	return ""
+}

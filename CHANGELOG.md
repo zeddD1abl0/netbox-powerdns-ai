@@ -17,6 +17,9 @@ All notable changes to this project are recorded here. The format follows
   and are redacted everywhere they could be printed or logged. Unknown keys and
   variables are errors, and every problem is reported at once.
 - Configuration and command-line reference pages, generated from the code.
+- Logs on standard error, as JSON or text (`log.format`) from a chosen level
+  (`log.level`). Every line carries the run's `trace_id`, `span_id`, and
+  `request_id`, and outgoing requests carry the W3C `traceparent` header.
 - Project foundation:
   - working rules for contributors (`CLAUDE.md`);
   - in-repo work tracking (`project/`);

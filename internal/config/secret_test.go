@@ -22,8 +22,8 @@ func TestSecretRedacts(t *testing.T) {
 	s := NewSecret(secretValue)
 	h := holder{Name: "n", Token: s}
 	var logJSON, logText bytes.Buffer
-	slog.New(slog.NewJSONHandler(&logJSON, nil)).Info("m", "token", s, "holder", h)
-	slog.New(slog.NewTextHandler(&logText, nil)).Info("m", slog.Any("token", s), slog.Any("ptr", &s))
+	slog.New(slog.NewJSONHandler(&logJSON, nil)).InfoContext(t.Context(), "m", "token", s, "holder", h)
+	slog.New(slog.NewTextHandler(&logText, nil)).InfoContext(t.Context(), "m", slog.Any("token", s), slog.Any("ptr", &s))
 	jsonOut, err := json.Marshal(h)
 	if err != nil {
 		t.Fatal(err)

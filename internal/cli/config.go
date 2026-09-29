@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"context"
+
 	"github.com/spf13/cobra"
 )
 
@@ -20,19 +22,17 @@ func newConfigCmd(a *app) *cobra.Command {
 		Args: usageArgs(cobra.NoArgs),
 	}
 	output := addOutputFlag(show)
-	show.RunE = func(*cobra.Command, []string) error {
-		_, settings, err := a.loader.Load()
-		if err != nil {
-			return err
-		}
-		if *output == outputJSON {
-			return writeJSON(a.stdout, settings)
-		}
-		rows := make([][]string, len(settings))
-		for i, s := range settings {
-			rows[i] = []string{s.Key, s.Value, s.Source.String()}
-		}
-		return writeTable(a.stdout, []string{"KEY", "VALUE", "SOURCE"}, rows)
+	show.RunE = func(cmd *cobra.Command, _ []string) error {
+		return a.run(cmd, func(_ context.Context, s *session) error {
+			if *output == outputJSON {
+				return writeJSON(a.stdout, s.settings)
+			}
+			rows := make([][]string, len(s.settings))
+			for i, st := range s.settings {
+				rows[i] = []string{st.Key, st.Value, st.Source.String()}
+			}
+			return writeTable(a.stdout, []string{"KEY", "VALUE", "SOURCE"}, rows)
+		})
 	}
 	cmd.AddCommand(show)
 	return cmd

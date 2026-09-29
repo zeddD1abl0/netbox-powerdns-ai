@@ -23,7 +23,7 @@ const (
 // Main runs nbpdns with args, not including the program name, and returns its
 // exit code.
 func Main(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	root := New(stdout, stderr)
+	root := New(stdout, stderr) //nolint:contextcheck // ctx reaches the commands through ExecuteContext.
 	root.SetArgs(args)
 	err := root.ExecuteContext(ctx)
 	if err == nil {
