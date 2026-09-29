@@ -31,5 +31,6 @@ from [`template.md`](template.md).
 | [0015](0015-glibc-based-debian-or-ubuntu-images-for-ci-and-con.md) | glibc-based Debian or Ubuntu images for CI and containers | accepted |
 | [0016](0016-staged-ci-pipelines-that-mirror-make-ci.md) | Staged CI pipelines that mirror `make ci` | accepted |
 | [0017](0017-documentation-platform-hugo-restated-for-the-relea.md) | Documentation platform — Hugo, restated for the release-binary toolchain | accepted |
+| [0018](0018-merge-milestones-through-gitlab-merge-requests.md) | Merge milestones through GitLab merge requests | accepted |
 
 <!-- projctl:adr-index:end -->

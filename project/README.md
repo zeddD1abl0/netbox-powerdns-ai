@@ -10,7 +10,7 @@
 | Milestone | Title | Status | Items closed |
 |---|---|---|---|
 | [M00](milestones/M00-foundation.md) | Foundation | done | 16 of 16 |
-| [M01](milestones/M01-service-skeleton.md) | Service skeleton | in-progress | 0 of 8 |
+| [M01](milestones/M01-service-skeleton.md) | Service skeleton | in-progress | 1 of 8 |
 | [M02](milestones/M02-identity.md) | Identity | planned | — |
 | [M03](milestones/M03-read-path-drift-report.md) | Read path and drift report | planned | — |
 | [M04](milestones/M04-write-path.md) | Write path | planned | — |
@@ -24,13 +24,13 @@
 | Item | Title | Type | Status | Waiting on |
 |---|---|---|---|---|
 | [ITEM-0017](items/ITEM-0017-run-the-claude-code-hook-pipe-tests-in-make-test.md) | Run the Claude Code hook pipe-tests in make test | debt | open | — |
-| [ITEM-0018](items/ITEM-0018-record-the-merge-request-process.md) | Record the merge-request process | task | open | — |
 | [ITEM-0019](items/ITEM-0019-re-slice-the-milestones-into-smaller-steps.md) | Re-slice the milestones into smaller steps | task | open | — |
 | [ITEM-0020](items/ITEM-0020-command-line-config-registry-and-generated-referen.md) | Command line, config registry and generated references | feature | open | ITEM-0019 |
 | [ITEM-0021](items/ITEM-0021-logging-and-tracing-foundation.md) | Logging and tracing foundation | feature | open | ITEM-0020 |
 | [ITEM-0022](items/ITEM-0022-netbox-lab-and-integration-tests-in-ci.md) | NetBox lab and integration tests in CI | task | open | — |
 | [ITEM-0023](items/ITEM-0023-netbox-client-and-normalized-dns-model.md) | NetBox client and normalized DNS model | feature | open | ITEM-0020, ITEM-0021, ITEM-0022 |
 | [ITEM-0024](items/ITEM-0024-nbpdns-netbox-commands-and-docs.md) | nbpdns netbox commands and docs | feature | open | ITEM-0023 |
+| [ITEM-0018](items/ITEM-0018-record-the-merge-request-process.md) | Record the merge-request process | task | done 2026-09-29 | — |
 
 ## Open questions
 
@@ -52,4 +52,4 @@
 
 ## Decisions
 
-17 ADRs (14 accepted, 3 superseded), listed in [docs/adr](../docs/adr/_index.md).
+18 ADRs (15 accepted, 3 superseded), listed in [docs/adr](../docs/adr/_index.md).

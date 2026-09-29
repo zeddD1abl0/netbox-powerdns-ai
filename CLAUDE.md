@@ -37,9 +37,9 @@ lives in `project/`, and decisions live in `docs/adr/`.
     the milestone starts.
   - Commit when each item is done. Checkpoint commits are fine.
   - Use Conventional Commits, with a `Refs: ITEM-nnnn` trailer on every commit.
-  - Never commit to `main`, merge into `main`, or push. A hook blocks commits on
-    `main`.
-  - The user reviews the branch, merges it (not a squash merge) and pushes.
+  - Never commit to `main`, merge into it, or push; a hook blocks commits on
+    `main`. The user pushes the branch and merges it through a GitLab merge
+    request with a merge commit, never a squash ([ADR-0018](docs/adr/0018-merge-milestones-through-gitlab-merge-requests.md)).
 - Don't implement milestone N until milestone N-1 is **complete** (every item
   done, `make check` green) **and merged** (its branch is in `main`). If asked
   to start early, warn and list what's outstanding. The user may override.
