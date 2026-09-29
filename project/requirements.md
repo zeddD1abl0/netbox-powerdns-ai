@@ -59,71 +59,71 @@ When a question is answered:
 ## Open questions
 
 **Blocking** questions must be answered before M1 is designed. **Needed by**
-names the milestone that needs the answer, using the provisional milestone list
-in [M00](milestones/M00-foundation.md).
+names the milestone that needs the answer, from the milestone list in
+[ADR-0019](../docs/adr/0019-re-slice-the-milestones-into-smaller-steps.md).
 
 ### Product and domain
 
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
-| Q-007 | Which NetBox and plugin versions are supported, and how does the app authenticate to NetBox? | Current NetBox 4.x plus the previous minor, with a read-only API token. | M3 |
-| Q-011 | Where does data that NetBox doesn't model live: TSIG keys, zone metadata (ALLOW-AXFR-FROM, ALSO-NOTIFY, SOA-EDIT-API), serial policy, DNSSEC key rollover? | In NetBox wherever the plugin models it. Everything else is per-zone or per-group config in this app. | M4 |
-| Q-012 | Does "change settings" mean this app's settings only, or PowerDNS server config (`pdns.conf`) too? | This app's settings plus per-zone PowerDNS metadata. `pdns.conf` stays with Ansible. | M1 |
-| Q-013 | What change safety is needed: dry-run diff, four-eyes approval, change windows, blast-radius limits, rollback? | Every sync computes a plan and auto-applies below thresholds. Above a threshold (such as more than N deletes, or NS/SOA changes) it needs approval. | M4 |
-| Q-014 | What validation runs before and after changes? | Pre-flight checks (CNAME at apex, dangling NS, TTL bounds, syntax). After apply, query every server for the SOA serial and sample records. | M4 |
-| Q-015 | Is multi-tenancy needed: are permissions scoped to zone, NetBox tenant or server group? | Global roles in v1, scoped by server group. Tenant scoping is a later ADR. | M2 |
-| Q-016 | What is the web UI's scope? | Settings, ops dashboard (sync status, drift, per-server health), approvals, audit viewer, users and roles. **No record editor**, since NetBox is the editor. | M1 |
-| Q-017 | What are the scale targets: servers, zones, records, change rate, propagation latency from NetBox to servers? | Needs an answer. A possible design target is 50 servers, 10k zones, 1M records, and under 60 s propagation. | M3 |
-| Q-053 | Which PowerDNS Authoritative versions must be supported? Catalog zones (Q-052) need 4.7 or later. | 4.9 and 5.x. | M3 |
-| Q-054 | The parts of Q-010 not yet answered: how is a sync triggered, and how are existing PowerDNS zones adopted into NetBox (brownfield import)? | A NetBox event-rule webhook plus a periodic full reconcile. An import tool for first adoption, with imported zones starting in report mode. | M3 |
+| Q-007 | Which NetBox and plugin versions are supported, and how does the app authenticate to NetBox? | Current NetBox 4.x plus the previous minor, with a read-only API token. | M01 |
+| Q-011 | Where does data that NetBox doesn't model live: TSIG keys, zone metadata (ALLOW-AXFR-FROM, ALSO-NOTIFY, SOA-EDIT-API), serial policy, DNSSEC key rollover? | In NetBox wherever the plugin models it. Everything else is per-zone or per-group config in this app. | M12 |
+| Q-012 | Does "change settings" mean this app's settings only, or PowerDNS server config (`pdns.conf`) too? | This app's settings plus per-zone PowerDNS metadata. `pdns.conf` stays with Ansible. | M07 |
+| Q-013 | What change safety is needed: dry-run diff, four-eyes approval, change windows, blast-radius limits, rollback? | Every sync computes a plan and auto-applies below thresholds. Above a threshold (such as more than N deletes, or NS/SOA changes) it needs approval. | M13 |
+| Q-014 | What validation runs before and after changes? | Pre-flight checks (CNAME at apex, dangling NS, TTL bounds, syntax). After apply, query every server for the SOA serial and sample records. | M13 |
+| Q-015 | Is multi-tenancy needed: are permissions scoped to zone, NetBox tenant or server group? | Global roles in v1, scoped by server group. Tenant scoping is a later ADR. | M10 |
+| Q-016 | What is the web UI's scope? | Settings, ops dashboard (sync status, drift, per-server health), approvals, audit viewer, users and roles. **No record editor**, since NetBox is the editor. | M11 |
+| Q-017 | What are the scale targets: servers, zones, records, change rate, propagation latency from NetBox to servers? | Needs an answer. A possible design target is 50 servers, 10k zones, 1M records, and under 60 s propagation. | M03 |
+| Q-053 | Which PowerDNS Authoritative versions must be supported? Catalog zones (Q-052) need 4.7 or later. | 4.9 and 5.x. | M02 |
+| Q-054 | The parts of Q-010 not yet answered: how is a sync triggered, and how are existing PowerDNS zones adopted into NetBox (brownfield import)? | A NetBox event-rule webhook plus a periodic full reconcile. An import tool for first adoption, with imported zones starting in report mode. | M06 (triggers), M14 (import) |
 
 ### Architecture and deployment
 
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
-| Q-021 | How does the app reach PowerDNS: direct push, or agents on the DNS hosts? | Direct HTTPS push. An agent mode is a later extension point. | M3 |
-| Q-022 | How is the PowerDNS API secured in transit? Its built-in webserver has no native TLS. | A TLS proxy in front of it, with mTLS optional. Document the reference setup. | M3 |
-| Q-023 | How are secrets stored at rest (PowerDNS API keys, TSIG, OIDC client secrets)? | Envelope encryption with a master key from env or file. Vault/OpenBao later. | M1 |
-| Q-024 | When the UI and IaC both manage a setting, which one owns it? | A `managed_by` field on each resource. Resources owned by IaC are read-only in the UI. | M1 |
-| Q-025 | What packaging is needed? | Static linux amd64/arm64 binary, distroless non-root image, Helm chart, systemd unit, compose example, air-gap bundle. Linux only. | M1 (binary, image), M6 (rest) |
-| Q-026 | How are upgrades, backup and restore, and config export handled? | Forward-only migrations. `export` and `import` commands for app config. | M1 |
-| Q-027 | What happens when things fail? | The app is **never in the DNS data path**. NetBox down: keep the last-known state and alert. PowerDNS server down: retry, mark the group degraded, report partial applies. | M3 |
+| Q-021 | How does the app reach PowerDNS: direct push, or agents on the DNS hosts? | Direct HTTPS push. An agent mode is a later extension point. | M02 |
+| Q-022 | How is the PowerDNS API secured in transit? Its built-in webserver has no native TLS. | A TLS proxy in front of it, with mTLS optional. Document the reference setup. | M02 |
+| Q-023 | How are secrets stored at rest (PowerDNS API keys, TSIG, OIDC client secrets)? | Envelope encryption with a master key from env or file. Vault/OpenBao later. | M07 |
+| Q-024 | When the UI and IaC both manage a setting, which one owns it? | A `managed_by` field on each resource. Resources owned by IaC are read-only in the UI. | M07 |
+| Q-025 | What packaging is needed? | Static linux amd64/arm64 binary, distroless non-root image, Helm chart, systemd unit, compose example, air-gap bundle. Linux only. | M04 (binary, image), M16 (rest) |
+| Q-026 | How are upgrades, backup and restore, and config export handled? | Forward-only migrations. `export` and `import` commands for app config. | M07 (migrations), M16 (rest) |
+| Q-027 | What happens when things fail? | The app is **never in the DNS data path**. NetBox down: keep the last-known state and alert. PowerDNS server down: retry, mark the group degraded, report partial applies. | M03 |
 
 ### Identity and access
 
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
-| Q-028 | Which IdP and protocols? | Authentik, with OIDC, SAML and trusted proxy headers, each toggled independently. No LDAP in v1. | M2 |
-| Q-029 | Are local users, MFA and break-glass access needed? | Local users with TOTP/WebAuthn, plus an env-only break-glass token. Every use is audited. | M2 |
-| Q-030 | What RBAC model? | Viewer, Operator and Admin built in. Custom roles. IdP group → role mapping. Permissions checked per action. | M2 |
-| Q-031 | How do Terraform, Ansible and CI pipelines authenticate? | Scoped, expiring, hashed API tokens and service accounts. OIDC workload identity (CI JWTs) later. | M2 |
-| Q-032 | Is SCIM provisioning needed? | Not in v1. | M2 |
+| Q-028 | Which IdP and protocols? | Authentik, with OIDC, SAML and trusted proxy headers, each toggled independently. No LDAP in v1. | M10 |
+| Q-029 | Are local users, MFA and break-glass access needed? | Local users with TOTP/WebAuthn, plus an env-only break-glass token. Every use is audited. | M09 |
+| Q-030 | What RBAC model? | Viewer, Operator and Admin built in. Custom roles. IdP group → role mapping. Permissions checked per action. | M10 |
+| Q-031 | How do Terraform, Ansible and CI pipelines authenticate? | Scoped, expiring, hashed API tokens and service accounts. OIDC workload identity (CI JWTs) later. | M09 |
+| Q-032 | Is SCIM provisioning needed? | Not in v1. | M10 |
 
 ### Audit, logging and SIEM
 
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
-| Q-033 | Which SIEMs or log platforms must be supported (Splunk, Elastic, Sentinel, Wazuh, Graylog, Loki, QRadar)? | Sinks: stdout JSON, file, syslog RFC 5424 over TLS, HTTP (HEC-compatible), OTLP logs. | M5 |
-| Q-034 | What wire format? | Native versioned JSON first. OCSF and CEF mappings are ADR candidates. | M5 |
-| Q-035 | What audit coverage, retention and tamper evidence are needed, and what happens when the SIEM is down? | All auth, config, RBAC, token, plan, apply, drift and approval events. Hash-chained. Retention configurable. An outbox buffers events, with an alert on backlog. | M1 |
-| Q-036 | Which compliance frameworks apply (ISO 27001, SOC 2, PCI DSS, Essential Eight/ISM, NIS2)? | Needs an answer. It affects retention, crypto and MFA. | M1 |
-| Q-037 | How far does traceability go? | End to end: carry NetBox's changelog identity (user, `request_id`, ObjectChange ID) through sync → apply → each server → verification, so one trace links the NetBox edit to every PowerDNS write. | M3 |
+| Q-033 | Which SIEMs or log platforms must be supported (Splunk, Elastic, Sentinel, Wazuh, Graylog, Loki, QRadar)? | Sinks: stdout JSON, file, syslog RFC 5424 over TLS, HTTP (HEC-compatible), OTLP logs. | M15 |
+| Q-034 | What wire format? | Native versioned JSON first. OCSF and CEF mappings are ADR candidates. | M15 |
+| Q-035 | What audit coverage, retention and tamper evidence are needed, and what happens when the SIEM is down? | All auth, config, RBAC, token, plan, apply, drift and approval events. Hash-chained. Retention configurable. An outbox buffers events, with an alert on backlog. | M07 |
+| Q-036 | Which compliance frameworks apply (ISO 27001, SOC 2, PCI DSS, Essential Eight/ISM, NIS2)? | Needs an answer. It affects retention, crypto and MFA. | M07 |
+| Q-037 | How far does traceability go? | End to end: carry NetBox's changelog identity (user, `request_id`, ObjectChange ID) through sync → apply → each server → verification, so one trace links the NetBox edit to every PowerDNS write. | M06 |
 
 ### API, metrics and extensibility
 
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
-| Q-038 | Do "clearly defined metrics" cover this app only, or PowerDNS stats too? | App metrics: sync lag, plan size, failures, drift count, per-server serial lag, API RED metrics. PowerDNS stats stay on PowerDNS's own `/metrics`. | M1 |
-| Q-039 | How will the app be extended in future? | A backend interface (for other DNS vendors later), outbound webhooks and an event stream. A plugin runtime is deferred to an ADR. | M1 |
-| Q-040 | Are rate limits and quotas needed? | Limits per token and per IP. | M2 |
+| Q-038 | Do "clearly defined metrics" cover this app only, or PowerDNS stats too? | App metrics: sync lag, plan size, failures, drift count, per-server serial lag, API RED metrics. PowerDNS stats stay on PowerDNS's own `/metrics`. | M04 |
+| Q-039 | How will the app be extended in future? | A backend interface (for other DNS vendors later), outbound webhooks and an event stream. A plugin runtime is deferred to an ADR. | M02 |
+| Q-040 | Are rate limits and quotas needed? | Limits per token and per IP. | M09 |
 
 ### IaC
 
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
-| Q-041 | What does IaC manage? With NetBox as the source of truth, DNS records go through NetBox's own Terraform provider. | IaC for this app covers **its own config**: server groups, sync policies, sinks, roles, tokens and settings. | M1 |
-| Q-042 | Where do the Terraform/OpenTofu provider and the Ansible collection live, and which registries do they publish to? | Separate repos in later milestones, built with terraform-plugin-framework. The API is designed for them from M1: declarative, idempotent, stable IDs, import support. | M7 |
-| Q-043 | Is a declarative config file (GitOps) needed? | Resources can be declared in the config file and are then `managed_by=file`. | M1 |
+| Q-041 | What does IaC manage? With NetBox as the source of truth, DNS records go through NetBox's own Terraform provider. | IaC for this app covers **its own config**: server groups, sync policies, sinks, roles, tokens and settings. | M05 |
+| Q-042 | Where do the Terraform/OpenTofu provider and the Ansible collection live, and which registries do they publish to? | Separate repos in later milestones, built with terraform-plugin-framework. The API is designed for them from M1: declarative, idempotent, stable IDs, import support. | M17 |
+| Q-043 | Is a declarative config file (GitOps) needed? | Resources can be declared in the config file and are then `managed_by=file`. | M02 |
 
 ### Documentation
 
@@ -134,8 +134,8 @@ in [M00](milestones/M00-foundation.md).
 
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
-| Q-050 | Which UI technology? | Server-rendered templ + htmx with vendored assets and no Node build, embedded in the binary. | M1 |
-| Q-051 | What accessibility and localisation level? | WCAG 2.2 AA. English only. | M1 |
+| Q-050 | Which UI technology? | Server-rendered templ + htmx with vendored assets and no Node build, embedded in the binary. | M11 |
+| Q-051 | What accessibility and localisation level? | WCAG 2.2 AA. English only. | M11 |
 
 ## Answered
 

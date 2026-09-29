@@ -5,7 +5,7 @@ type: debt # feature | bug | debt | task
 status: open # open | in-progress | blocked | done | wontfix
 milestone: M01
 requirements: [REQ-022]
-depends_on: []
+depends_on: [ITEM-0019]
 created: 2026-09-26
 closed:
 ---
@@ -32,3 +32,11 @@ regression in CI, before a review has to.
 - 2026-09-26: Found while fixing ITEM-0016. A hand-run version of the guard
   cases is in that item's notes. Where the tests live (`tools/projctl`, or a
   small module of their own) is decided in M01 design.
+- 2026-09-29: Decided with the user: the tests live in their own Go module,
+  `tools/hooktest`, added to the Makefile's `GO_MODULES`. `jq` is pinned as a
+  release binary in `tools/tools.mk`, so the edit-hook test also runs in the
+  CI image, which has no `jq`. Waits for ITEM-0019 so the board follows the
+  phase order. The review found that, by design, the guard allows moving
+  `main` without a commit (`git fetch . HEAD:main`, `git branch -f main`,
+  `git update-ref`) and committing in a worktree on `main`; the tests should
+  record that behavior explicitly.

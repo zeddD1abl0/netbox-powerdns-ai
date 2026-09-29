@@ -1,46 +1,101 @@
 ---
 id: M01
-title: Service skeleton
+title: NetBox read path
 status: in-progress # planned | in-progress | done
 started: 2026-09-26
 closed:
 ---
 
-# M01: Service skeleton
-
-> [!IMPORTANT]
-> **M01 has been re-planned as "NetBox read path".** The approved design below
-> replaces this stub's goal and scope. ITEM-0019, the first implementation
-> step after ITEM-0018, rewrites and renames this file and the other stubs.
->
-> **State for the next session (2026-09-27):**
-> - The design was approved, with implementation deferred.
-> - Items ITEM-0018 to ITEM-0024 are filed and open. ITEM-0017 is also
->   open.
-> - Nothing is implemented yet.
-> - **Start with** ITEM-0018 (the merge-request process), then ITEM-0019
->   (the re-slice, which renames this branch to `m01-netbox-read-path`).
-> - **On the user's side:** set GitLab's merge method to Merge commit, with
->   squash disallowed, and size the runners for the Docker-in-Docker
->   integration job.
+# M01: NetBox read path
 
 ## Goal
 
-A runnable `nbpdns` binary and container image with every cross-cutting foundation in place, and no DNS features yet. Each later milestone builds on this without rework.
+A runnable `nbpdns` binary that reads DNS data from NetBox's DNS plugin and
+shows it. It lays the command-line, config, logging and tracing foundations
+every later milestone uses, and the Docker-based lab and CI that integration
+tests need.
 
-## Scope (provisional)
+## Non-goals
 
-- Config registry with the `NBPDNS_` prefix: file, env and flags, plus runtime settings in the DB and generated reference docs (ADR-0005)
-- Structured logging (`log/slog`), Prometheus metrics, health and readiness endpoints, OpenTelemetry tracing
-- PostgreSQL and SQLite with one migration set, and leader election for the sync worker (ADR-0009)
-- OpenAPI pipeline: `api/openapi.yaml`, code generation, contract tests, `make api-lint`, and the reference served by the binary (ADR-0012)
-- Audit core: the event model, the registry and persistence. SIEM export is M05.
-- Static binary and distroless image, built by GoReleaser
-- Container lab (`deploy/dev/`): NetBox with the DNS plugin, and PowerDNS primaries and secondaries in two server groups (REQ-036)
+- No PowerDNS (M02), no comparison (M03), no long-running service (M04), no
+  REST API (M05), no webhooks (M06).
+- No database or state (M07).
+- No authentication of nbpdns's own users (M09). M01 only authenticates *to*
+  NetBox.
+- No writes to NetBox.
+
+## Phases
+
+| Phase | Items |
+|---|---|
+| M1a Process | ITEM-0018 merge-request process; ITEM-0019 re-slice the milestones |
+| M1b Skeleton | ITEM-0020 command line, config registry and generated references (ADR-0021); ITEM-0025 the C compiler prerequisite; ITEM-0021 logging and tracing; ITEM-0017 hook tests in `make test` |
+| M1c Lab and CI | ITEM-0022 NetBox lab, compose pin, Docker-in-Docker integration job on both forges |
+| M1d NetBox | ITEM-0023 NetBox client and normalized model (ADR-0020, REQ-040); ITEM-0024 `nbpdns netbox` commands, docs, CHANGELOG |
+
+## Acceptance criteria
+
+- [ ] ADR-0018 and ADR-0019 are accepted. The stubs M01 to M18 match the new
+  list, `requirements.md` is remapped, and the `close-milestone` skill writes
+  MR descriptions.
+- [ ] `nbpdns` builds as a static binary. `version`, `config show`,
+  `completion` and the `netbox` commands work as designed.
+- [ ] Config precedence, `_FILE` secrets, strict unknown keys (file and env),
+  source reporting and redaction are covered by table-driven tests.
+  `make generate-check` fails on a stale reference.
+- [ ] Every log line carries `trace_id` and `request_id`, and NetBox requests
+  carry `traceparent`.
+- [ ] `make lab-up` starts NetBox 4.7 and 4.6 with the plugin. The integration
+  tests pass against both, with a least-privilege v2 token.
+- [ ] Integration tests run in every GitLab and GitHub pipeline, and
+  `make project-lint` confirms the CI files mirror `make ci`.
+- [ ] Hook pipe-tests run in `make test` (ITEM-0017).
+- [ ] The prerequisites name the C compiler that `-race` needs (ITEM-0025).
+- [ ] The docs pages in the approved design exist, the generated references
+  are current, and the CHANGELOG is updated.
+- [ ] `/code-review high` and `/security-review` have run. M01 handles the
+  NetBox token, so the secrets trigger applies.
+- [ ] The manual verification is recorded, and the user has merged through an
+  MR with a merge commit.
+
+## Decided after approval
+
+> [!IMPORTANT]
+> These decisions, made on 2026-09-29 after the review before implementation,
+> override the approved design below.
+>
+> - **Plain HTTP is allowed.** `netbox.url` may use `http://`, since not every
+>   NetBox deployment has TLS. The token then crosses the network
+>   unencrypted, so the key's reference entry warns about it, and nbpdns logs
+>   a warning when the URL uses `http://` (ADR-0020).
+> - **The normalized model is built from RRsets:** records that share an owner
+>   name, class and type, with one TTL. When NetBox records in one RRset have
+>   different TTLs, the RRset takes the lowest (ADR-0020).
+> - **Local test servers.** Retries, timeouts and TLS are tested against a
+>   local HTTP server that returns only status codes, headers and delays.
+>   NetBox's API responses are tested only through the lab and responses
+>   recorded from it (ADR-0020).
+> - **ADR numbers.** ADR-0020 (the NetBox client) is written before ADR-0021
+>   (Cobra and Viper), so the numbers below hold. The ADR that fixes the
+>   prerequisites (ITEM-0025) follows ADR-0021.
+> - **Hook tests** (ITEM-0017) live in their own Go module, `tools/hooktest`.
+>   `jq` is pinned as a release binary, so they also run in the CI image.
+> - **Integration test files are linted.** golangci-lint and `go vet` also
+>   check files with the `integration` build tag.
 
 ## Verification log
 
 Append-only and dated. Record what was run and what was seen.
+
+- 2026-09-29: Review before implementation, on `eaa5f9b`.
+  - `make check` and `make docs-links` pass, so all of `make ci` is green.
+  - On a `PATH` with no C compiler, Go disables cgo and `make test` fails
+    with `go: -race requires cgo`. Filed as ITEM-0025.
+  - The commit guard, pipe-tested against a scratch repository, denies a
+    commit on `main`, and a switch to `main` followed by a commit. By design
+    it allows moving `main` without a commit (`git fetch . HEAD:main`,
+    `git branch -f main`, `git update-ref`) and committing in a worktree on
+    `main`. ITEM-0017 turns these cases into tests.
 
 ## Approved design
 

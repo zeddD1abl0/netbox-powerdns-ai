@@ -29,3 +29,14 @@ DNS model that M02 and M03 share.
 <!-- Append-only. Start each note with the date: "- YYYY-MM-DD: …" -->
 - 2026-09-27: Created from M01's approved design, before implementation
   started.
+- 2026-09-29: Decided with the user, and recorded in ADR-0020:
+  - `netbox.url` may use `http://`. The key's description in the
+    configuration reference warns that the token is then sent unencrypted,
+    and the client logs a warning.
+  - The normalized model groups records into RRsets. When NetBox records in
+    one RRset have different TTLs, the RRset takes the lowest.
+  - Retries, timeouts and TLS are tested against a local HTTP test server
+    that returns only status codes, headers and delays. NetBox's API
+    responses are tested only through the lab and recorded responses.
+  ADR-0020 is written before ADR-0021 (ITEM-0020) to keep the numbers in the
+  approved design, as a checkpoint commit for this item.

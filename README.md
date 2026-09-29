@@ -10,9 +10,9 @@ runs as a single binary or a container, and has a web UI, an API, SSO, and
 IaC-driven configuration.
 
 > [!NOTE]
-> This project is at **M0 (Foundation)**. There's no product code yet. The
-> scope is being settled; see the open questions in
-> [`project/requirements.md`](project/requirements.md).
+> This project is in early development and has no release yet. The
+> [project board](project/README.md) shows the current milestone and what
+> comes next.
 
 ## Where to look
 

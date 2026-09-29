@@ -32,5 +32,6 @@ from [`template.md`](template.md).
 | [0016](0016-staged-ci-pipelines-that-mirror-make-ci.md) | Staged CI pipelines that mirror `make ci` | accepted |
 | [0017](0017-documentation-platform-hugo-restated-for-the-relea.md) | Documentation platform — Hugo, restated for the release-binary toolchain | accepted |
 | [0018](0018-merge-milestones-through-gitlab-merge-requests.md) | Merge milestones through GitLab merge requests | accepted |
+| [0019](0019-re-slice-the-milestones-into-smaller-steps.md) | Re-slice the milestones into smaller steps | accepted |
 
 <!-- projctl:adr-index:end -->

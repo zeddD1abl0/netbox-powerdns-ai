@@ -129,3 +129,43 @@ Measurement showed that building the eight tools from source needed about
 
 These are recorded in ADR-0014 (tool binaries), ADR-0015 (glibc images) and
 ADR-0016 (CI stages), and as REQ-038 and REQ-039.
+
+## Answers, 2026-09-27 (M01 design)
+
+These were given in the M01 design session. They weren't quoted at the time;
+this is the summary recorded under "Approved design" in
+[M01](milestones/M01-netbox-read-path.md).
+
+| Topic | Answer |
+|---|---|
+| Milestone size | Smaller milestones. Each merge should be a useful, logical step. M01 reads from the NetBox API; later milestones add PowerDNS, then the database (SQLite, then PostgreSQL). |
+| Authentication order | Read-only, unauthenticated features come first. Authentication arrives before anything can change state from outside. |
+| Merging | Through a GitLab merge request with a merge commit. GitHub is a push mirror. |
+| Libraries | Established libraries instead of custom modules: Cobra for the command line and Viper for configuration. For logging, the user compared slog with zap and chose `log/slog`. |
+| NetBox webhooks | Needed. Where they go was left to Claude; they got their own milestone, after the REST API. |
+| Q-007: supported versions | NetBox 4.7 and 4.6, with the DNS plugin 1.7.x and 1.6.x. |
+| CI | Integration tests against a real NetBox run in every pipeline, using Docker-in-Docker. |
+
+The resulting decisions are recorded in ADR-0018 (merging), ADR-0019 (the
+milestones), ADR-0020 (the NetBox client) and ADR-0021 (Cobra and Viper).
+
+## Answers, 2026-09-29 (review before M01 implementation)
+
+A review of the repository before implementation raised these questions. The
+user's answers are quoted.
+
+| Question | Answer |
+|---|---|
+| Is GitLab set to merge with a merge commit, with squash disabled? | "Merge commit with Squash disabled is done" |
+| May nbpdns reach NetBox over plain HTTP, which sends the token unencrypted? | "Allow over HTTP. Not all NetBox deployments will be secure. Add a warning to the configuration item" |
+| Should the normalized DNS model group records into RRsets, with the lowest TTL when a set's records disagree? | "RRSET with the lowest TTL sounds good to me" |
+| May retries, timeouts and TLS be tested against a local test server, since a real NetBox can't be made to fail on demand? | "Yes, test against a fake server" |
+| Should the hook tests live in their own module, `tools/hooktest`, with `jq` pinned as a release binary? | "Both of these seem fine to me" |
+
+The user didn't object to the other steps proposed in the same review:
+- ITEM-0025 fixes the prerequisites, which omit the C compiler that `-race`
+  needs;
+- ADR-0020 is written before ADR-0021, to keep the numbers in M01's design;
+- lint and vet also check files with the `integration` build tag.
+
+Runner capacity for the Docker-in-Docker job wasn't confirmed yet.

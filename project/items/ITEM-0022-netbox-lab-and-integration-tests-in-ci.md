@@ -30,3 +30,8 @@ tests run against it locally and in every pipeline on both forges.
 <!-- Append-only. Start each note with the date: "- YYYY-MM-DD: …" -->
 - 2026-09-27: Created from M01's approved design, before implementation
   started.
+- 2026-09-29: The user hasn't yet confirmed runner capacity for the
+  Docker-in-Docker job (estimated 4–6 GB of ephemeral storage). Measure the
+  real figure and report it. Also agreed in the review: golangci-lint and
+  `go vet` must check files with the `integration` build tag, which they skip
+  by default.

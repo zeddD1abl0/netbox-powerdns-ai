@@ -73,7 +73,7 @@ check: vet lint test vuln secrets docs-lint api-lint project-lint ## Everything 
 ci: check docs-links ## Every CI job's targets, run locally in one go
 
 # Go modules that fmt, vet, lint, test and vuln cover. A module with no
-# packages yet (the root, until M1) is skipped.
+# packages yet is skipped.
 GO_MODULES := . tools/projctl
 
 # $(call each_module,COMMAND) runs COMMAND inside every Go module with packages.
@@ -141,7 +141,7 @@ api-lint: $(VACUUM) ## Lint api/openapi.yaml against the Zalando ruleset, and se
 		grep -q -- "$$rule" <<< "$$out" || { echo "api/testdata/bad.yaml doesn't trigger $$rule"; exit 1; }; \
 	done; \
 	echo "api ruleset: self-test passed"
-	@if [ -f api/openapi.yaml ]; then $(VACUUM_LINT) api/openapi.yaml; else echo "api/openapi.yaml doesn't exist yet (M1)"; fi
+	@if [ -f api/openapi.yaml ]; then $(VACUUM_LINT) api/openapi.yaml; else echo "api/openapi.yaml doesn't exist yet (M05)"; fi
 
 .PHONY: vale-sync
 vale-sync: $(VALE) ## Refresh the vendored Vale style packages (needs network)

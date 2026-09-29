@@ -9,8 +9,7 @@ lives in `project/`, and decisions live in `docs/adr/`.
 1. Read [`project/README.md`](project/README.md), the board. It shows the
    current milestone, the open items and the open questions.
 2. Read the current milestone's file in [`project/milestones/`](project/milestones/).
-3. Read only the items, ADRs and docs the task needs. Don't read whole
-   directories.
+3. Read only the items, ADRs and docs the task needs, not whole directories.
 
 ## Where things live
 
@@ -23,7 +22,7 @@ lives in `project/`, and decisions live in `docs/adr/`.
 | Decisions and their rationale | `docs/adr/nnnn-*.md` |
 | Product documentation (Diátaxis) | `docs/tutorials/`, `docs/how-to/`, `docs/reference/`, `docs/explanation/` |
 | How to write the docs | [`docs/contributing/documentation-style.md`](docs/contributing/documentation-style.md) |
-| API contract (from M1) | `api/openapi.yaml` |
+| API contract (from M05) | `api/openapi.yaml` |
 
 ## Workflow
 
@@ -51,11 +50,12 @@ lives in `project/`, and decisions live in `docs/adr/`.
 - Status lives in front matter: `open` → `in-progress` → `done`, or `blocked` or
   `wontfix`. Set `closed:` when an item is done or dropped.
 - **Files never move or get renamed.** Closing an item changes its status only.
+  The one exception: a planned milestone stub with no work yet may be
+  rewritten or renamed by a re-plan recorded in an ADR ([ADR-0019](docs/adr/0019-re-slice-the-milestones-into-smaller-steps.md)).
 - Item notes are append-only and dated (`YYYY-MM-DD`).
 - Before a session ends, append the state and next steps to the in-progress item's notes.
 - A decision with lasting consequences gets an ADR (`new-adr` skill,
-  `make adr TITLE="…"`). Accepted ADRs aren't edited: a new ADR supersedes
-  them.
+  `make adr TITLE="…"`). Accepted ADRs aren't edited; new ones supersede them.
 - A problem found while working becomes an item, not a code comment or a TODO.
 - When a question is answered, move it from **Open questions** to **Answered**
   in `project/requirements.md` with the date. Link the ADR or REQ it produced.
