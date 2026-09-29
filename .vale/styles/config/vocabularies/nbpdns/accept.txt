@@ -95,3 +95,5 @@ blackfriday
 fsnotify
 afero
 dotenv
+gcc
+golang

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Updates or checks the pinned tool binaries in tools/tools.mk (ADR-0014).
+# Updates or checks the pinned tool binaries in tools/tools.mk (ADR-0022).
 #
 #   tools/update.sh          move every tool to its latest release
 #   tools/update.sh --check  keep the versions; re-derive every pinned SHA-256

@@ -15,7 +15,7 @@ CI_IMAGE := golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99
 ##@ Tools
 
 # Release binaries are pinned per platform in tools/tools.mk and fetched once
-# into .cache/tools/<platform>/ (ADR-0014). Each tool's variable, such as
+# into .cache/tools/<platform>/ (ADR-0022). Each tool's variable, such as
 # $(HUGO), is the path to its binary.
 include tools/tools.mk
 PLATFORM := $(shell go env GOOS)-$(shell go env GOARCH)
@@ -100,12 +100,23 @@ vet: ## Run go vet
 TEST_TOOLS := $(JQ) $(GOLANGCI_LINT)
 TEST_ENV := HOOKTEST_JQ=$(JQ) HOOKTEST_GOLANGCI_LINT=$(GOLANGCI_LINT)
 
+# The race detector needs cgo, so a C compiler (ADR-0022). Without one, Go
+# turns cgo off; say what's missing before Go does.
+define need_cgo
+	@test "$$(go env CGO_ENABLED)" = 1 || { \
+		echo "The race detector needs cgo, and so a C compiler, which this host lacks."; \
+		echo "Install one (on Debian or Ubuntu: apt install gcc libc6-dev), or run 'make shell'."; \
+		exit 1; }
+endef
+
 .PHONY: test
 test: $(TEST_TOOLS) ## Run unit tests with the race detector
+	$(need_cgo)
 	$(call each_module,$(TEST_ENV) go test -race ./...)
 
 .PHONY: test-integration
 test-integration: $(TEST_TOOLS) ## Run integration tests (build tag "integration") against the container lab
+	$(need_cgo)
 	$(call each_module,$(TEST_ENV) go test -race -tags integration ./...)
 
 ##@ Build

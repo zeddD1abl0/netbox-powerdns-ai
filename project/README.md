@@ -10,7 +10,7 @@
 | Milestone | Title | Status | Items closed |
 |---|---|---|---|
 | [M00](milestones/M00-foundation.md) | Foundation | done | 16 of 16 |
-| [M01](milestones/M01-netbox-read-path.md) | NetBox read path | in-progress | 4 of 9 |
+| [M01](milestones/M01-netbox-read-path.md) | NetBox read path | in-progress | 5 of 9 |
 | [M02](milestones/M02-powerdns-read-path.md) | PowerDNS read path | planned | — |
 | [M03](milestones/M03-drift-report.md) | Drift report | planned | — |
 | [M04](milestones/M04-service.md) | Service | planned | — |
@@ -37,11 +37,11 @@
 | [ITEM-0022](items/ITEM-0022-netbox-lab-and-integration-tests-in-ci.md) | NetBox lab and integration tests in CI | task | open | — |
 | [ITEM-0023](items/ITEM-0023-netbox-client-and-normalized-dns-model.md) | NetBox client and normalized DNS model | feature | open | ITEM-0021, ITEM-0022 |
 | [ITEM-0024](items/ITEM-0024-nbpdns-netbox-commands-and-docs.md) | nbpdns netbox commands and docs | feature | open | ITEM-0023 |
-| [ITEM-0025](items/ITEM-0025-document-the-c-compiler-that-race-needs.md) | Document the C compiler that -race needs | bug | open | — |
 | [ITEM-0017](items/ITEM-0017-run-the-claude-code-hook-pipe-tests-in-make-test.md) | Run the Claude Code hook pipe-tests in make test | debt | done 2026-09-29 | — |
 | [ITEM-0018](items/ITEM-0018-record-the-merge-request-process.md) | Record the merge-request process | task | done 2026-09-29 | — |
 | [ITEM-0019](items/ITEM-0019-re-slice-the-milestones-into-smaller-steps.md) | Re-slice the milestones into smaller steps | task | done 2026-09-29 | — |
 | [ITEM-0020](items/ITEM-0020-command-line-config-registry-and-generated-referen.md) | Command line, config registry and generated references | feature | done 2026-09-29 | — |
+| [ITEM-0025](items/ITEM-0025-document-the-c-compiler-that-race-needs.md) | Document the C compiler that -race needs | bug | done 2026-09-29 | — |
 
 ## Open questions
 
@@ -72,4 +72,4 @@
 
 ## Decisions
 
-21 ADRs (18 accepted, 3 superseded), listed in [docs/adr](../docs/adr/_index.md).
+22 ADRs (18 accepted, 4 superseded), listed in [docs/adr](../docs/adr/_index.md).

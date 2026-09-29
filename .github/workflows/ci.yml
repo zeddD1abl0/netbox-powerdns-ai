@@ -1,6 +1,6 @@
 # CI for nbpdns on GitHub, mirroring .gitlab-ci.yml's stages with `needs`
 # (ADR-0016): lint, then test, then build, then security. Every job only runs
-# make targets (ADR-0014). `make project-lint` checks that together the jobs
+# make targets (ADR-0022). `make project-lint` checks that together the jobs
 # run exactly what `make ci` runs, in the Makefile's CI_IMAGE.
 name: ci
 

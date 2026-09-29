@@ -27,7 +27,7 @@ from [`template.md`](template.md).
 | [0011](0011-documentation-platform-hugo.md) | Documentation platform — Hugo | superseded by ADR-0017 |
 | [0012](0012-api-standard.md) | API standard — OpenAPI 3.1 spec-first, Zalando guidelines | accepted |
 | [0013](0013-toolchain-per-tool-modules-and-c-compiler.md) | Self-contained toolchain, revised — per-tool modules and a C compiler | superseded by ADR-0014 |
-| [0014](0014-toolchain-pinned-release-binaries-on-glibc-linux.md) | Toolchain: pinned release binaries on glibc Linux | accepted |
+| [0014](0014-toolchain-pinned-release-binaries-on-glibc-linux.md) | Toolchain: pinned release binaries on glibc Linux | superseded by ADR-0022 |
 | [0015](0015-glibc-based-debian-or-ubuntu-images-for-ci-and-con.md) | glibc-based Debian or Ubuntu images for CI and containers | accepted |
 | [0016](0016-staged-ci-pipelines-that-mirror-make-ci.md) | Staged CI pipelines that mirror `make ci` | accepted |
 | [0017](0017-documentation-platform-hugo-restated-for-the-relea.md) | Documentation platform — Hugo, restated for the release-binary toolchain | accepted |
@@ -35,5 +35,6 @@ from [`template.md`](template.md).
 | [0019](0019-re-slice-the-milestones-into-smaller-steps.md) | Re-slice the milestones into smaller steps | accepted |
 | [0020](0020-netbox-client-and-normalized-dns-model.md) | NetBox client and normalized DNS model | accepted |
 | [0021](0021-cobra-and-viper-for-commands-and-configuration.md) | Cobra and Viper for commands and configuration | accepted |
+| [0022](0022-toolchain-with-the-c-compiler-that-race-needs.md) | Toolchain with the C compiler that -race needs | accepted |
 
 <!-- projctl:adr-index:end -->

@@ -1,5 +1,5 @@
 # CI for nbpdns on GitLab, in stages (ADR-0016). Every job only runs make
-# targets (ADR-0014). `make project-lint` checks that together the jobs run
+# targets (ADR-0022). `make project-lint` checks that together the jobs run
 # exactly what `make ci` runs, in the Makefile's CI_IMAGE. To add a check, add
 # a make target, add it to `ci`, and add a job here and in
 # .github/workflows/ci.yml.

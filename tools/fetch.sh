@@ -1,5 +1,5 @@
 #!/bin/sh
-# Downloads one pinned tool binary (ADR-0014).
+# Downloads one pinned tool binary (ADR-0022).
 #
 #   tools/fetch.sh URL SHA256 MEMBER DEST
 #

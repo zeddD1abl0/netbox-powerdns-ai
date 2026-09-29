@@ -1,6 +1,6 @@
 ---
 title: "0014: Toolchain: pinned release binaries on glibc Linux"
-status: accepted
+status: superseded by ADR-0022
 date: 2026-09-25
 decision-makers: [jordan]
 requirements: [REQ-022, REQ-026, REQ-038]

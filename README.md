@@ -28,8 +28,10 @@ IaC-driven configuration.
 
 Claude develops this project from start to finish, following
 [`CLAUDE.md`](CLAUDE.md). Development and CI run on glibc Linux amd64 (Debian
-or Ubuntu). The only prerequisites are Go, Docker, make, curl, tar, and
-sha256sum ([ADR-0014](docs/adr/0014-toolchain-pinned-release-binaries-on-glibc-linux.md)).
+or Ubuntu). The only prerequisites are Go, Docker, make, curl, tar,
+sha256sum, and a C compiler, which the race detector needs: on Debian or
+Ubuntu, `gcc` and `libc6-dev`
+([ADR-0022](docs/adr/0022-toolchain-with-the-c-compiler-that-race-needs.md)).
 Every other tool is pinned in the repository and fetched on first use. On
 other platforms, `make shell` runs everything inside the CI image.
 

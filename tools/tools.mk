@@ -1,4 +1,4 @@
-# Pinned tool release binaries (ADR-0014), included by the Makefile.
+# Pinned tool release binaries (ADR-0022), included by the Makefile.
 #
 # Each tool has a repository, a version, and per platform an asset name and
 # the SHA-256 that the download must match. The URL is
