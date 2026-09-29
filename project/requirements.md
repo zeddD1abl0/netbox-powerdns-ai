@@ -55,6 +55,7 @@ When a question is answered:
 | REQ-037 | The API follows the Zalando RESTful API Guidelines in full, with no version in URL paths. | Q-056, [ADR-0012](../docs/adr/0012-api-standard.md) |
 | REQ-038 | CI and container images are glibc-based (Debian or Ubuntu); Alpine/musl isn't required. | User, 2026-09-25; [ADR-0015](../docs/adr/0015-glibc-based-debian-or-ubuntu-images-for-ci-and-con.md) |
 | REQ-039 | CI pipelines are split into stages (lint, test, build, security, and more later); `make ci` remains the local "do everything" target. | User, 2026-09-25 |
+| REQ-040 | Reads NetBox 4.7 and 4.6, with the NetBox DNS plugin 1.7.x and 1.6.x, through the REST API with a read-only token. | Q-007, [ADR-0020](../docs/adr/0020-netbox-client-and-normalized-dns-model.md) |
 
 ## Open questions
 
@@ -66,7 +67,6 @@ names the milestone that needs the answer, from the milestone list in
 
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
-| Q-007 | Which NetBox and plugin versions are supported, and how does the app authenticate to NetBox? | Current NetBox 4.x plus the previous minor, with a read-only API token. | M01 |
 | Q-011 | Where does data that NetBox doesn't model live: TSIG keys, zone metadata (ALLOW-AXFR-FROM, ALSO-NOTIFY, SOA-EDIT-API), serial policy, DNSSEC key rollover? | In NetBox wherever the plugin models it. Everything else is per-zone or per-group config in this app. | M12 |
 | Q-012 | Does "change settings" mean this app's settings only, or PowerDNS server config (`pdns.conf`) too? | This app's settings plus per-zone PowerDNS metadata. `pdns.conf` stays with Ansible. | M07 |
 | Q-013 | What change safety is needed: dry-run diff, four-eyes approval, change windows, blast-radius limits, rollback? | Every sync computes a plan and auto-applies below thresholds. Above a threshold (such as more than N deletes, or NS/SOA changes) it needs approval. | M13 |
@@ -162,3 +162,4 @@ names the milestone that needs the answer, from the milestone list in
 | Q-049 | Which CI runners? | Default accepted: the self-hosted GitLab Kubernetes privileged runners. A GitHub Actions wrapper is kept ready. | 2026-09-25 | ITEM-0006 |
 | Q-055 | Which GitHub owner goes in the module path? | `zeddD1abl0`, from the `github` remote: `github.com/zeddD1abl0/netbox-powerdns-ai`. | 2026-09-25 | [ADR-0005](../docs/adr/0005-project-identity.md) |
 | Q-056 | Which API style guide, and are versions put in URL paths? | The Zalando RESTful API Guidelines, followed in full, including rule 115: no version in URL paths. | 2026-09-25 | REQ-037, [ADR-0012](../docs/adr/0012-api-standard.md) |
+| Q-007 | Which NetBox and plugin versions are supported, and how does the app authenticate to NetBox? | NetBox 4.7 and 4.6, with the DNS plugin 1.7.x and 1.6.x, read through the REST API. A read-only v2 token; a v1 token still works, with a warning. | 2026-09-27 | REQ-040, [ADR-0020](../docs/adr/0020-netbox-client-and-normalized-dns-model.md) |

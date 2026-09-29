@@ -83,3 +83,7 @@ glibc
 musl
 SBOMs?
 [Rr]ebas(e|ed|es|ing)
+RRsets?
+TTLs?
+unencrypted
+backoff

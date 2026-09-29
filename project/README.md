@@ -45,11 +45,10 @@
 
 ## Open questions
 
-35 open (0 blocking), 21 answered. The questions and their proposed defaults are in [requirements.md](requirements.md#open-questions).
+34 open (0 blocking), 22 answered. The questions and their proposed defaults are in [requirements.md](requirements.md#open-questions).
 
 | Needed by | Open questions |
 |---|---|
-| M01 | Q-007 |
 | M02 | Q-021, Q-022, Q-039, Q-043, Q-053 |
 | M03 | Q-017, Q-027 |
 | M04 | Q-038 |
@@ -69,8 +68,8 @@
 
 ## Requirements
 
-39 requirements, listed in [requirements.md](requirements.md#requirements). 20 aren't referenced by any item yet: REQ-003, REQ-004, REQ-007, REQ-008, REQ-009, REQ-010, REQ-011, REQ-014, REQ-015, REQ-016, REQ-017, REQ-023, REQ-028, REQ-029, REQ-030, REQ-031, REQ-032, REQ-033, REQ-034, REQ-035.
+40 requirements, listed in [requirements.md](requirements.md#requirements). 20 aren't referenced by any item yet: REQ-003, REQ-004, REQ-007, REQ-008, REQ-009, REQ-010, REQ-011, REQ-014, REQ-015, REQ-016, REQ-017, REQ-023, REQ-028, REQ-029, REQ-030, REQ-031, REQ-032, REQ-033, REQ-034, REQ-035.
 
 ## Decisions
 
-19 ADRs (16 accepted, 3 superseded), listed in [docs/adr](../docs/adr/_index.md).
+20 ADRs (17 accepted, 3 superseded), listed in [docs/adr](../docs/adr/_index.md).
