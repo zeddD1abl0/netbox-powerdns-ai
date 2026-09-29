@@ -67,9 +67,28 @@ jobs:
           persist-credentials: false
       - run: make test
 
+  # The lab runs in a privileged Docker-in-Docker service.
+  integration-test:
+    needs: [go-lint, docs-lint, api-lint, project-lint]
+    runs-on: ubuntu-latest
+    container: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
+    services:
+      docker:
+        image: docker:29.8.1-dind@sha256:3f3c01aaaebf7cce837356b688b7c059a4749f10bd7660dec7c58fc454a283f0
+        options: --privileged
+        env:
+          DOCKER_TLS_CERTDIR: ""
+    env:
+      DOCKER_HOST: tcp://docker:2375
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: make test-integration
+
   # Stage: build
   build:
-    needs: [unit-test]
+    needs: [unit-test, integration-test]
     runs-on: ubuntu-latest
     container: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
     steps:
@@ -79,7 +98,7 @@ jobs:
       - run: make build
 
   docs-site:
-    needs: [unit-test]
+    needs: [unit-test, integration-test]
     runs-on: ubuntu-latest
     container: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
     steps:

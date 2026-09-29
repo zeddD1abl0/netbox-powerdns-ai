@@ -62,5 +62,14 @@ JQ_ASSET_linux-amd64                = jq-linux-amd64
 JQ_SHA256_linux-amd64               := b1c22172dd303f3be49e935aa56aa48a8b7a46e0bc838b4997d3bb451495870f
 JQ_MEMBER_linux-amd64               = -
 
+# docker-compose runs the development lab (deploy/dev/compose.yaml).
+DOCKER_COMPOSE_REPO                 := docker/compose
+DOCKER_COMPOSE_VERSION              := 5.5.1
+DOCKER_COMPOSE_CHECKSUMS            = checksums.txt
+DOCKER_COMPOSE_ASSET_linux-amd64    = docker-compose-linux-x86_64
+DOCKER_COMPOSE_SHA256_linux-amd64   := db1889184726840f75c4f9c001048430d4f25b3be3cb084d3ddd762bc0aed576
+DOCKER_COMPOSE_MEMBER_linux-amd64   = -
+
 # Tools pinned as release binaries, as <VARIABLE PREFIX>:<binary name>.
-BINARY_TOOLS := GOLANGCI_LINT:golangci-lint HUGO:hugo VALE:vale VACUUM:vacuum GITLEAKS:gitleaks HTMLTEST:htmltest JQ:jq
+BINARY_TOOLS := GOLANGCI_LINT:golangci-lint HUGO:hugo VALE:vale VACUUM:vacuum GITLEAKS:gitleaks HTMLTEST:htmltest JQ:jq \
+	DOCKER_COMPOSE:docker-compose

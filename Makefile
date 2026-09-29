@@ -70,7 +70,7 @@ shell: ## Open a shell in the CI image with the repository mounted (for macOS, W
 check: vet lint test vuln secrets docs-lint api-lint project-lint generate-check ## Everything CI checks (formatting is checked by lint)
 
 .PHONY: ci
-ci: check build docs-links ## Every CI job's targets, run locally in one go
+ci: check build docs-links test-integration ## Every CI job's targets, run locally in one go
 
 # Go modules that fmt, vet, lint, test and vuln cover. A module with no
 # packages yet is skipped.
@@ -92,9 +92,11 @@ endef
 fmt: $(GOLANGCI_LINT) ## Format Go code with the configured formatters (gofmt, goimports)
 	$(call each_module,$(GOLANGCI_LINT) fmt --config $(ROOT)/.golangci.yml ./...)
 
+# Integration tests carry the "integration" build tag. vet and lint check them
+# too; otherwise they'd skip those files.
 .PHONY: vet
 vet: ## Run go vet
-	$(call each_module,go vet ./...)
+	$(call each_module,go vet -tags integration ./...)
 
 # The hook tests in tools/hooktest run the pinned jq and golangci-lint.
 TEST_TOOLS := $(JQ) $(GOLANGCI_LINT)
@@ -115,7 +117,7 @@ test: $(TEST_TOOLS) ## Run unit tests with the race detector
 	$(call each_module,$(TEST_ENV) go test -race ./...)
 
 .PHONY: test-integration
-test-integration: $(TEST_TOOLS) ## Run integration tests (build tag "integration") against the container lab
+test-integration: lab-up $(TEST_TOOLS) ## Start the lab, then run the integration tests (build tag "integration")
 	$(need_cgo)
 	$(call each_module,$(TEST_ENV) go test -race -tags integration ./...)
 
@@ -141,6 +143,32 @@ generate-check: ## Fail if a generated reference page is out of date
 	done; \
 	if [ $$stale -eq 0 ]; then echo "generated references: up to date"; fi; \
 	exit $$stale
+
+##@ Development lab
+
+# The lab (deploy/dev/compose.yaml, REQ-036) runs on the Docker host that
+# DOCKER_HOST names, or the local one.
+LAB_DIR := deploy/dev
+# The lab's credentials are public, so on a local Docker host its ports listen
+# on 127.0.0.1 only. A remote one (DOCKER_HOST=tcp://..., as with
+# Docker-in-Docker in CI) is reached by name, so they listen on every
+# interface there.
+LAB_BIND_ADDRESS := $(if $(filter tcp://%,$(DOCKER_HOST)),0.0.0.0,127.0.0.1)
+LAB_COMPOSE = LAB_BIND_ADDRESS=$(LAB_BIND_ADDRESS) $(DOCKER_COMPOSE) --file $(LAB_DIR)/compose.yaml
+
+.PHONY: lab-up
+lab-up: $(DOCKER_COMPOSE) ## Start the NetBox lab, and wait until it's healthy
+	@# A Docker-in-Docker service can still be starting when the job begins.
+	@for i in $$(seq 60); do \
+		$(LAB_COMPOSE) ls >/dev/null 2>&1 && break; \
+		if [ $$i -eq 60 ]; then echo "The Docker daemon isn't answering$${DOCKER_HOST:+ at $$DOCKER_HOST}."; exit 1; fi; \
+		sleep 1; \
+	done
+	$(LAB_COMPOSE) up --detach --wait --wait-timeout 1200
+
+.PHONY: lab-down
+lab-down: $(DOCKER_COMPOSE) ## Remove the NetBox lab and its data
+	$(LAB_COMPOSE) down --volumes --remove-orphans
 
 ##@ Security
 

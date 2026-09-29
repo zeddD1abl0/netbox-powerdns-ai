@@ -54,6 +54,21 @@ unit-test:
   script:
     - make test
 
+# The lab runs in a Docker-in-Docker service, which needs a privileged
+# runner, like the self-hosted Kubernetes runners (Q-049).
+integration-test:
+  extends: .go
+  stage: test
+  services:
+    - name: docker:29.8.1-dind@sha256:3f3c01aaaebf7cce837356b688b7c059a4749f10bd7660dec7c58fc454a283f0
+      alias: docker
+      variables:
+        DOCKER_TLS_CERTDIR: ""
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+  script:
+    - make test-integration
+
 build:
   extends: .go
   stage: build

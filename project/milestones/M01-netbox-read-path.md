@@ -82,6 +82,15 @@ tests need.
 >   `jq` is pinned as a release binary, so they also run in the CI image.
 > - **Integration test files are linted.** golangci-lint and `go vet` also
 >   check files with the `integration` build tag.
+>
+> Changed during implementation, with the reasons recorded where named:
+>
+> - **The command-line reference** comes from a generator of our own, not
+>   `cobra/doc`, and unknown config file keys are found by comparing with
+>   the key registry, not `UnmarshalExact` (ADR-0021).
+> - **The lab builds no images.** Each NetBox container installs the pinned
+>   plugin as it starts, so there's no Dockerfile, and buildx isn't pinned
+>   (ITEM-0022).
 
 ## Verification log
 
