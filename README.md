@@ -35,6 +35,7 @@ other platforms, `make shell` runs everything inside the CI image.
 
 ```shell
 make            # list every target
+make build      # build bin/nbpdns
 make ci         # run exactly what CI runs
 make docs-serve # preview the documentation site
 ```

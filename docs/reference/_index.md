@@ -12,8 +12,8 @@ by hand:
 
 | Page | Generated from | Arrives in |
 |---|---|---|
-| Configuration keys | the config registry | M01 |
-| Command line | the command-line definitions | M01 |
+| [Configuration](configuration.md) | the config registry | M01 |
+| [Command line](command-line.md) | the command-line definitions | M01 |
 | Metrics | the metrics registry | M04 |
 | API reference | `api/openapi.yaml` | M05 |
 | Audit events | the audit event registry | M07 |

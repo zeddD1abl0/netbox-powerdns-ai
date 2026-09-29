@@ -87,3 +87,11 @@ RRsets?
 TTLs?
 unencrypted
 backoff
+zsh
+[Ss]ubcommands?
+stdlib
+koanf
+blackfriday
+fsnotify
+afero
+dotenv

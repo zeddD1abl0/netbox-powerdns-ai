@@ -8,6 +8,15 @@ All notable changes to this project are recorded here. The format follows
 
 ### Added
 
+- The `nbpdns` command, built as a static binary (`make build`), with
+  `version`, `config show`, and shell completion. Output is a table or JSON
+  (`--output`), and exit statuses tell success, failure, and usage errors
+  apart.
+- Configuration from flags, `NBPDNS_` environment variables, and a YAML config
+  file, in that order of precedence. Secrets can be read from files (`_FILE`),
+  and are redacted everywhere they could be printed or logged. Unknown keys and
+  variables are errors, and every problem is reported at once.
+- Configuration and command-line reference pages, generated from the code.
 - Project foundation:
   - working rules for contributors (`CLAUDE.md`);
   - in-repo work tracking (`project/`);

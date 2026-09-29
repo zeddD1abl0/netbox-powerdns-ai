@@ -67,10 +67,10 @@ shell: ## Open a shell in the CI image with the repository mounted (for macOS, W
 ##@ Pipeline
 
 .PHONY: check
-check: vet lint test vuln secrets docs-lint api-lint project-lint ## Everything CI checks (formatting is checked by lint)
+check: vet lint test vuln secrets docs-lint api-lint project-lint generate-check ## Everything CI checks (formatting is checked by lint)
 
 .PHONY: ci
-ci: check docs-links ## Every CI job's targets, run locally in one go
+ci: check build docs-links ## Every CI job's targets, run locally in one go
 
 # Go modules that fmt, vet, lint, test and vuln cover. A module with no
 # packages yet is skipped.
@@ -107,6 +107,29 @@ test: $(TEST_TOOLS) ## Run unit tests with the race detector
 .PHONY: test-integration
 test-integration: $(TEST_TOOLS) ## Run integration tests (build tag "integration") against the container lab
 	$(call each_module,$(TEST_ENV) go test -race -tags integration ./...)
+
+##@ Build
+
+.PHONY: build
+build: ## Build nbpdns as a static binary, bin/nbpdns
+	CGO_ENABLED=0 go build -trimpath -o bin/nbpdns ./cmd/nbpdns
+
+# The reference pages generated from the code (internal/cmd/gendocs). Never
+# edit them by hand.
+.PHONY: generate
+generate: ## Regenerate the reference pages generated from the code
+	go run ./internal/cmd/gendocs -out docs/reference
+
+.PHONY: generate-check
+generate-check: ## Fail if a generated reference page is out of date
+	@tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' EXIT; \
+	go run ./internal/cmd/gendocs -out "$$tmp"; \
+	stale=0; for f in "$$tmp"/*; do \
+		page=docs/reference/$$(basename "$$f"); \
+		diff -u "$$page" "$$f" || { echo "$$page is out of date; run 'make generate'"; stale=1; }; \
+	done; \
+	if [ $$stale -eq 0 ]; then echo "generated references: up to date"; fi; \
+	exit $$stale
 
 ##@ Security
 

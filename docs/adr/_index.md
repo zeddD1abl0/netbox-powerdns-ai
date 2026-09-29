@@ -34,5 +34,6 @@ from [`template.md`](template.md).
 | [0018](0018-merge-milestones-through-gitlab-merge-requests.md) | Merge milestones through GitLab merge requests | accepted |
 | [0019](0019-re-slice-the-milestones-into-smaller-steps.md) | Re-slice the milestones into smaller steps | accepted |
 | [0020](0020-netbox-client-and-normalized-dns-model.md) | NetBox client and normalized DNS model | accepted |
+| [0021](0021-cobra-and-viper-for-commands-and-configuration.md) | Cobra and Viper for commands and configuration | accepted |
 
 <!-- projctl:adr-index:end -->

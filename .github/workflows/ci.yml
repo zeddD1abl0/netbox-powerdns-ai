@@ -27,7 +27,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - run: make vet lint
+      - run: make vet lint generate-check
 
   docs-lint:
     runs-on: ubuntu-latest
@@ -68,6 +68,16 @@ jobs:
       - run: make test
 
   # Stage: build
+  build:
+    needs: [unit-test]
+    runs-on: ubuntu-latest
+    container: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: make build
+
   docs-site:
     needs: [unit-test]
     runs-on: ubuntu-latest
@@ -80,7 +90,7 @@ jobs:
 
   # Stage: security
   vuln:
-    needs: [docs-site]
+    needs: [build, docs-site]
     runs-on: ubuntu-latest
     container: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
     steps:
@@ -90,7 +100,7 @@ jobs:
       - run: make vuln
 
   secrets:
-    needs: [docs-site]
+    needs: [build, docs-site]
     runs-on: ubuntu-latest
     container: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
     steps:

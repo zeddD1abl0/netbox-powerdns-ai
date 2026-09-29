@@ -28,7 +28,7 @@ go-lint:
   extends: .go
   stage: lint
   script:
-    - make vet lint
+    - make vet lint generate-check
 
 docs-lint:
   extends: .go
@@ -53,6 +53,12 @@ unit-test:
   stage: test
   script:
     - make test
+
+build:
+  extends: .go
+  stage: build
+  script:
+    - make build
 
 docs-site:
   extends: .go
