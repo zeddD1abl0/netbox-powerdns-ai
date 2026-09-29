@@ -28,7 +28,7 @@ define binary_tool
 $(1) := $$(TOOLS_DIR)/$(2)-$$($(1)_VERSION)
 $$($(1)): tools/tools.mk
 	@test -n "$$($(1)_SHA256_$$(PLATFORM))" || { echo "no pinned $(2) for $$(PLATFORM); run the tools in the CI image with 'make shell'"; exit 1; }
-	@tools/fetch.sh "https://github.com/$$($(1)_REPO)/releases/download/v$$($(1)_VERSION)/$$($(1)_ASSET_$$(PLATFORM))" \
+	@tools/fetch.sh "https://github.com/$$($(1)_REPO)/releases/download/$$(or $$($(1)_TAG),v$$($(1)_VERSION))/$$($(1)_ASSET_$$(PLATFORM))" \
 		"$$($(1)_SHA256_$$(PLATFORM))" "$$($(1)_MEMBER_$$(PLATFORM))" "$$@"
 endef
 $(foreach t,$(BINARY_TOOLS),$(eval $(call binary_tool,$(word 1,$(subst :, ,$(t))),$(word 2,$(subst :, ,$(t))))))
@@ -74,7 +74,7 @@ ci: check docs-links ## Every CI job's targets, run locally in one go
 
 # Go modules that fmt, vet, lint, test and vuln cover. A module with no
 # packages yet is skipped.
-GO_MODULES := . tools/projctl
+GO_MODULES := . tools/projctl tools/hooktest
 
 # $(call each_module,COMMAND) runs COMMAND inside every Go module with packages.
 define each_module
@@ -96,13 +96,17 @@ fmt: $(GOLANGCI_LINT) ## Format Go code with the configured formatters (gofmt, g
 vet: ## Run go vet
 	$(call each_module,go vet ./...)
 
+# The hook tests in tools/hooktest run the pinned jq and golangci-lint.
+TEST_TOOLS := $(JQ) $(GOLANGCI_LINT)
+TEST_ENV := HOOKTEST_JQ=$(JQ) HOOKTEST_GOLANGCI_LINT=$(GOLANGCI_LINT)
+
 .PHONY: test
-test: ## Run unit tests with the race detector
-	$(call each_module,go test -race ./...)
+test: $(TEST_TOOLS) ## Run unit tests with the race detector
+	$(call each_module,$(TEST_ENV) go test -race ./...)
 
 .PHONY: test-integration
-test-integration: ## Run integration tests (build tag "integration") against the container lab
-	$(call each_module,go test -race -tags integration ./...)
+test-integration: $(TEST_TOOLS) ## Run integration tests (build tag "integration") against the container lab
+	$(call each_module,$(TEST_ENV) go test -race -tags integration ./...)
 
 ##@ Security
 
