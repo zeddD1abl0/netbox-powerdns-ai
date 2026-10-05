@@ -156,6 +156,8 @@ nbpdns netbox check [flags]
 List the records of one zone in NetBox's DNS plugin, as nbpdns normalizes
 them: grouped into RRsets, with absolute lowercase names, canonical values,
 and each RRset's TTL. Inactive records are listed too, with their status.
+The table's TTL is the RRset's, which DNS serves, except for an inactive
+record, which shows its own.
 
 Give the zone's name in its ASCII form. If the name is in more than one view,
 choose one with --view.

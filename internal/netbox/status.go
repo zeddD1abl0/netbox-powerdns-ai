@@ -28,6 +28,18 @@ var Supported = []Release{
 	{NetBox: "4.6", Plugin: "1.6"},
 }
 
+// SupportedSeries returns the supported NetBox and plugin release series, as
+// text such as "4.7.x or 4.6.x".
+func SupportedSeries() (netBox, plugin string) { return seriesText(Supported) }
+
+func seriesText(releases []Release) (netBox, plugin string) {
+	var nb, pl []string
+	for _, r := range releases {
+		nb, pl = append(nb, r.NetBox+".x"), append(pl, r.Plugin+".x")
+	}
+	return strings.Join(nb, " or "), strings.Join(pl, " or ")
+}
+
 // Status is what NetBox reports about itself at /api/status/.
 type Status struct {
 	// NetBoxVersion is NetBox's version, such as 4.7.1.

@@ -10,10 +10,10 @@
 | Milestone | Title | Status | Items closed |
 |---|---|---|---|
 | [M00](milestones/M00-foundation.md) | Foundation | done | 16 of 16 |
-| [M01](milestones/M01-netbox-read-path.md) | NetBox read path | in-progress | 9 of 9 |
+| [M01](milestones/M01-netbox-read-path.md) | NetBox read path | in-progress | 10 of 10 |
 | [M02](milestones/M02-powerdns-read-path.md) | PowerDNS read path | planned | — |
 | [M03](milestones/M03-drift-report.md) | Drift report | planned | — |
-| [M04](milestones/M04-service.md) | Service | planned | — |
+| [M04](milestones/M04-service.md) | Service | planned | 0 of 1 |
 | [M05](milestones/M05-rest-api.md) | REST API | planned | — |
 | [M06](milestones/M06-netbox-webhooks.md) | NetBox webhooks | planned | — |
 | [M07](milestones/M07-sqlite-persistence.md) | SQLite persistence | planned | — |
@@ -42,6 +42,13 @@
 | [ITEM-0023](items/ITEM-0023-netbox-client-and-normalized-dns-model.md) | NetBox client and normalized DNS model | feature | done 2026-10-06 | — |
 | [ITEM-0024](items/ITEM-0024-nbpdns-netbox-commands-and-docs.md) | nbpdns netbox commands and docs | feature | done 2026-10-06 | — |
 | [ITEM-0025](items/ITEM-0025-document-the-c-compiler-that-race-needs.md) | Document the C compiler that -race needs | bug | done 2026-09-29 | — |
+| [ITEM-0026](items/ITEM-0026-fix-the-m01-code-review-findings.md) | Fix the M01 code review findings | bug | done 2026-10-06 | — |
+
+## Open items in other milestones
+
+| Item | Title | Type | Status | Waiting on |
+|---|---|---|---|---|
+| [ITEM-0027](items/ITEM-0027-avoid-rebuilding-the-log-handler-chain-per-record.md) | Avoid rebuilding the log handler chain per record for grouped loggers | debt | open | — |
 
 ## Open questions
 

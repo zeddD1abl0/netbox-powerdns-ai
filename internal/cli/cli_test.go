@@ -240,7 +240,7 @@ func TestWriteRecords(t *testing.T) {
 		{"example.com.", "3600", "NS", "ns1.example.com.", "active", "yes"},
 		{"www.example.com.", "300", "A", "192.0.2.10", "active", "no"},
 		{"www.example.com.", "300", "A", "192.0.2.11", "active", "no"},
-		{"www.example.com.", "300", "A", "192.0.2.12", "inactive", "no"},
+		{"www.example.com.", "60", "A", "192.0.2.12", "inactive", "no"},
 	}
 	if len(lines) != len(want) {
 		t.Fatalf("table:\n%s", b.String())

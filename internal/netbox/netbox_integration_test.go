@@ -135,8 +135,9 @@ func TestLab(t *testing.T) {
 					}
 				}
 				var pe *PermissionError
-				if _, err := c.Zones(t.Context(), ZoneFilter{}); !errors.As(err, &pe) || pe.ObjectType != "netbox_dns.zone" {
-					t.Errorf("Zones: %v, want a PermissionError for netbox_dns.zone", err)
+				if _, err := c.Zones(t.Context(), ZoneFilter{}); !errors.As(err, &pe) || pe.ObjectType != "netbox_dns.zone" ||
+					!strings.Contains(pe.Detail, "permission") {
+					t.Errorf("Zones: %v, want a PermissionError for netbox_dns.zone, with NetBox's detail", err)
 				}
 			})
 

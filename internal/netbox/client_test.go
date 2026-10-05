@@ -9,18 +9,22 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"io"
 	"log"
 	"log/slog"
+	"maps"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -188,6 +192,31 @@ func TestRetryAfterHeader(t *testing.T) {
 		if got := retryAfterHeader(tt.header, now); got != tt.want {
 			t.Errorf("retryAfterHeader(%q) = %v, want %v", tt.header, got, tt.want)
 		}
+	}
+}
+
+// TestBodyFailureIsRetried stalls partway through the first answer's body,
+// past the timeout, and checks the request is tried again.
+func TestBodyFailureIsRetried(t *testing.T) {
+	body := recorded(t, "status.json")
+	var tries atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if tries.Add(1) == 1 {
+			w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+			_, _ = w.Write(body[:len(body)/2])
+			w.(http.Flusher).Flush()
+			select {
+			case <-time.After(time.Second):
+			case <-r.Context().Done():
+			}
+			return
+		}
+		_, _ = w.Write(body)
+	}))
+	t.Cleanup(srv.Close)
+	c, delays := testClient(t, srv.URL, Options{Timeout: 200 * time.Millisecond})
+	if _, err := c.Status(t.Context()); err != nil || tries.Load() != 2 || len(*delays) != 1 {
+		t.Errorf("Status after %d requests: %v", tries.Load(), err)
 	}
 }
 
@@ -463,11 +492,76 @@ func TestEndpointAndRebase(t *testing.T) {
 	if got := c.endpoint("api/status/", nil).String(); got != "https://netbox.example.com/netbox/api/status/" {
 		t.Errorf("endpoint = %s", got)
 	}
-	// NetBox behind a proxy may build its links with another scheme or host;
-	// the token only ever goes to the configured one.
-	next, err := c.rebase("http://internal:8080/netbox/api/plugins/netbox-dns/records/?limit=10&offset=10")
+	// NetBox behind a proxy may build its links with another scheme, host or
+	// path; the token only ever goes to the configured one, and the proxy's
+	// path prefix stays.
+	current := c.endpoint(pluginAPI+"records/", url.Values{"limit": {"10"}})
+	next, err := c.rebase(current, "http://internal:8080/api/plugins/netbox-dns/records/?limit=10&offset=10")
 	if err != nil || next.String() != "https://netbox.example.com/netbox/api/plugins/netbox-dns/records/?limit=10&offset=10" {
 		t.Errorf("rebase = %v, %v", next, err)
+	}
+}
+
+func TestConsistent(t *testing.T) {
+	tests := []struct {
+		counts []int
+		n      int
+		want   bool
+	}{
+		{[]int{39}, 39, true},
+		{[]int{39, 39, 39, 39}, 39, true},
+		{[]int{0}, 0, true},
+		{[]int{39, 38, 38, 38}, 38, false}, // one deleted while reading
+		{[]int{39, 40, 40, 40}, 40, false}, // one added while reading
+		{[]int{39, 39}, 38, false},
+		{[]int{-1}, 39, false},
+		{nil, 0, false},
+	}
+	for _, tt := range tests {
+		if got := consistent(tt.counts, tt.n); got != tt.want {
+			t.Errorf("consistent(%v, %d) = %v, want %v", tt.counts, tt.n, got, tt.want)
+		}
+	}
+}
+
+// TestListChecksCounts serves the recorded page of 39 records with its
+// count rewritten, as a list that changes, or a broken answer, would give.
+func TestListChecksCounts(t *testing.T) {
+	var page map[string]json.RawMessage
+	if err := json.Unmarshal(recorded(t, "records.json"), &page); err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name      string
+		counts    []string // the count each request gets; the last repeats
+		wantErr   bool
+		wantTries int32
+	}{
+		{"unchanged", []string{"39"}, false, 1},
+		{"changed while read, then not", []string{"40", "39"}, false, 2},
+		{"keeps changing", []string{"40"}, true, 3},
+		{"a negative count", []string{"-1"}, true, 3},
+		{"a huge count", []string{"10000000000"}, true, 3},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var tries atomic.Int32
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				p := maps.Clone(page)
+				p["count"] = json.RawMessage(tt.counts[min(int(tries.Add(1)), len(tt.counts))-1])
+				b, _ := json.Marshal(p)
+				_, _ = w.Write(b)
+			}))
+			t.Cleanup(srv.Close)
+			c, _ := testClient(t, srv.URL, Options{})
+			records, err := c.Records(t.Context(), 1)
+			if (err != nil) != tt.wantErr || tries.Load() != tt.wantTries {
+				t.Errorf("Records: %d records after %d reads, %v", len(records), tries.Load(), err)
+			}
+			if err == nil && len(records) != 39 {
+				t.Errorf("%d records, want 39", len(records))
+			}
+		})
 	}
 }
 

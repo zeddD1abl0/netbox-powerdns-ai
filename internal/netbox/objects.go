@@ -16,18 +16,34 @@ import (
 // pluginAPI is where the DNS plugin's REST API lives, under NetBox's base URL.
 const pluginAPI = "api/plugins/netbox-dns/"
 
-// endpoints maps each object type nbpdns reads to its endpoint, under
-// pluginAPI.
-var endpoints = map[string]string{
-	"netbox_dns.view":       "views/",
-	"netbox_dns.zone":       "zones/",
-	"netbox_dns.nameserver": "nameservers/",
-	"netbox_dns.record":     "records/",
+// endpoints are the DNS plugin's object types that nbpdns reads, each with
+// its endpoint under pluginAPI.
+var endpoints = []struct{ objectType, path string }{
+	{"netbox_dns.view", "views/"},
+	{"netbox_dns.zone", "zones/"},
+	{"netbox_dns.nameserver", "nameservers/"},
+	{"netbox_dns.record", "records/"},
 }
 
 // ObjectTypes are the DNS plugin's object types that nbpdns reads, which its
 // token's user must be allowed to view.
-var ObjectTypes = []string{"netbox_dns.view", "netbox_dns.zone", "netbox_dns.nameserver", "netbox_dns.record"}
+var ObjectTypes = func() []string {
+	types := make([]string, len(endpoints))
+	for i, e := range endpoints {
+		types[i] = e.objectType
+	}
+	return types
+}()
+
+// endpointOf returns objectType's endpoint, under pluginAPI.
+func endpointOf(objectType string) (string, bool) {
+	for _, e := range endpoints {
+		if e.objectType == objectType {
+			return e.path, true
+		}
+	}
+	return "", false
+}
 
 // A View is a DNS view in NetBox. Every zone is in one.
 type View struct {
@@ -82,8 +98,19 @@ type page[T any] struct {
 	Results []T    `json:"results"`
 }
 
+const (
+	// listAttempts is how many times list reads a list that keeps changing
+	// while it reads it, before it gives up.
+	listAttempts = 3
+	// maxPrealloc bounds the room list makes for a list before reading it,
+	// whatever count the answer claims.
+	maxPrealloc = 10000
+)
+
 // list reads every page of the list at path, under pluginAPI, following
-// NetBox's next links.
+// NetBox's next links. Paging by offset skips or repeats an object when the
+// list changes between two pages, so a list that changed while being read is
+// read again.
 func list[T any](ctx context.Context, c *Client, path string, query url.Values) ([]T, error) {
 	if query == nil {
 		query = url.Values{}
@@ -91,39 +118,78 @@ func list[T any](ctx context.Context, c *Client, path string, query url.Values) 
 	if c.pageSize > 0 {
 		query.Set("limit", strconv.Itoa(c.pageSize))
 	}
+	// Paging by offset needs a total order, or objects that tie can move
+	// between pages.
+	query.Set("ordering", "id")
 	u := c.endpoint(pluginAPI+path, query)
-	var out []T
-	for {
-		var p page[T]
-		if err := c.get(ctx, u, &p); err != nil {
-			return nil, err
-		}
-		if out == nil {
-			out = make([]T, 0, p.Count)
-		}
-		out = append(out, p.Results...)
-		if p.Next == "" {
-			return out, nil
-		}
-		next, err := c.rebase(p.Next)
+	for attempt := 1; ; attempt++ {
+		out, counts, err := readPages[T](ctx, c, u)
 		if err != nil {
 			return nil, err
 		}
+		if consistent(counts, len(out)) {
+			return out, nil
+		}
+		if attempt == listAttempts {
+			return nil, fmt.Errorf("NetBox's list at GET %s changed while nbpdns read it, %d times running; try again", u.RequestURI(), listAttempts)
+		}
+		c.log.DebugContext(ctx, "a NetBox list changed while nbpdns read it, so it's read again",
+			"path", u.RequestURI(), "attempt", attempt)
+	}
+}
+
+// readPages reads the pages of the list that starts at u, and returns their
+// objects and the count each page gave. It stops early when the pages can't
+// be of one unchanged list.
+func readPages[T any](ctx context.Context, c *Client, u *url.URL) ([]T, []int, error) {
+	var (
+		out    []T
+		counts []int
+	)
+	for {
+		var p page[T]
+		if err := c.get(ctx, u, &p); err != nil {
+			return nil, nil, err
+		}
+		if out == nil {
+			out = make([]T, 0, min(max(p.Count, 0), maxPrealloc))
+		}
+		out = append(out, p.Results...)
+		counts = append(counts, p.Count)
+		if p.Next == "" || len(p.Results) == 0 || len(out) > p.Count {
+			return out, counts, nil
+		}
+		next, err := c.rebase(u, p.Next)
+		if err != nil {
+			return nil, nil, err
+		}
 		if next.String() == u.String() {
-			return nil, fmt.Errorf("NetBox's next-page link for GET %s points back to the same page", u.RequestURI())
+			return nil, nil, fmt.Errorf("NetBox's next-page link for GET %s points back to the same page", u.RequestURI())
 		}
 		u = next
 	}
 }
 
+// consistent reports whether the pages of a list, with counts and n objects
+// in all, are of one unchanged list: each page gave the same count, and that
+// many objects came.
+func consistent(counts []int, n int) bool {
+	for _, c := range counts {
+		if c != counts[0] {
+			return false
+		}
+	}
+	return len(counts) > 0 && counts[0] == n
+}
+
 // Views lists every view.
 func (c *Client) Views(ctx context.Context) ([]View, error) {
-	return list[View](ctx, c, endpoints["netbox_dns.view"], nil)
+	return list[View](ctx, c, "views/", nil)
 }
 
 // Nameservers lists every name server.
 func (c *Client) Nameservers(ctx context.Context) ([]Nameserver, error) {
-	return list[Nameserver](ctx, c, endpoints["netbox_dns.nameserver"], nil)
+	return list[Nameserver](ctx, c, "nameservers/", nil)
 }
 
 // A ZoneFilter selects zones. Each field that isn't empty must match.
@@ -144,18 +210,18 @@ func (c *Client) Zones(ctx context.Context, f ZoneFilter) ([]Zone, error) {
 			q.Set(k, v)
 		}
 	}
-	return list[Zone](ctx, c, endpoints["netbox_dns.zone"], q)
+	return list[Zone](ctx, c, "zones/", q)
 }
 
 // Records lists every record in the zone with the ID zoneID.
 func (c *Client) Records(ctx context.Context, zoneID int) ([]Record, error) {
-	return list[Record](ctx, c, endpoints["netbox_dns.record"], url.Values{"zone_id": {strconv.Itoa(zoneID)}})
+	return list[Record](ctx, c, "records/", url.Values{"zone_id": {strconv.Itoa(zoneID)}})
 }
 
 // Count returns how many objects of objectType, one of ObjectTypes, the
 // token's user can view. It reads one object at most.
 func (c *Client) Count(ctx context.Context, objectType string) (int, error) {
-	path, ok := endpoints[objectType]
+	path, ok := endpointOf(objectType)
 	if !ok {
 		return 0, fmt.Errorf("nbpdns doesn't read %s objects", objectType)
 	}

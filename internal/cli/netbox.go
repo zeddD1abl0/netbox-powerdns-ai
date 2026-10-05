@@ -32,12 +32,6 @@ func newNetBoxCmd(a *app) *cobra.Command {
 
 // netbox returns a client for the configured NetBox. Close it when done.
 func (s *session) netbox(ctx context.Context) (*netbox.Client, error) {
-	switch {
-	case s.cfg.NetBox.URL == "":
-		return nil, config.UnsetError("netbox.url")
-	case !s.cfg.NetBox.Token.IsSet():
-		return nil, config.UnsetError("netbox.token")
-	}
 	return netbox.New(ctx, netbox.OptionsFrom(s.cfg.NetBox, s.log, s.tracer))
 }
 
@@ -139,14 +133,11 @@ func runChecks(ctx context.Context, c *netbox.Client) checkReport {
 	}
 	r.NetBoxVersion, r.PluginVersion = st.NetBoxVersion, st.PluginVersion()
 
-	var nb, plugin []string
-	for _, s := range netbox.Supported {
-		nb, plugin = append(nb, s.NetBox+".x"), append(plugin, s.Plugin+".x")
-	}
+	nb, plugin := netbox.SupportedSeries()
 	if st.NetBoxSupported() {
 		r.add("netbox", checkOK, "NetBox "+st.NetBoxVersion)
 	} else {
-		r.add("netbox", checkFailed, fmt.Sprintf("NetBox %s isn't a supported release; nbpdns supports %s", st.NetBoxVersion, strings.Join(nb, " or ")))
+		r.add("netbox", checkFailed, fmt.Sprintf("NetBox %s isn't a supported release; nbpdns supports %s", st.NetBoxVersion, nb))
 	}
 	switch {
 	case st.PluginVersion() == "":
@@ -155,7 +146,7 @@ func runChecks(ctx context.Context, c *netbox.Client) checkReport {
 		r.add("plugin", checkOK, netbox.PluginName+" "+st.PluginVersion())
 	default:
 		r.add("plugin", checkFailed, fmt.Sprintf("%s %s isn't a supported release; nbpdns supports %s",
-			netbox.PluginName, st.PluginVersion(), strings.Join(plugin, " or ")))
+			netbox.PluginName, st.PluginVersion(), plugin))
 	}
 
 	if c.TokenVersion() == 2 {
@@ -248,7 +239,9 @@ func newNetBoxRecordsCmd(a *app) *cobra.Command {
 		Short: "List a zone's records, as nbpdns normalizes them",
 		Long: "List the records of one zone in NetBox's DNS plugin, as nbpdns normalizes\n" +
 			"them: grouped into RRsets, with absolute lowercase names, canonical values,\n" +
-			"and each RRset's TTL. Inactive records are listed too, with their status.\n\n" +
+			"and each RRset's TTL. Inactive records are listed too, with their status.\n" +
+			"The table's TTL is the RRset's, which DNS serves, except for an inactive\n" +
+			"record, which shows its own.\n\n" +
 			"Give the zone's name in its ASCII form. If the name is in more than one view,\n" +
 			"choose one with --view.\n\n" +
 			"Where NetBox's data has a problem that nbpdns works around, such as active\n" +
@@ -310,7 +303,12 @@ func writeRecords(w io.Writer, format outputFormat, zr zoneRecords) error {
 			if r.Managed {
 				managed = "yes"
 			}
-			rows = append(rows, []string{s.Name, strconv.FormatUint(uint64(s.TTL), 10), s.Type, r.Value, r.Status, managed})
+			// An inactive record isn't served, so the RRset's TTL isn't its.
+			ttl := s.TTL
+			if !r.Active {
+				ttl = r.TTL
+			}
+			rows = append(rows, []string{s.Name, strconv.FormatUint(uint64(ttl), 10), s.Type, r.Value, r.Status, managed})
 		}
 	}
 	return writeTable(w, []string{"NAME", "TTL", "TYPE", "VALUE", "STATUS", "MANAGED"}, rows)

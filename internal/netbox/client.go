@@ -75,10 +75,10 @@ type Client struct {
 // token crosses the network unencrypted, or if the token is a v1 token.
 func New(ctx context.Context, o Options) (*Client, error) {
 	if o.URL == "" {
-		return nil, errors.New("netbox.url isn't set")
+		return nil, config.UnsetError("netbox.url")
 	}
 	if !o.Token.IsSet() {
-		return nil, errors.New("netbox.token isn't set")
+		return nil, config.UnsetError("netbox.token")
 	}
 	base, err := url.Parse(o.URL)
 	if err != nil {
@@ -179,16 +179,18 @@ func (c *Client) endpoint(path string, query url.Values) *url.URL {
 	return u
 }
 
-// rebase returns a next-page link on NetBox's base URL. NetBox builds the link
-// from the request it saw, which behind a proxy may name another scheme or
-// host; the token must only ever go to the configured one.
-func (c *Client) rebase(link string) (*url.URL, error) {
+// rebase returns the URL of the page that NetBox's next-page link names,
+// after the page at current. NetBox builds the link from the request it saw,
+// which behind a proxy may name another scheme, host or path, and the token
+// must only ever go to the configured one. The next page differs from the
+// current one only in its query, so that's all rebase takes from the link.
+func (c *Client) rebase(current *url.URL, link string) (*url.URL, error) {
 	next, err := url.Parse(link)
 	if err != nil {
 		return nil, fmt.Errorf("NetBox's next-page link %q: %w", link, err)
 	}
-	u := *c.base
-	u.Path, u.RawPath, u.RawQuery = next.Path, next.RawPath, next.RawQuery
+	u := *current
+	u.RawQuery = next.RawQuery
 	return &u, nil
 }
 
@@ -242,7 +244,16 @@ func (c *Client) try(ctx context.Context, u *url.URL, out any, attempt int) (tim
 		"attempt", attempt, "duration_seconds", time.Since(start).Seconds())
 
 	if resp.StatusCode == http.StatusOK {
-		if err := json.NewDecoder(io.LimitReader(resp.Body, maxBody)).Decode(out); err != nil {
+		body, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
+		if err != nil {
+			// The connection failed, or timed out, partway through the
+			// answer, which a retry may get whole.
+			return 0, &UnreachableError{URL: c.base.String(), Err: err}
+		}
+		if len(body) > maxBody {
+			return 0, fmt.Errorf("NetBox's answer to GET %s is larger than %d MiB", u.RequestURI(), maxBody>>20)
+		}
+		if err := json.Unmarshal(body, out); err != nil {
 			return 0, fmt.Errorf("decoding NetBox's answer to GET %s: %w", u.RequestURI(), err)
 		}
 		return 0, nil
@@ -272,15 +283,15 @@ func (c *Client) denied(ctx context.Context, u *url.URL, apiErr *APIError) error
 	if _, err := c.try(ctx, status, &s, 1); err != nil {
 		return err
 	}
-	return &PermissionError{ObjectType: objectType(u.Path)}
+	return &PermissionError{ObjectType: objectType(u.Path), Detail: apiErr.Detail}
 }
 
 // objectType names the NetBox object type a DNS plugin endpoint lists, or
 // returns the path if it isn't one.
 func objectType(path string) string {
-	for typ, p := range endpoints {
-		if strings.HasSuffix(path, "/"+pluginAPI+p) {
-			return typ
+	for _, e := range endpoints {
+		if strings.HasSuffix(path, "/"+pluginAPI+e.path) {
+			return e.objectType
 		}
 	}
 	return path

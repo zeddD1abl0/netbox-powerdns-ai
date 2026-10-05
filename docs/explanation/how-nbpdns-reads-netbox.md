@@ -33,10 +33,15 @@ sequenceDiagram
    nbpdns logs a warning and carries on, since reading may still work.
    `nbpdns netbox check` counts it as a failure.
 2. **Lists come in pages.** nbpdns asks for `netbox.page_size` objects at a
-   time, and follows the link NetBox gives to the next page. It takes only
-   the path and query from that link, and keeps the scheme and host of
-   `netbox.url`. Behind a proxy, NetBox may build its links with an internal
-   address, and the token must only go to the configured one.
+   time, in the order of their IDs, and follows the link NetBox gives to the
+   next page. It takes only the query from that link, and keeps the rest of
+   the URL it asked for. Behind a proxy, NetBox may build its links with an
+   internal address, and the token must only go to the configured one.
+
+   Paging by position skips or repeats an object if the list changes between
+   two pages. NetBox gives the list's length with each page, so nbpdns can
+   tell: if the length changed, or doesn't match what arrived, it reads the
+   list again, up to three times, and then fails.
 3. **Records are read zone by zone**, filtered by the zone's ID, with up to
    `netbox.concurrency` requests in flight. The first error stops the read,
    so a result is never missing a zone without saying so.

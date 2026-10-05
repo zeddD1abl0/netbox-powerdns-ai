@@ -33,10 +33,18 @@ func (e *AuthError) Error() string {
 type PermissionError struct {
 	// ObjectType is the NetBox object type, such as netbox_dns.zone.
 	ObjectType string
+	// Detail is the refusal's own explanation, such as NetBox's "You do not
+	// have permission to perform this action.", or that of a proxy in front
+	// of NetBox.
+	Detail string
 }
 
 func (e *PermissionError) Error() string {
-	return fmt.Sprintf("the token's user can't view %s objects in NetBox; give it the view permission on the DNS plugin's objects", e.ObjectType)
+	s := fmt.Sprintf("the token's user can't view %s objects in NetBox", e.ObjectType)
+	if e.Detail != "" {
+		s += fmt.Sprintf(" (%q)", e.Detail)
+	}
+	return s + "; give it the view permission on the DNS plugin's objects"
 }
 
 // VersionError means NetBox, or its DNS plugin, isn't a supported release
@@ -51,12 +59,9 @@ func (e *VersionError) Error() string {
 	if e.Plugin == "" {
 		return fmt.Sprintf("NetBox %s doesn't have the NetBox DNS plugin installed", e.NetBox)
 	}
-	var nb, plugin []string
-	for _, r := range e.supported {
-		nb, plugin = append(nb, r.NetBox+".x"), append(plugin, r.Plugin+".x")
-	}
+	nb, plugin := seriesText(e.supported)
 	return fmt.Sprintf("NetBox %s with the DNS plugin %s isn't supported; nbpdns supports NetBox %s, with the plugin %s",
-		e.NetBox, e.Plugin, strings.Join(nb, " or "), strings.Join(plugin, " or "))
+		e.NetBox, e.Plugin, nb, plugin)
 }
 
 // AmbiguousZoneError means a zone name is in more than one view, and no view
