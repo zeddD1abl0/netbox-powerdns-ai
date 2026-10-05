@@ -65,3 +65,17 @@ func TestKeysSorted(t *testing.T) {
 		}
 	}
 }
+
+func TestUnsetError(t *testing.T) {
+	tests := []struct{ key, want string }{
+		{"netbox.url", "netbox.url isn't set; set it in the config file, set NBPDNS_NETBOX_URL, or pass --netbox-url"},
+		{"netbox.token", "netbox.token isn't set; set it, or netbox.token_file for a file that holds it, in the config file; " +
+			"or set NBPDNS_NETBOX_TOKEN or NBPDNS_NETBOX_TOKEN_FILE; or pass --netbox-token or --netbox-token-file"},
+		{"no.such_key", "no.such_key isn't set"},
+	}
+	for _, tt := range tests {
+		if got := UnsetError(tt.key).Error(); got != tt.want {
+			t.Errorf("UnsetError(%s) = %q, want %q", tt.key, got, tt.want)
+		}
+	}
+}

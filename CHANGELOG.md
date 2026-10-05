@@ -8,6 +8,24 @@ All notable changes to this project are recorded here. The format follows
 
 ### Added
 
+- `nbpdns netbox check`, `zones`, and `records`: read DNS data from the NetBox
+  DNS plugin, through NetBox's REST API, with a read-only token. `check`
+  reports NetBox's and the plugin's releases, and whether the token can view
+  each kind of object. `records` shows a zone in nbpdns's normalized form:
+  RRsets with absolute names, canonical values, and one TTL each, with
+  inactive records listed. It reports problems in NetBox's data as warnings,
+  and in its JSON output, without failing. A zone name in more than one view
+  needs `--view`.
+- NetBox 4.7 and 4.6, with the DNS plugin 1.7.x and 1.6.x, are supported.
+  Lists are paged, records are read with bounded concurrency, and requests
+  have a time limit and are retried when the failure may pass. TLS 1.2 or
+  later is required, with an optional CA file. Plain `http://` works, with a
+  warning, and so do v1 tokens.
+- Documentation: a tutorial on reading NetBox's DNS data, how-to guides on
+  read-only access to NetBox and on configuring nbpdns, explanations of how
+  nbpdns reads NetBox and of configuration precedence, and a supported
+  versions reference.
+
 - The `nbpdns` command, built as a static binary (`make build`), with
   `version`, `config show`, and shell completion. Output is a table or JSON
   (`--output`), and exit statuses tell success, failure, and usage errors

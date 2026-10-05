@@ -10,3 +10,5 @@ Task-focused directions for someone who already knows the basics, for example
 its goal and prerequisites, then gives numbered steps.
 
 - [Run the development lab](run-the-development-lab.md)
+- [Give nbpdns read-only access to NetBox](give-nbpdns-read-only-access-to-netbox.md)
+- [Configure nbpdns](configure-nbpdns.md)

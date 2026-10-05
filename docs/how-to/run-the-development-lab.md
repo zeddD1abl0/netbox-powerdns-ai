@@ -66,7 +66,10 @@ make test-integration
 ```
 
 This starts the lab if it isn't running, then runs every test with the
-`integration` build tag, against both NetBox versions.
+`integration` build tag, against both NetBox versions. Each test creates its
+own DNS data, and users with their own API tokens, with names that contain a
+random ID, and removes them when it ends. Data you add to the lab yourself
+isn't touched.
 
 ## Remove the lab
 

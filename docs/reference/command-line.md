@@ -122,6 +122,75 @@ nbpdns config show [flags]
 |---|---|---|---|
 | `-o`, `--output` | `format` | `table` | The output format: `table` or `json`. |
 
+### `nbpdns netbox`
+
+Read DNS data from NetBox's DNS plugin, the source of truth, through
+NetBox's REST API. These commands only read: nbpdns never changes NetBox.
+
+```text
+nbpdns netbox [command]
+```
+
+Subcommands: [`check`](#nbpdns-netbox-check), [`records`](#nbpdns-netbox-records), and [`zones`](#nbpdns-netbox-zones).
+
+### `nbpdns netbox check`
+
+Check that nbpdns can read DNS data from NetBox: that NetBox answers, runs a
+supported release with the DNS plugin, accepts the token, and lets the
+token's user view the plugin's views, zones, name servers, and records.
+
+Each check passes, warns, or fails. If any check fails, nbpdns exits with
+status 1. A warning, such as for an http:// URL or a v1 token, doesn't fail
+the check.
+
+```text
+nbpdns netbox check [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `-o`, `--output` | `format` | `table` | The output format: `table` or `json`. |
+
+### `nbpdns netbox records`
+
+List the records of one zone in NetBox's DNS plugin, as nbpdns normalizes
+them: grouped into RRsets, with absolute lowercase names, canonical values,
+and each RRset's TTL. Inactive records are listed too, with their status.
+
+Give the zone's name in its ASCII form. If the name is in more than one view,
+choose one with --view.
+
+Where NetBox's data has a problem that nbpdns works around, such as active
+records in one RRset with different TTLs, nbpdns logs a warning for each one
+and lists it under "problems" in JSON output. Problems don't make the
+command fail.
+
+```text
+nbpdns netbox records --zone NAME [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `-o`, `--output` | `format` | `table` | The output format: `table` or `json`. |
+| `--view` | `string` | none | The zone's view, if its name is in more than one. |
+| `--zone` | `string` | none | The zone's name, such as `example.com`. Required. |
+
+### `nbpdns netbox zones`
+
+List the zones in NetBox's DNS plugin, with each one's view, status, SOA
+serial, default TTL, and name servers. Names are absolute and lowercase, in
+their ASCII form, as nbpdns compares them.
+
+```text
+nbpdns netbox zones [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `-o`, `--output` | `format` | `table` | The output format: `table` or `json`. |
+| `--status` | `string` | none | Only list the zones with this status, such as `active`. |
+| `--view` | `string` | none | Only list the zones in this view. |
+
 ### `nbpdns version`
 
 Print the version, commit, and Go version that nbpdns was built with.

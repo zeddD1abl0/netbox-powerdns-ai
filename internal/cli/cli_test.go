@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/config"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/dns"
 )
 
 // run runs nbpdns with args and the environment env, and returns its exit
@@ -49,6 +50,13 @@ func TestExitCodes(t *testing.T) {
 		{"invalid configuration", map[string]string{"NBPDNS_LOG_LEVEL": "loud", "NBPDNS_TYPO": "x"}, []string{"config", "show"}, exitError, "unknown environment variable NBPDNS_TYPO"},
 		{"version ignores the configuration", map[string]string{"NBPDNS_TYPO": "x"}, []string{"version"}, exitOK, ""},
 		{"completion", nil, []string{"completion", "bash"}, exitOK, ""},
+		{"stray argument to netbox", nil, []string{"netbox", "extra"}, exitUsage, "Run 'nbpdns --help'"},
+		{"netbox without a URL", nil, []string{"netbox", "zones"}, exitError,
+			"netbox.url isn't set; set it in the config file, set NBPDNS_NETBOX_URL, or pass --netbox-url"},
+		{"netbox without a token", map[string]string{"NBPDNS_NETBOX_URL": "https://netbox.example.com"}, []string{"netbox", "check"},
+			exitError, "netbox.token isn't set"},
+		{"records without a zone", nil, []string{"netbox", "records"}, exitUsage, "--zone is required"},
+		{"records of a zone named in Unicode", nil, []string{"netbox", "records", "--zone", "bücher.example"}, exitUsage, "ASCII form"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -140,6 +148,11 @@ func TestReference(t *testing.T) {
 		"| `--netbox-token-file` | `path` | none | Read `netbox.token` from this file. |",
 		"| `-o`, `--output` | `format` | `table` |",
 		"(#nbpdns-config-show)",
+		"### `nbpdns netbox records`",
+		"nbpdns netbox records --zone NAME [flags]",
+		"| `--zone` | `string` | none | The zone's name, such as `example.com`. Required. |",
+		"| `--status` | `string` | none | Only list the zones with this status, such as `active`. |",
+		"Subcommands: [`check`](#nbpdns-netbox-check), [`records`](#nbpdns-netbox-records), and [`zones`](#nbpdns-netbox-zones).",
 	} {
 		if !strings.Contains(page, want) {
 			t.Errorf("reference doesn't contain %q", want)
@@ -201,4 +214,58 @@ func field(t *testing.T, format, line, key string) string {
 		}
 	}
 	return ""
+}
+
+// TestWriteRecords checks both forms of `nbpdns netbox records` output,
+// with and without problems.
+func TestWriteRecords(t *testing.T) {
+	zone := dns.Zone{Name: "example.com.", View: "_default_", Status: "active", Active: true, DefaultTTL: 3600,
+		Nameservers: []string{"ns1.example.com."}, RRsets: []dns.RRset{
+			{Name: "example.com.", Type: "NS", TTL: 3600, Records: []dns.Record{{Value: "ns1.example.com.", TTL: 3600, Status: "active", Active: true, Managed: true}}},
+			{Name: "www.example.com.", Type: "A", TTL: 300, Records: []dns.Record{
+				{Value: "192.0.2.10", TTL: 300, Status: "active", Active: true},
+				{Value: "192.0.2.11", TTL: 3600, Status: "active", Active: true},
+				{Value: "192.0.2.12", TTL: 60, Status: "inactive"},
+			}},
+		}}
+	problem := dns.Problem{Zone: "example.com.", Name: "www.example.com.", Type: "A", Detail: "its active records have different TTLs"}
+
+	var b bytes.Buffer
+	if err := writeRecords(&b, outputTable, zoneRecords{Zone: zone, Problems: []dns.Problem{problem}}); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(b.String()), "\n")
+	want := [][]string{
+		{"NAME", "TTL", "TYPE", "VALUE", "STATUS", "MANAGED"},
+		{"example.com.", "3600", "NS", "ns1.example.com.", "active", "yes"},
+		{"www.example.com.", "300", "A", "192.0.2.10", "active", "no"},
+		{"www.example.com.", "300", "A", "192.0.2.11", "active", "no"},
+		{"www.example.com.", "300", "A", "192.0.2.12", "inactive", "no"},
+	}
+	if len(lines) != len(want) {
+		t.Fatalf("table:\n%s", b.String())
+	}
+	for i, line := range lines {
+		if got := strings.Fields(line); strings.Join(got, " ") != strings.Join(want[i], " ") {
+			t.Errorf("row %d = %q, want %q", i, got, want[i])
+		}
+	}
+
+	for _, probs := range [][]dns.Problem{{problem}, {}} {
+		b.Reset()
+		if err := writeRecords(&b, outputJSON, zoneRecords{Zone: zone, Problems: probs}); err != nil {
+			t.Fatal(err)
+		}
+		var got struct {
+			Name     string            `json:"name"`
+			RRsets   []json.RawMessage `json:"rrsets"`
+			Problems []dns.Problem     `json:"problems"`
+		}
+		if err := json.Unmarshal(b.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		if got.Name != "example.com." || len(got.RRsets) != 2 || len(got.Problems) != len(probs) || !strings.Contains(b.String(), `"problems": [`) {
+			t.Errorf("JSON with %d problems:\n%s", len(probs), b.String())
+		}
+	}
 }

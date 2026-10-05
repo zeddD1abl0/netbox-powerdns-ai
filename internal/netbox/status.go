@@ -44,11 +44,25 @@ func (s *Status) PluginVersion() string { return s.Plugins[PluginName] }
 // NetBox or the plugin isn't a supported release.
 func (s *Status) Check() error { return s.check(Supported) }
 
+// NetBoxSupported reports whether NetBox is a supported release.
+func (s *Status) NetBoxSupported() bool { return s.netBoxSupported(Supported) }
+
+// PluginSupported reports whether the DNS plugin is installed, in a
+// supported release.
+func (s *Status) PluginSupported() bool { return s.pluginSupported(Supported) }
+
+func (s *Status) netBoxSupported(supported []Release) bool {
+	nb := series(s.NetBoxVersion)
+	return slices.ContainsFunc(supported, func(r Release) bool { return r.NetBox == nb })
+}
+
+func (s *Status) pluginSupported(supported []Release) bool {
+	plugin := series(s.PluginVersion())
+	return s.PluginVersion() != "" && slices.ContainsFunc(supported, func(r Release) bool { return r.Plugin == plugin })
+}
+
 func (s *Status) check(supported []Release) error {
-	nb, plugin := series(s.NetBoxVersion), series(s.PluginVersion())
-	okNetBox := slices.ContainsFunc(supported, func(r Release) bool { return r.NetBox == nb })
-	okPlugin := slices.ContainsFunc(supported, func(r Release) bool { return r.Plugin == plugin })
-	if s.PluginVersion() == "" || !okNetBox || !okPlugin {
+	if !s.netBoxSupported(supported) || !s.pluginSupported(supported) {
 		return &VersionError{NetBox: s.NetBoxVersion, Plugin: s.PluginVersion(), supported: supported}
 	}
 	return nil

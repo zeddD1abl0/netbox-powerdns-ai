@@ -1,6 +1,7 @@
 // Command gendocs writes the reference pages that are generated from the
-// code: the configuration keys and the command line. `make generate` runs
-// it, and `make generate-check` fails when a committed page is stale.
+// code: the configuration keys, the command line, and the supported
+// versions. `make generate` runs it, and `make generate-check` fails when a
+// committed page is stale.
 //
 //	gendocs [-out dir]
 package main
@@ -15,6 +16,7 @@ import (
 
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/cli"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/config"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/netbox"
 )
 
 // pages maps each generated page's file name to its writer.
@@ -23,6 +25,7 @@ var pages = map[string]func(io.Writer) error{
 	"command-line.md": func(w io.Writer) error {
 		return cli.WriteReference(w, cli.New(io.Discard, io.Discard))
 	},
+	"supported-versions.md": netbox.WriteReference,
 }
 
 func main() {

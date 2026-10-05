@@ -60,6 +60,22 @@ func (k Key) FileEnv() string { return k.Env() + "_FILE" }
 // netbox-token-file.
 func (k Key) FileFlag() string { return k.Flag() + "-file" }
 
+// UnsetError returns the error for a key that a command needs but that has
+// no value, saying where to set it.
+func UnsetError(name string) error {
+	for _, k := range Keys() {
+		if k.Name != name {
+			continue
+		}
+		if k.Secret {
+			return fmt.Errorf("%s isn't set; set it, or %s for a file that holds it, in the config file; or set %s or %s; or pass --%s or --%s",
+				k.Name, k.FileName(), k.Env(), k.FileEnv(), k.Flag(), k.FileFlag())
+		}
+		return fmt.Errorf("%s isn't set; set it in the config file, set %s, or pass --%s", k.Name, k.Env(), k.Flag())
+	}
+	return fmt.Errorf("%s isn't set", name)
+}
+
 // Type describes the key's values, in Markdown, for the reference.
 func (k Key) Type() string { return k.typ }
 

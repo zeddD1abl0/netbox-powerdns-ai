@@ -169,3 +169,16 @@ The user didn't object to the other steps proposed in the same review:
 - lint and vet also check files with the `integration` build tag.
 
 Runner capacity for the Docker-in-Docker job wasn't confirmed yet.
+
+## Answers, 2026-10-06 (finishing M01)
+
+A review of the work in progress proposed defaults for three details of the
+`nbpdns netbox` commands (ITEM-0024). The user's answers are quoted.
+
+| Question | Answer |
+|---|---|
+| When NetBox's data has problems that normalization works around, such as an RRset whose records disagree on TTL, should `nbpdns netbox records` report them and still succeed? | "Yes, just report the error, don't fail." |
+| When a zone name exists in more than one view and no `--view` is given, should the command fail and list the views? | "Yes, throw an error regarding multiple view names" |
+| Should inactive records be shown by default? | "Yes, inactive records should just be shown" |
+
+The user then asked for M01 to be completed.

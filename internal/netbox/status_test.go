@@ -30,6 +30,9 @@ func TestStatusCheck(t *testing.T) {
 			s.Plugins[PluginName] = tt.plugin
 		}
 		err := s.Check()
+		if (s.NetBoxSupported() && s.PluginSupported()) != (err == nil) {
+			t.Errorf("NetBox %s, plugin %s: NetBoxSupported and PluginSupported disagree with Check: %v", tt.netbox, tt.plugin, err)
+		}
 		var ve *VersionError
 		switch {
 		case tt.want == "" && err != nil:
