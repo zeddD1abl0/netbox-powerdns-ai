@@ -59,11 +59,7 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	out := req.Clone(ctx)
 	propagation.TraceContext{}.Inject(ctx, propagation.HeaderCarrier(out.Header))
-	base := t.Base
-	if base == nil {
-		base = http.DefaultTransport
-	}
-	resp, err := base.RoundTrip(out)
+	resp, err := t.base().RoundTrip(out)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
@@ -74,4 +70,20 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		span.SetStatus(codes.Error, resp.Status)
 	}
 	return resp, nil
+}
+
+// CloseIdleConnections closes the idle connections of the transport that
+// sends the requests, if it keeps any, so http.Client.CloseIdleConnections
+// reaches it.
+func (t *Transport) CloseIdleConnections() {
+	if c, ok := t.base().(interface{ CloseIdleConnections() }); ok {
+		c.CloseIdleConnections()
+	}
+}
+
+func (t *Transport) base() http.RoundTripper {
+	if t.Base == nil {
+		return http.DefaultTransport
+	}
+	return t.Base
 }

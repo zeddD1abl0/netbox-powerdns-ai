@@ -137,3 +137,23 @@ func TestProviderIgnoresOTELVariables(t *testing.T) {
 		}
 	}
 }
+
+// closer is a RoundTripper that records whether its idle connections were
+// closed.
+type closer struct {
+	http.RoundTripper
+	closed bool
+}
+
+func (c *closer) CloseIdleConnections() { c.closed = true }
+
+// TestTransportCloseIdleConnections checks that closing an http.Client's idle
+// connections reaches the transport under the Transport.
+func TestTransportCloseIdleConnections(t *testing.T) {
+	base := &closer{RoundTripper: http.DefaultTransport}
+	client := &http.Client{Transport: &Transport{Base: base, Tracer: Tracer(NewProvider("test"))}}
+	client.CloseIdleConnections()
+	if !base.closed {
+		t.Error("the base transport's idle connections weren't closed")
+	}
+}
