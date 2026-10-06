@@ -52,16 +52,7 @@ func TestWriteDrift(t *testing.T) {
 	if err := writeDrift(&b, r); err != nil {
 		t.Fatal(err)
 	}
-	// Columns are aligned to their widest value, so spacing is compared as one
-	// space.
-	norm := func(s string) string {
-		lines := strings.Split(s, "\n")
-		for i, l := range lines {
-			lines[i] = strings.Join(strings.Fields(l), " ")
-		}
-		return strings.Join(lines, "\n")
-	}
-	out := norm(b.String())
+	out := oneSpace(b.String())
 	for _, want := range []string{
 		"site-a  ok      1        1      1        0         1        1",
 		"site-b  failed  0        0      0        0         0        0",
@@ -78,7 +69,7 @@ func TestWriteDrift(t *testing.T) {
 		"\nProblems in the data, worked around:\n",
 		"bad.b.example. A  kept as given",
 	} {
-		if !strings.Contains(out, norm(want)) {
+		if !strings.Contains(out, oneSpace(want)) {
 			t.Errorf("no %q in:\n%s", want, b.String())
 		}
 	}
@@ -90,6 +81,17 @@ func TestWriteDrift(t *testing.T) {
 	if strings.Contains(b.String(), ":\n") {
 		t.Errorf("sections in an empty report:\n%s", b.String())
 	}
+}
+
+// oneSpace returns s with the spaces between the words of each line made
+// one. Table columns are aligned to their widest value, so tests compare
+// rows this way.
+func oneSpace(s string) string {
+	lines := strings.Split(s, "\n")
+	for i, l := range lines {
+		lines[i] = strings.Join(strings.Fields(l), " ")
+	}
+	return strings.Join(lines, "\n")
 }
 
 func TestDriftExitCodes(t *testing.T) {

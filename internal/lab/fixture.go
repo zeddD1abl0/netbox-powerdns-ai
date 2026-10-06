@@ -116,19 +116,7 @@ func CreateFixture(t testing.TB, nb NetBox, id string) *Fixture {
 	zone := a.create("plugins/netbox-dns/zones/", zoneFields(view))
 	a.create("plugins/netbox-dns/zones/", zoneFields(other))
 
-	records := make([]map[string]any, len(f.Records))
-	for i, r := range f.Records {
-		rec := map[string]any{"zone": zone, "name": r.Name, "type": r.Type, "value": r.Value, "status": "active"}
-		if r.TTL != 0 {
-			rec["ttl"] = r.TTL
-		}
-		if r.Status != "" {
-			rec["status"] = r.Status
-		}
-		records[i] = rec
-	}
-	// A bulk create; deleting the zone deletes the records.
-	a.do(http.MethodPost, "plugins/netbox-dns/records/", records, nil)
+	a.records(zone, f.Records)
 
 	f.ReaderToken = a.user("nbpdns-reader-"+id, true)
 	f.NoAccessToken = a.user("nbpdns-noaccess-"+id, false)
@@ -152,6 +140,27 @@ func (a *adminClient) create(path string, fields any) int {
 	a.do(http.MethodPost, path, fields, &obj)
 	a.t.Cleanup(func() { a.do(http.MethodDelete, fmt.Sprintf("%s%d/", path, obj.ID), nil, nil) })
 	return obj.ID
+}
+
+// records creates records in the zone with the ID zone, in one bulk create.
+// Deleting the zone deletes them.
+func (a *adminClient) records(zone int, records []FixtureRecord) {
+	a.t.Helper()
+	if len(records) == 0 {
+		return
+	}
+	fields := make([]map[string]any, len(records))
+	for i, r := range records {
+		rec := map[string]any{"zone": zone, "name": r.Name, "type": r.Type, "value": r.Value, "status": "active"}
+		if r.TTL != 0 {
+			rec["ttl"] = r.TTL
+		}
+		if r.Status != "" {
+			rec["status"] = r.Status
+		}
+		fields[i] = rec
+	}
+	a.do(http.MethodPost, "plugins/netbox-dns/records/", fields, nil)
 }
 
 // user creates a user, and gives it the view permission on the DNS

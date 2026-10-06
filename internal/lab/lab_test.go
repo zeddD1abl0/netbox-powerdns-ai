@@ -1,6 +1,7 @@
 package lab
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -55,5 +56,21 @@ func TestPowerDNSFixtureNames(t *testing.T) {
 	}
 	if len(f.Others) != 2 || f.RRsets[0].Type != "SOA" {
 		t.Errorf("fixture = %+v", f)
+	}
+}
+
+func TestDriftFixtureNames(t *testing.T) {
+	f := DescribeDriftFixture("t0123abcd")
+	zones := []string{f.InSync, f.Drift, f.Missing, f.Parked, f.Ignored, f.Unmanaged}
+	for _, z := range zones {
+		if !strings.Contains(z, f.ID) || !strings.HasSuffix(z, ".") {
+			t.Errorf("zone %q isn't absolute, or doesn't contain the ID", z)
+		}
+		if strings.HasSuffix(f.Nameserver, "."+z) {
+			t.Errorf("name server %s is inside %s", f.Nameserver, z)
+		}
+	}
+	if slices.Sort(zones); len(slices.Compact(zones)) != 6 {
+		t.Errorf("zones share a name: %v", zones)
 	}
 }

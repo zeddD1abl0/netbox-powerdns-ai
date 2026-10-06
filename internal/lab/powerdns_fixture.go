@@ -101,6 +101,20 @@ func NewPowerDNSFixture(t testing.TB, p PowerDNS) *PowerDNSFixture {
 func CreatePowerDNSFixture(t testing.TB, p PowerDNS, id string) *PowerDNSFixture {
 	t.Helper()
 	f := DescribePowerDNSFixture(id)
+	createPowerDNSZone(t, p, f.Zone, f.RRsets)
+	for _, z := range f.Others {
+		createPowerDNSZone(t, p, z, []FixtureRRset{
+			{Name: z, Type: "SOA", TTL: 3600, Records: []FixtureContent{{Content: f.Nameserver + " hostmaster." + z + " 1 10800 3600 604800 3600"}}},
+			{Name: z, Type: "NS", TTL: 3600, Records: []FixtureContent{{Content: f.Nameserver}}},
+		})
+	}
+	return f
+}
+
+// createPowerDNSZone creates a native zone with sets as its RRsets in p, and
+// deletes it when the test ends.
+func createPowerDNSZone(t testing.TB, p PowerDNS, zone string, sets []FixtureRRset) {
+	t.Helper()
 	type record struct {
 		Content  string `json:"content"`
 		Disabled bool   `json:"disabled"`
@@ -111,25 +125,15 @@ func CreatePowerDNSFixture(t testing.TB, p PowerDNS, id string) *PowerDNSFixture
 		TTL     uint32   `json:"ttl"`
 		Records []record `json:"records"`
 	}
-	create := func(zone string, sets []FixtureRRset) {
-		rrsets := make([]rrset, len(sets))
-		for i, s := range sets {
-			rrsets[i] = rrset{Name: s.Name, Type: s.Type, TTL: s.TTL}
-			for _, r := range s.Records {
-				rrsets[i].Records = append(rrsets[i].Records, record(r))
-			}
+	rrsets := make([]rrset, len(sets))
+	for i, s := range sets {
+		rrsets[i] = rrset{Name: s.Name, Type: s.Type, TTL: s.TTL}
+		for _, r := range s.Records {
+			rrsets[i].Records = append(rrsets[i].Records, record(r))
 		}
-		powerDNSDo(t, p, http.MethodPost, "zones", map[string]any{"name": zone, "kind": "Native", "nameservers": []string{}, "rrsets": rrsets})
-		t.Cleanup(func() { powerDNSDo(t, p, http.MethodDelete, "zones/"+url.PathEscape(zone), nil) })
 	}
-	create(f.Zone, f.RRsets)
-	for _, z := range f.Others {
-		create(z, []FixtureRRset{
-			{Name: z, Type: "SOA", TTL: 3600, Records: []FixtureContent{{Content: f.Nameserver + " hostmaster." + z + " 1 10800 3600 604800 3600"}}},
-			{Name: z, Type: "NS", TTL: 3600, Records: []FixtureContent{{Content: f.Nameserver}}},
-		})
-	}
-	return f
+	powerDNSDo(t, p, http.MethodPost, "zones", map[string]any{"name": zone, "kind": "Native", "nameservers": []string{}, "rrsets": rrsets})
+	t.Cleanup(func() { powerDNSDo(t, p, http.MethodDelete, "zones/"+url.PathEscape(zone), nil) })
 }
 
 // powerDNSDo sends a request to path, under p's server, failing the test on
