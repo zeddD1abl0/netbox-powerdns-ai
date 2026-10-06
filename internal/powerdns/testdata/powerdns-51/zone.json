@@ -1,0 +1,247 @@
+{
+  "account": "",
+  "api_rectify": false,
+  "catalog": "",
+  "dnssec": false,
+  "edited_serial": 2026100601,
+  "id": "rec.nbpdns.example.",
+  "kind": "Native",
+  "last_check": 0,
+  "master_tsig_key_ids": [],
+  "masters": [],
+  "name": "rec.nbpdns.example.",
+  "notified_serial": 0,
+  "nsec3narrow": false,
+  "nsec3param": "",
+  "rrsets": [
+    {
+      "comments": [],
+      "name": "_443._tcp.www.rec.nbpdns.example.",
+      "records": [
+        {
+          "content": "3 1 1 abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+          "disabled": false
+        }
+      ],
+      "ttl": 3600,
+      "type": "TLSA"
+    },
+    {
+      "comments": [],
+      "name": "www.rec.nbpdns.example.",
+      "records": [
+        {
+          "content": "1 . alpn=h3,h2 ipv4hint=192.0.2.10",
+          "disabled": false
+        }
+      ],
+      "ttl": 3600,
+      "type": "HTTPS"
+    },
+    {
+      "comments": [],
+      "name": "www.rec.nbpdns.example.",
+      "records": [
+        {
+          "content": "2001:db8::10",
+          "disabled": false
+        }
+      ],
+      "ttl": 3600,
+      "type": "AAAA"
+    },
+    {
+      "comments": [],
+      "name": "www.rec.nbpdns.example.",
+      "records": [
+        {
+          "content": "192.0.2.10",
+          "disabled": false
+        },
+        {
+          "content": "192.0.2.11",
+          "disabled": false
+        },
+        {
+          "content": "192.0.2.14",
+          "disabled": true
+        }
+      ],
+      "ttl": 300,
+      "type": "A"
+    },
+    {
+      "comments": [],
+      "name": "alias.rec.nbpdns.example.",
+      "records": [
+        {
+          "content": "www.rec.nbpdns.example.",
+          "disabled": false
+        }
+      ],
+      "ttl": 3600,
+      "type": "CNAME"
+    },
+    {
+      "comments": [],
+      "name": "naptr.rec.nbpdns.example.",
+      "records": [
+        {
+          "content": "100 10 \"S\" \"SIP+D2U\" \"\" _sip._udp.rec.nbpdns.example.",
+          "disabled": false
+        }
+      ],
+      "ttl": 3600,
+      "type": "NAPTR"
+    },
+    {
+      "comments": [],
+      "name": "_sip._tcp.rec.nbpdns.example.",
+      "records": [
+        {
+          "content": "10 5 5060 sip.rec.nbpdns.example.",
+          "disabled": false
+        }
+      ],
+      "ttl": 3600,
+      "type": "SRV"
+    },
+    {
+      "comments": [],
+      "name": "long.rec.nbpdns.example.",
+      "records": [
+        {
+          "content": "\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\" \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"",
+          "disabled": false
+        }
+      ],
+      "ttl": 3600,
+      "type": "TXT"
+    },
+    {
+      "comments": [],
+      "name": "off.rec.nbpdns.example.",
+      "records": [
+        {
+          "content": "192.0.2.12",
+          "disabled": true
+        }
+      ],
+      "ttl": 3600,
+      "type": "A"
+    },
+    {
+      "comments": [],
+      "name": "quoted.rec.nbpdns.example.",
+      "records": [
+        {
+          "content": "\"quoted\" \"two\"",
+          "disabled": false
+        }
+      ],
+      "ttl": 3600,
+      "type": "TXT"
+    },
+    {
+      "comments": [],
+      "name": "svc.rec.nbpdns.example.",
+      "records": [
+        {
+          "content": "1 Web.rec.nbpdns.example. port=8443",
+          "disabled": false
+        }
+      ],
+      "ttl": 3600,
+      "type": "SVCB"
+    },
+    {
+      "comments": [],
+      "name": "xn--bcher-kva.rec.nbpdns.example.",
+      "records": [
+        {
+          "content": "192.0.2.13",
+          "disabled": false
+        }
+      ],
+      "ttl": 3600,
+      "type": "A"
+    },
+    {
+      "comments": [],
+      "name": "caa.rec.nbpdns.example.",
+      "records": [
+        {
+          "content": "0 issue \"letsencrypt.org\"",
+          "disabled": false
+        }
+      ],
+      "ttl": 3600,
+      "type": "CAA"
+    },
+    {
+      "comments": [],
+      "name": "rec.nbpdns.example.",
+      "records": [
+        {
+          "content": "4 2 abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+          "disabled": false
+        }
+      ],
+      "ttl": 3600,
+      "type": "SSHFP"
+    },
+    {
+      "comments": [],
+      "name": "rec.nbpdns.example.",
+      "records": [
+        {
+          "content": "\"v=spf1 -all\"",
+          "disabled": false
+        }
+      ],
+      "ttl": 3600,
+      "type": "TXT"
+    },
+    {
+      "comments": [],
+      "name": "rec.nbpdns.example.",
+      "records": [
+        {
+          "content": "10 Mail.REC.NBPDNS.EXAMPLE.",
+          "disabled": false
+        }
+      ],
+      "ttl": 3600,
+      "type": "MX"
+    },
+    {
+      "comments": [],
+      "name": "rec.nbpdns.example.",
+      "records": [
+        {
+          "content": "ns1-rec.nbpdns.example. hostmaster.rec.nbpdns.example. 2026100601 10800 3600 604800 3600",
+          "disabled": false
+        }
+      ],
+      "ttl": 3600,
+      "type": "SOA"
+    },
+    {
+      "comments": [],
+      "name": "rec.nbpdns.example.",
+      "records": [
+        {
+          "content": "ns1-rec.nbpdns.example.",
+          "disabled": false
+        }
+      ],
+      "ttl": 3600,
+      "type": "NS"
+    }
+  ],
+  "serial": 2026100601,
+  "slave_tsig_key_ids": [],
+  "soa_edit": "",
+  "soa_edit_api": "DEFAULT",
+  "url": "/api/v1/servers/localhost/zones/rec.nbpdns.example."
+}

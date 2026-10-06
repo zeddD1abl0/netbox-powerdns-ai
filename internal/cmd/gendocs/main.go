@@ -17,6 +17,7 @@ import (
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/cli"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/config"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/netbox"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/powerdns"
 )
 
 // pages maps each generated page's file name to its writer.
@@ -25,7 +26,12 @@ var pages = map[string]func(io.Writer) error{
 	"command-line.md": func(w io.Writer) error {
 		return cli.WriteReference(w, cli.New(io.Discard, io.Discard))
 	},
-	"supported-versions.md": netbox.WriteReference,
+	"supported-versions.md": func(w io.Writer) error {
+		if err := netbox.WriteReference(w); err != nil {
+			return err
+		}
+		return powerdns.WriteReference(w)
+	},
 }
 
 func main() {

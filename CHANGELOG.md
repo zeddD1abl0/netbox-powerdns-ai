@@ -16,6 +16,12 @@ All notable changes to this project are recorded here. The format follows
   inactive records listed. It reports problems in NetBox's data as warnings,
   and in its JSON output, without failing. A zone name in more than one view
   needs `--view`.
+- PowerDNS Authoritative 5.1 and 5.0 are supported, read through each server
+  group's primary's HTTP API with its API key. Requests have a time limit and
+  are retried when the failure may pass, redirects aren't followed, and TLS,
+  a CA file, and a client certificate are supported. Plain `http://` works,
+  with a warning. A server that isn't authoritative is an error, and an
+  unsupported release a warning.
 - PowerDNS server groups, declared in the config file under
   `powerdns.groups`: each a name, the NetBox views it serves, and its
   primary's API URL, API key or key file, server ID, CA file, and client
