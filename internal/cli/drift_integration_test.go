@@ -155,6 +155,11 @@ func TestDrift(t *testing.T) {
 				if !slices.Equal(states, tt.states) || !slices.Equal(g.Unmanaged, tt.wantUnmanaged) {
 					t.Errorf("states %v, unmanaged %v; want %v, %v", states, g.Unmanaged, tt.states, tt.wantUnmanaged)
 				}
+				// The other zones' policies aren't warned about: only this
+				// zone was listed.
+				if len(g.Warnings) != 0 {
+					t.Errorf("warnings %q", g.Warnings)
+				}
 			})
 		}
 		nowhere := "nowhere-" + f.ID + ".nbpdns.example"

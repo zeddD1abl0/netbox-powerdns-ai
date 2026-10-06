@@ -4,11 +4,15 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"os"
 	"regexp"
 	"slices"
 	"strings"
 
 	"github.com/spf13/viper"
+	"go.yaml.in/yaml/v3"
+
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/dns"
 )
 
 // GroupsKey is the config file key that declares the PowerDNS server
@@ -63,18 +67,12 @@ func checkPolicy(s string) error {
 	return nil
 }
 
-// zoneKey returns a zone name as an absolute, lowercase name, or an error if
-// it isn't one, as NetBox stores zone names: ASCII, which for an
-// internationalized name starts with xn--.
+// zoneKey returns a zone name, as dns.ZoneName checks it, as the absolute
+// name the drift report compares.
 func zoneKey(name string) (string, error) {
-	n := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(name)), ".")
-	if n == "" {
-		return "", errors.New("a zone name is empty")
-	}
-	for _, r := range n {
-		if r < 0x21 || r > 0x7e {
-			return "", fmt.Errorf("zone %q: give the name in its ASCII form, such as xn--bcher-kva.example for bücher.example", name)
-		}
+	n, err := dns.ZoneName(name)
+	if err != nil {
+		return "", err
 	}
 	return n + ".", nil
 }
@@ -288,8 +286,12 @@ func loadGroups(v *viper.Viper, path string) ([]Group, []Setting, []error) {
 		settings []Setting
 		errs     []error
 	)
+	collisions := zonePolicyCollisions(path)
 	for i, raw := range list {
 		g, set, gerrs := decodeGroup(raw)
+		if err := collisions[i]; err != nil {
+			gerrs = append(gerrs, err)
+		}
 		where := fmt.Sprintf("%s[%d]", GroupsKey, i)
 		if entry, ok := raw.(map[string]any); ok {
 			if name, ok := entry["name"].(string); ok && name != "" {
@@ -315,6 +317,55 @@ func loadGroups(v *viper.Viper, path string) ([]Group, []Setting, []error) {
 		}
 	}
 	return groups, settings, errs
+}
+
+// zonePolicyCollisions returns an error for each group, by its index, in the
+// config file at path whose zone_policies has two keys that differ only in
+// case. Viper lowercases map keys, so decodeGroup sees such keys as one, with
+// either one's policy; only the file shows both.
+func zonePolicyCollisions(path string) map[int]error {
+	b, err := os.ReadFile(path) //nolint:gosec // The config file the user named, which Viper has just read.
+	if err != nil {
+		return nil // Viper reports it.
+	}
+	var doc any
+	if yaml.Unmarshal(b, &doc) != nil {
+		return nil // Viper reports it.
+	}
+	list, _ := lookup(doc, "powerdns", "groups").([]any)
+	out := map[int]error{}
+	for i, g := range list {
+		policies, _ := lookup(g, "zone_policies").(map[string]any)
+		seen := map[string]string{}
+		for _, k := range slices.Sorted(maps.Keys(policies)) {
+			if first, ok := seen[strings.ToLower(k)]; ok {
+				out[i] = fmt.Errorf("zone_policies: %s and %s are one zone, listed twice", first, k)
+				break
+			}
+			seen[strings.ToLower(k)] = k
+		}
+	}
+	return out
+}
+
+// lookup follows keys down through nested mappings, matching each one
+// without regard to case, as Viper does, and returns the value found, or
+// nil.
+func lookup(v any, keys ...string) any {
+	for _, k := range keys {
+		m, ok := v.(map[string]any)
+		if !ok {
+			return nil
+		}
+		v = nil
+		for _, mk := range slices.Sorted(maps.Keys(m)) {
+			if strings.EqualFold(mk, k) {
+				v = m[mk]
+				break
+			}
+		}
+	}
+	return v
 }
 
 // decodeGroup decodes one entry of the groups list, and returns the group,

@@ -16,8 +16,9 @@ All notable changes to this project are recorded here. The format follows
   assign to its group are listed as unmanaged, not drift, and zones whose
   policy is `ignore` aren't compared. The table gives each drifted zone's
   policy, with `enforce` marked as acting from M12. It exits 0 with no
-  drift, 3 with drift, and 1 when NetBox or a primary can't be read, with
-  the other groups still reported.
+  drift, 3 with drift, and 1 when NetBox or a primary can't be read. A
+  group whose primary can't be read is marked failed, and the others are
+  still reported.
 - Documentation: a tutorial on finding drift between NetBox and PowerDNS, a
   how-to guide on setting a zone's drift policy, and an explanation of how
   nbpdns finds drift.

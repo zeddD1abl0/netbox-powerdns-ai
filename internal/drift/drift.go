@@ -87,8 +87,12 @@ type Counts struct {
 	Unmanaged int `json:"unmanaged"`
 }
 
+// DriftedZones counts the zones that drifted: those in drift, missing, or
+// served though inactive in NetBox.
+func (c Counts) DriftedZones() int { return c.Drift + c.Missing + c.Inactive }
+
 // Drifted reports whether any zone counted drifted.
-func (c Counts) Drifted() bool { return c.Drift+c.Missing+c.Inactive > 0 }
+func (c Counts) Drifted() bool { return c.DriftedZones() > 0 }
 
 // A GroupReport is one server group's comparison.
 type GroupReport struct {
@@ -174,8 +178,10 @@ func Compare(g config.Group, nb, pd []dns.Zone, probs []dns.Problem) GroupReport
 			r.Warnings = append(r.Warnings, fmt.Sprintf("zone_policies names %s, which isn't in any of the group's NetBox views", zone))
 		}
 	}
+	// A NetBox problem is the group's only if it's in the zone compared, of
+	// that view. The primary's problems have no view, and are the group's.
 	for _, p := range probs {
-		if _, ok := netbox[p.Zone]; ok {
+		if z, ok := netbox[p.Zone]; ok && (p.View == "" || p.View == z.View) {
 			r.Problems = append(r.Problems, p)
 		}
 	}

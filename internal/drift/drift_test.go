@@ -125,7 +125,13 @@ func TestCompareGroup(t *testing.T) {
 	pd := []dns.Zone{zone("a.example.", "", 1), zone("shared.example.", "", 1), zone("zz.example.", "", 1), zone("other.example.", "", 1)}
 	g := config.Group{Name: "site-a", Views: []string{"v", "w"}, DriftPolicy: config.PolicyReport,
 		ZonePolicies: map[string]string{"gone.example.": config.PolicyIgnore}}
-	probs := []dns.Problem{{Zone: "a.example.", Detail: "kept"}, {Zone: "elsewhere.example.", Detail: "dropped"}}
+	probs := []dns.Problem{
+		{Zone: "a.example.", Detail: "kept"},
+		{Zone: "a.example.", View: "v", Detail: "kept from NetBox"},
+		{Zone: "elsewhere.example.", Detail: "dropped"},
+		// Not the shared zone compared, the one in v.
+		{Zone: "shared.example.", View: "w", Detail: "dropped from the other view"},
+	}
 	r := Compare(g, nb, pd, probs)
 
 	var states []string
@@ -141,7 +147,7 @@ func TestCompareGroup(t *testing.T) {
 	if !slices.Equal(r.Unmanaged, []string{"other.example.", "zz.example."}) {
 		t.Errorf("unmanaged %v", r.Unmanaged)
 	}
-	if len(r.Problems) != 1 || r.Problems[0].Detail != "kept" {
+	if len(r.Problems) != 2 || r.Problems[0].Detail != "kept" || r.Problems[1].Detail != "kept from NetBox" {
 		t.Errorf("problems %v", r.Problems)
 	}
 	if len(r.Warnings) != 2 || !strings.Contains(r.Warnings[0], "shared.example. is in the views v and w") ||
@@ -219,6 +225,7 @@ func TestRun(t *testing.T) {
 		zone("a.example.", "v", 1, rrset("www.a.example.", "A", 300, rec("192.0.2.1"))),
 		zone("b.example.", "v", 1),
 		zone("c.example.", "w", 1),
+		zone("d.example.", "v", 1, rrset("www.d.example.", "A", 300, rec("192.0.2.1"))),
 	}}
 	pdA := &memory{zones: []dns.Zone{zone("a.example.", "", 1), zone("b.example.", "", 1), zone("x.example.", "", 1)}}
 	pdB := &memory{zones: []dns.Zone{zone("c.example.", "", 1)}}
@@ -237,15 +244,15 @@ func TestRun(t *testing.T) {
 		t.Fatalf("report complete %v, drift %v, %d groups", r.Complete, r.Drift, len(r.Groups))
 	}
 	a, b, c := r.Groups[0], r.Groups[1], r.Groups[2]
-	if a.Counts != (Counts{Drift: 1, Ignored: 1, Unmanaged: 1}) || b.Counts != (Counts{InSync: 1}) {
+	if a.Counts != (Counts{Drift: 1, Missing: 1, Ignored: 1, Unmanaged: 1}) || b.Counts != (Counts{InSync: 1}) {
 		t.Errorf("counts %+v, %+v", a.Counts, b.Counts)
 	}
 	if c.Status != StatusFailed || c.Error != "no client" {
 		t.Errorf("site-c: %+v", c)
 	}
 	// Only the zones compared are read: not the one every group ignores, nor
-	// the primary's unmanaged one. NetBox's are read once, though two groups
-	// serve view v.
+	// the one missing on the primary, nor the primary's unmanaged one.
+	// NetBox's are read once, though two groups serve view v.
 	if slices.Sort(nb.read); !slices.Equal(nb.read, []string{"v/a.example.", "w/c.example."}) {
 		t.Errorf("NetBox read %v", nb.read)
 	}
@@ -254,9 +261,26 @@ func TestRun(t *testing.T) {
 	}
 
 	t.Run("one zone", func(t *testing.T) {
+		// site-a's policy for b.example. isn't warned about, as a zone it
+		// doesn't serve: only c.example. was listed.
 		r, err := Run(t.Context(), memNetBox{nb}, groups[:2], "c.example.")
-		if err != nil || !r.Complete || r.Drift || len(r.Groups[0].Zones) != 0 || len(r.Groups[1].Zones) != 1 {
+		if err != nil || !r.Complete || r.Drift || len(r.Groups[0].Zones) != 0 || len(r.Groups[1].Zones) != 1 ||
+			len(r.Groups[0].Warnings) != 0 || len(r.Groups[1].Warnings) != 0 {
 			t.Errorf("report %+v, %v", r, err)
+		}
+		// The zone's own policy still applies.
+		r, err = Run(t.Context(), memNetBox{nb}, groups[:1], "b.example.")
+		if err != nil || len(r.Groups[0].Zones) != 1 || r.Groups[0].Zones[0].State != StateIgnored || len(r.Groups[0].Warnings) != 0 {
+			t.Errorf("report %+v, %v", r, err)
+		}
+	})
+	t.Run("every group failed", func(t *testing.T) {
+		// Nothing is read from NetBox for groups that can't be compared.
+		fresh := &memory{zones: nb.zones}
+		down := []Group{{Config: groups[0].Config, Primary: memPrimary{&memory{err: errors.New("refused")}}}, groups[2]}
+		r, err := Run(t.Context(), memNetBox{fresh}, down, "")
+		if err != nil || r.Complete || len(fresh.read) != 0 || r.Groups[0].Error != "refused" {
+			t.Errorf("report %+v, %v; NetBox read %v", r, err, fresh.read)
 		}
 	})
 	t.Run("a zone that's nowhere", func(t *testing.T) {

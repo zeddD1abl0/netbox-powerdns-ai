@@ -47,13 +47,14 @@ func (e *ZoneNotFoundError) Error() string {
 }
 
 // Run compares every group, or only the zone named zone if it isn't empty.
-// It reads NetBox once, for every group's views, then each group's primary
-// in turn, and reads RRsets only for the zones it compares. If NetBox can't
-// be read, Run returns the error. A group whose primary can't be read is
-// marked failed, and the others are still compared (ADR-0027). If zone
-// isn't empty and every group was read, but neither side has the zone, Run
-// returns a ZoneNotFoundError, so that a mistyped name isn't reported as in
-// sync.
+// It lists NetBox's zones once, for every group's views, then each group's
+// primary's zones in turn. It then reads RRsets, from NetBox once and from
+// each primary, only for the zones it compares, and compares each group. If
+// NetBox can't be read, Run returns the error. A group whose primary can't
+// be read is marked failed, and the others are still compared (ADR-0027).
+// If zone isn't empty and every group was read, but neither side has the
+// zone, Run returns a ZoneNotFoundError, so that a mistyped name isn't
+// reported as in sync.
 func Run(ctx context.Context, nb NetBox, groups []Group, zone string) (Report, error) {
 	var views []string
 	for _, g := range groups {
@@ -68,12 +69,31 @@ func Run(ctx context.Context, nb NetBox, groups []Group, zone string) (Report, e
 		return Report{}, err
 	}
 
-	// The NetBox zones some group compares, read once each.
+	// List each primary first: a group that can't be listed needs nothing
+	// from NetBox, and a zone that its primary doesn't have needs no RRsets.
 	type id struct{ view, name string }
+	type state struct {
+		cfg    config.Group
+		nb, pd []dns.Zone
+		err    error
+	}
+	states := make([]state, len(groups))
 	needed := map[id]dns.Zone{}
-	for _, g := range groups {
-		for _, z := range inViews(listed, g.Config.Views) {
-			if z.Active && g.Config.Policy(z.Name) != config.PolicyIgnore {
+	for i, g := range groups {
+		st := &states[i]
+		st.cfg, st.nb, st.err = forZone(g.Config, zone), inViews(listed, g.Config.Views), g.Err
+		if st.err == nil {
+			st.pd, st.err = g.Primary.Zones(ctx, zone)
+		}
+		if st.err != nil {
+			continue
+		}
+		onPrimary := map[string]bool{}
+		for _, z := range st.pd {
+			onPrimary[z.Name] = true
+		}
+		for _, z := range st.nb {
+			if compared(st.cfg, z) && onPrimary[z.Name] {
 				needed[id{z.View, z.Name}] = z
 			}
 		}
@@ -86,20 +106,23 @@ func Run(ctx context.Context, nb NetBox, groups []Group, zone string) (Report, e
 	for _, z := range read {
 		full[id{z.View, z.Name}] = z
 	}
-	withRRsets := func(zones []dns.Zone) []dns.Zone {
-		out := make([]dns.Zone, len(zones))
-		for i, z := range zones {
-			out[i] = z
-			if f, ok := full[id{z.View, z.Name}]; ok {
-				out[i] = f
-			}
-		}
-		return out
-	}
 
 	r := Report{Complete: true, Groups: []GroupReport{}}
-	for _, g := range groups {
-		gr := compareGroup(ctx, g, withRRsets(inViews(listed, g.Config.Views)), nbProbs, zone)
+	for i, g := range groups {
+		st := states[i]
+		var gr GroupReport
+		if st.err != nil {
+			gr = failed(g.Config.Name, st.err)
+		} else {
+			nbZones := make([]dns.Zone, len(st.nb))
+			for j, z := range st.nb {
+				nbZones[j] = z
+				if f, ok := full[id{z.View, z.Name}]; ok {
+					nbZones[j] = f
+				}
+			}
+			gr = compareGroup(ctx, g.Primary, st.cfg, nbZones, st.pd, nbProbs)
+		}
 		if gr.Status != StatusOK {
 			r.Complete = false
 		}
@@ -119,39 +142,56 @@ func Run(ctx context.Context, nb NetBox, groups []Group, zone string) (Report, e
 	return r, nil
 }
 
-// compareGroup reads g's primary and compares it with nb, the NetBox zones of
-// g's views.
-func compareGroup(ctx context.Context, g Group, nb []dns.Zone, nbProbs []dns.Problem, zone string) GroupReport {
-	failed := func(err error) GroupReport {
-		return GroupReport{Group: g.Config.Name, Status: StatusFailed, Error: err.Error(), Zones: []ZoneReport{},
-			Unmanaged: []string{}, Problems: []dns.Problem{}, Warnings: []string{}}
+// forZone returns g as Run compares it: with only zone's policy, if zone
+// isn't empty. Then only that zone is listed, so the other zones' policies
+// can't be checked against NetBox's.
+func forZone(g config.Group, zone string) config.Group {
+	if zone == "" {
+		return g
 	}
-	if g.Err != nil {
-		return failed(g.Err)
+	policies := map[string]string{}
+	if p, ok := g.ZonePolicies[zone]; ok {
+		policies[zone] = p
 	}
-	listed, err := g.Primary.Zones(ctx, zone)
-	if err != nil {
-		return failed(err)
-	}
-	compared := map[string]bool{}
+	g.ZonePolicies = policies
+	return g
+}
+
+// compared reports whether g compares the NetBox zone z, if its primary has
+// it: z is active, and its policy isn't ignore.
+func compared(g config.Group, z dns.Zone) bool {
+	return z.Active && g.Policy(z.Name) != config.PolicyIgnore
+}
+
+// failed returns the report of group, which couldn't be read.
+func failed(group string, err error) GroupReport {
+	return GroupReport{Group: group, Status: StatusFailed, Error: err.Error(), Zones: []ZoneReport{},
+		Unmanaged: []string{}, Problems: []dns.Problem{}, Warnings: []string{}}
+}
+
+// compareGroup reads the RRsets of the zones that group g compares from its
+// primary, p, which listed pd, and compares them with nb, the NetBox zones
+// of g's views.
+func compareGroup(ctx context.Context, p Primary, g config.Group, nb, pd []dns.Zone, nbProbs []dns.Problem) GroupReport {
+	want := map[string]bool{}
 	for _, z := range nb {
-		if z.Active && g.Config.Policy(z.Name) != config.PolicyIgnore {
-			compared[z.Name] = true
+		if compared(g, z) {
+			want[z.Name] = true
 		}
 	}
 	var toRead, rest []dns.Zone
-	for _, z := range listed {
-		if compared[z.Name] {
+	for _, z := range pd {
+		if want[z.Name] {
 			toRead = append(toRead, z)
 		} else {
 			rest = append(rest, z)
 		}
 	}
-	read, pdProbs, err := g.Primary.Read(ctx, toRead)
+	read, pdProbs, err := p.Read(ctx, toRead)
 	if err != nil {
-		return failed(err)
+		return failed(g.Name, err)
 	}
-	return Compare(g.Config, nb, append(read, rest...), append(slices.Clone(nbProbs), pdProbs...))
+	return Compare(g, nb, append(read, rest...), append(slices.Clone(nbProbs), pdProbs...))
 }
 
 // inViews returns the zones in views.

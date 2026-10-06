@@ -166,6 +166,12 @@ func TestGroupErrors(t *testing.T) {
 			[]string{"zone_policies:", "ASCII form"}},
 		{"a zone listed twice", groupsYAML(group("a", append(ok, "zone_policies: {example.com: ignore, example.com.: report}")...)),
 			[]string{"zone_policies: zone example.com. is listed twice"}},
+		// Viper lowercases map keys, so only the file shows these two.
+		{"a zone listed twice in two cases", groupsYAML(group("a", append(ok, "zone_policies: {example.com: ignore, Example.com: report}")...)),
+			[]string{"zone_policies: Example.com and example.com are one zone, listed twice"}},
+		{"a zone listed twice in two cases, under keys in capitals",
+			strings.Replace(groupsYAML(group("a", append(ok, "Zone_Policies: {EXAMPLE.com: ignore, example.COM: report}")...)), "powerdns:", "PowerDNS:", 1),
+			[]string{"powerdns.groups[0] (a)", "zone_policies: EXAMPLE.com and example.COM are one zone, listed twice"}},
 		{"a key that YAML reads as a number", groupsYAML(group("a", replace("  api_key: k", "  api_key: 1e10")...)),
 			[]string{"primary.api_key: want a string, not a number; put it in quotes"}},
 		{"two groups with one name", groupsYAML(group("a", ok...), group("a", ok...)), []string{"powerdns.groups[1] (a)", "another group is named a"}},

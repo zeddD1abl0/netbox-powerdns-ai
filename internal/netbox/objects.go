@@ -2,12 +2,10 @@ package netbox
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/url"
 	"slices"
 	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/dns"
@@ -237,23 +235,7 @@ func (c *Client) Count(ctx context.Context, objectType string) (int, error) {
 	return p.Count, nil
 }
 
-// ZoneName returns a zone name the way NetBox stores it: lowercase, without
-// a final dot, and in its ASCII form, which for an internationalized name
-// starts with xn--.
-func ZoneName(name string) (string, error) {
-	n := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(name)), ".")
-	for _, r := range n {
-		if r > 0x7e || r < 0x21 {
-			return "", fmt.Errorf("zone %q: give the name in its ASCII form, such as xn--bcher-kva.example for bücher.example", name)
-		}
-	}
-	if n == "" {
-		return "", errors.New("the zone name is empty")
-	}
-	return n, nil
-}
-
-// FindZone returns the zone named name, as ZoneName returns it, in the view
+// FindZone returns the zone named name, as dns.ZoneName returns it, in the view
 // named view. If view is empty, the zone may be in any view, but only one:
 // otherwise FindZone returns an *AmbiguousZoneError.
 func (c *Client) FindZone(ctx context.Context, name, view string) (Zone, error) {
@@ -312,7 +294,10 @@ func normalize(z Zone, records []Record) (dns.Zone, []dns.Problem) {
 		raw[i] = r.raw()
 	}
 	out := z.DNS()
-	return out, out.SetRecords(raw)
+	// Go doesn't say whether out is read before or after the call that fills
+	// it, so the call comes first.
+	probs := out.SetRecords(raw)
+	return out, probs
 }
 
 // ReadZones reads every record of each of zones, and returns the zones in

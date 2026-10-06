@@ -133,13 +133,13 @@ Only what each side serves is compared: NetBox's active records, and the
 primary's records apart from those turned off. An SOA is compared without its
 serial. Zones on a primary that NetBox doesn't assign to its group are listed
 as unmanaged, and aren't drift. A zone whose drift policy is ignore isn't
-compared.
+compared. nbpdns only reads, and changes nothing.
 
 nbpdns exits with status 0 if there's no drift, 3 if there is, and 1 if it
-couldn't compare everything: NetBox or a primary couldn't be read, in which
-case the groups that could be read are still reported, or the zone that
---zone names is neither in a group's NetBox views nor on its primary.
-Nothing is written.
+couldn't compare everything. Nothing is reported if NetBox can't be read, or
+if the zone that --zone names is neither in a group's NetBox views nor on its
+primary. If a primary can't be read, its group is marked failed, and the
+other groups are still reported.
 
 ```text
 nbpdns drift [flags]

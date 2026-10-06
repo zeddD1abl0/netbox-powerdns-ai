@@ -103,13 +103,16 @@ powerdns:
    - The drift section gives each drifted zone's policy in its `POLICY`
      column.
 
-3. Look for warnings in the logs, on standard error, such as:
+3. Look for warnings at the end of the report, such as:
 
    ```text
-   time=… level=WARN msg="the drift report worked around a problem" group=site-a warning="zone_policies names test.example.com., which isn't in any of the group's NetBox views" trace_id=…
+   Warnings about the configuration or NetBox's zones:
+   GROUP   WARNING
+   site-a  zone_policies names test.example.com., which isn't in any of the group's NetBox views
    ```
 
-   It means `zone_policies` names a zone that NetBox doesn't assign to the
+   nbpdns also logs each warning, on standard error, and the JSON report
+   lists them under `warnings`. This one means `zone_policies` names a zone that NetBox doesn't assign to the
    group. NetBox can change without nbpdns's config, so this is a warning,
    not an error. Check the name for a typo, or remove the entry if the zone
    is gone.

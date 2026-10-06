@@ -82,7 +82,7 @@ to brownfield import, which adopts them from M14.
 
 One PowerDNS server holds one zone of each name. If two of a group's views
 have a zone of the same name, nbpdns compares the one in the view whose name
-sorts first, and logs a warning naming both. Fix the group's views, or the
+sorts first, and gives a warning naming both. Fix the group's views, or the
 zones in NetBox.
 
 ## How RRsets differ
@@ -135,6 +135,11 @@ parse as its record type, it keeps the value as given and records a
 their own heading in the table and in `problems` in the JSON. They aren't
 drift, but a value kept as given may not match the other side's.
 
+**Warnings** are about the configuration or NetBox's zones, such as a zone
+name in two of a group's views, or a policy for a zone the group doesn't
+serve. They're listed at the end of the table, in `warnings` in the JSON,
+and in the logs. They aren't drift either.
+
 ## Failures and exit statuses
 
 A report that couldn't read everything mustn't look complete:
@@ -167,8 +172,10 @@ nbpdns is designed and tested for 1,000 zones and 100,000 records per run
 
 - NetBox is read once, for every group's views together, even if several
   groups serve the same view.
-- Records are read only for the zones that are compared: not for ignored or
-  unmanaged zones, and with `--zone`, only for that zone. Each side's
+- Each group's primary is listed before any records are read. Records are
+  then read only for the zones that are compared: not for ignored or
+  unmanaged zones, nor for zones that the primary doesn't have, nor for a
+  group whose primary can't be read, and with `--zone`, only for that zone. Each side's
   requests run with bounded concurrency, set by `netbox.concurrency` and
   `powerdns.concurrency`.
 - The comparison itself works in memory. A benchmark compares 1,000 zones of

@@ -11,20 +11,21 @@ import (
 
 func TestDriftResult(t *testing.T) {
 	ok := drift.GroupReport{Group: "a", Status: drift.StatusOK}
-	drifted := drift.GroupReport{Group: "b", Status: drift.StatusOK, Counts: drift.Counts{Drift: 1, Missing: 1}}
+	drifted := drift.GroupReport{Group: "b", Status: drift.StatusOK, Counts: drift.Counts{Drift: 1, Missing: 1, Inactive: 1}}
 	failed := drift.GroupReport{Group: "c", Status: drift.StatusFailed, Error: "down"}
 	tests := []struct {
 		name   string
-		groups []drift.GroupReport
+		report drift.Report
 		want   int
 		msg    string
 	}{
-		{"no drift", []drift.GroupReport{ok}, exitOK, ""},
-		{"drift", []drift.GroupReport{ok, drifted}, exitDrift, "2 zones drifted"},
-		{"a failed group wins over drift", []drift.GroupReport{drifted, failed}, exitError, "1 of 2 server groups couldn't be read"},
+		{"no drift", drift.Report{Complete: true, Groups: []drift.GroupReport{ok}}, exitOK, ""},
+		{"drift", drift.Report{Complete: true, Drift: true, Groups: []drift.GroupReport{ok, drifted}}, exitDrift, "3 zones drifted"},
+		{"a failed group wins over drift", drift.Report{Drift: true, Groups: []drift.GroupReport{drifted, failed}}, exitError,
+			"1 of 2 server groups couldn't be read"},
 	}
 	for _, tt := range tests {
-		err := driftResult(drift.Report{Groups: tt.groups})
+		err := driftResult(tt.report)
 		if code := exitCode(err); code != tt.want || (err != nil && !strings.Contains(err.Error(), tt.msg)) {
 			t.Errorf("%s: %v (exit %d), want exit %d with %q", tt.name, err, exitCode(err), tt.want, tt.msg)
 		}
@@ -45,6 +46,7 @@ func TestWriteDrift(t *testing.T) {
 				{Zone: "d.example.", State: drift.StateIgnored},
 			},
 			Unmanaged: []string{"z.example."},
+			Warnings:  []string{"zone_policies names gone.example., which isn't in any of the group's NetBox views"},
 			Problems:  []dns.Problem{{Zone: "b.example.", Name: "bad.b.example.", Type: "A", Detail: "kept as given"}}},
 		{Group: "site-b", Status: drift.StatusFailed, Error: "PowerDNS at http://x/ isn't reachable"},
 	}}
@@ -69,6 +71,8 @@ func TestWriteDrift(t *testing.T) {
 		"site-b  PowerDNS at http://x/ isn't reachable",
 		"\nProblems in the data, worked around:\n",
 		"bad.b.example. A  kept as given",
+		"\nWarnings about the configuration or NetBox's zones:\n",
+		"site-a  zone_policies names gone.example., which isn't in any of the group's NetBox views",
 	} {
 		if !strings.Contains(out, oneSpace(want)) {
 			t.Errorf("no %q in:\n%s", want, b.String())

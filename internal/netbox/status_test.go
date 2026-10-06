@@ -78,22 +78,3 @@ func TestSupportedMatchesLab(t *testing.T) {
 		t.Errorf("Supported = %v, but the lab runs %v", Supported, lab2)
 	}
 }
-
-func TestZoneName(t *testing.T) {
-	tests := []struct{ in, want, wantErr string }{
-		{"example.com", "example.com", ""},
-		{"Example.COM.", "example.com", ""},
-		{" example.com ", "example.com", ""},
-		{"xn--bcher-kva.example", "xn--bcher-kva.example", ""},
-		{"bücher.example", "", "ASCII form"},
-		{"exa mple.com", "", "ASCII form"},
-		{".", "", "empty"},
-		{"", "", "empty"},
-	}
-	for _, tt := range tests {
-		got, err := ZoneName(tt.in)
-		if got != tt.want || (err == nil) != (tt.wantErr == "") || (err != nil && !strings.Contains(err.Error(), tt.wantErr)) {
-			t.Errorf("ZoneName(%q) = %q, %v; want %q, error %q", tt.in, got, err, tt.want, tt.wantErr)
-		}
-	}
-}

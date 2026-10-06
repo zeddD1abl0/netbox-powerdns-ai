@@ -38,12 +38,12 @@ func newDriftCmd(a *app) *cobra.Command {
 			"primary's records apart from those turned off. An SOA is compared without its\n" +
 			"serial. Zones on a primary that NetBox doesn't assign to its group are listed\n" +
 			"as unmanaged, and aren't drift. A zone whose drift policy is ignore isn't\n" +
-			"compared.\n\n" +
+			"compared. nbpdns only reads, and changes nothing.\n\n" +
 			"nbpdns exits with status 0 if there's no drift, 3 if there is, and 1 if it\n" +
-			"couldn't compare everything: NetBox or a primary couldn't be read, in which\n" +
-			"case the groups that could be read are still reported, or the zone that\n" +
-			"--zone names is neither in a group's NetBox views nor on its primary.\n" +
-			"Nothing is written.",
+			"couldn't compare everything. Nothing is reported if NetBox can't be read, or\n" +
+			"if the zone that --zone names is neither in a group's NetBox views nor on its\n" +
+			"primary. If a primary can't be read, its group is marked failed, and the\n" +
+			"other groups are still reported.",
 		Args: usageArgs(cobra.NoArgs),
 	}
 	output := addOutputFlag(cmd)
@@ -53,7 +53,7 @@ func newDriftCmd(a *app) *cobra.Command {
 	cmd.RunE = func(cmd *cobra.Command, _ []string) error {
 		var name string
 		if *zone != "" {
-			n, err := netbox.ZoneName(*zone)
+			n, err := dns.ZoneName(*zone)
 			if err != nil {
 				return usageError{err}
 			}
@@ -118,20 +118,21 @@ func driftResult(r drift.Report) error {
 		if g.Status != drift.StatusOK {
 			failed++
 		}
-		drifted += g.Counts.Drift + g.Counts.Missing + g.Counts.Inactive
+		drifted += g.Counts.DriftedZones()
 	}
-	if failed > 0 {
+	switch {
+	case !r.Complete:
 		return fmt.Errorf("%d of %d server groups couldn't be read, so the report is incomplete", failed, len(r.Groups))
-	}
-	if drifted > 0 {
+	case r.Drift:
 		return driftError{zones: drifted}
 	}
 	return nil
 }
 
 // writeDrift writes the report as tables: a summary per group, then the
-// drift, then the unmanaged and ignored zones, the failed groups and the
-// problems, each under a heading, and only if there are any.
+// drift, then the unmanaged and ignored zones, the failed groups, the
+// problems and the warnings, each under a heading, and only if there are
+// any.
 func writeDrift(w io.Writer, r drift.Report) error {
 	var summary [][]string
 	for _, g := range r.Groups {
@@ -142,7 +143,7 @@ func writeDrift(w io.Writer, r drift.Report) error {
 	if err := writeTable(w, []string{"GROUP", "STATUS", "IN SYNC", "DRIFT", "MISSING", "INACTIVE", "IGNORED", "UNMANAGED"}, summary); err != nil {
 		return err
 	}
-	var changes, unmanaged, ignored, failed, problems [][]string
+	var changes, unmanaged, ignored, failed, problems, warnings [][]string
 	for _, g := range r.Groups {
 		if g.Status != drift.StatusOK {
 			failed = append(failed, []string{g.Group, g.Error})
@@ -166,6 +167,9 @@ func writeDrift(w io.Writer, r drift.Report) error {
 		for _, p := range g.Problems {
 			problems = append(problems, []string{g.Group, p.Zone, strings.TrimSpace(p.Name + " " + p.Type), p.Detail})
 		}
+		for _, w := range g.Warnings {
+			warnings = append(warnings, []string{g.Group, w})
+		}
 	}
 	sections := []struct {
 		title  string
@@ -177,6 +181,7 @@ func writeDrift(w io.Writer, r drift.Report) error {
 		{"Ignored zones, not compared", []string{"GROUP", "ZONE"}, ignored},
 		{"Groups that couldn't be read", []string{"GROUP", "ERROR"}, failed},
 		{"Problems in the data, worked around", []string{"GROUP", "ZONE", "RRSET", "PROBLEM"}, problems},
+		{"Warnings about the configuration or NetBox's zones", []string{"GROUP", "WARNING"}, warnings},
 	}
 	for _, sec := range sections {
 		if len(sec.rows) == 0 {
