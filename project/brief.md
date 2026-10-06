@@ -244,3 +244,18 @@ runs one PowerDNS server, the primary of the server group `lab-a`. This is
 recorded in ADR-0026, which supersedes ADR-0024, and REQ-041 is narrowed to
 match.
 
+## Answers, 2026-10-06 (M03 design)
+
+These were given in the M03 design session. Each was chosen from proposed
+options; the label of the chosen option is quoted.
+
+| Question | Answer |
+|---|---|
+| Where should each zone's drift policy (ADR-0008) be set? | "nbpdns's config file": a default per server group, with overrides per zone name. |
+| How should the report treat zones on a primary that NetBox doesn't assign to its group? | "List them, not as drift". |
+| How should SOA records be compared, given that PowerDNS rewrites the serial? | "All but the serial". |
+| Q-017: what scale should M03 be designed and tested for? | "Smaller for now": 1,000 zones and 100,000 records. |
+
+The user then approved M03's plan, which also answers Q-027 for the command
+line. The decisions are recorded in ADR-0027, and as REQ-043.
+
