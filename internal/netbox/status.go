@@ -18,18 +18,18 @@ type Release struct {
 }
 
 // Supported lists the releases nbpdns supports (REQ-040), newest first. The
-// lab runs each one (internal/lab), and the integration tests read from it.
+// lab runs each one (internal/lab), and the integration tests read from it,
+// so a release is only added here with its lab instance (ADR-0023).
 //
 // NetBox and the plugin are each checked against this list on their own:
 // NetBox won't load a plugin release that doesn't support it, so a running
 // pair is always one the plugin supports.
 var Supported = []Release{
 	{NetBox: "4.7", Plugin: "1.7"},
-	{NetBox: "4.6", Plugin: "1.6"},
 }
 
 // SupportedSeries returns the supported NetBox and plugin release series, as
-// text such as "4.7.x or 4.6.x".
+// text such as "4.7.x", or "4.7.x or 4.6.x" for more than one.
 func SupportedSeries() (netBox, plugin string) { return seriesText(Supported) }
 
 func seriesText(releases []Release) (netBox, plugin string) {
@@ -101,7 +101,7 @@ func (c *Client) Status(ctx context.Context) (*Status, error) {
 
 // Connect reads NetBox's status and checks its releases, before a command
 // reads from NetBox. A missing DNS plugin is an error. An unsupported release
-// only logs a warning, since reading may still work (ADR-0020).
+// only logs a warning, since reading may still work (ADR-0023).
 func (c *Client) Connect(ctx context.Context) (*Status, error) {
 	s, err := c.Status(ctx)
 	if err != nil {

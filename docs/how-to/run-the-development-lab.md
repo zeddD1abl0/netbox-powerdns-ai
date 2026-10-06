@@ -5,10 +5,9 @@ weight: 10
 
 # Run the development lab
 
-The development lab runs NetBox 4.7 and NetBox 4.6, each with the NetBox DNS
-plugin, in containers. The integration tests run against it, and the
-tutorials use it. This guide starts the lab, reaches each NetBox, and removes
-the lab again.
+The development lab runs NetBox 4.7, with the NetBox DNS plugin, in
+containers. The integration tests run against it, and the tutorials use it.
+This guide starts the lab, reaches NetBox, and removes the lab again.
 
 ## Before you start
 
@@ -16,7 +15,7 @@ You need:
 
 - the repository, and its [development prerequisites](../../README.md#development),
   which include Docker;
-- about 4 GB of free disk space and 2 GB of free memory.
+- about 2 GB of free disk space and 1.5 GB of free memory.
 
 The lab's own tool, docker-compose, is pinned in the repository and fetched on
 first use.
@@ -40,14 +39,14 @@ first use.
      http://localhost:8047/api/status/
    ```
 
-The lab's NetBox instances:
+The lab runs one NetBox for each
+[supported release](../reference/supported-versions.md):
 
 | NetBox | DNS plugin | URL |
 |---|---|---|
 | 4.7 | 1.7 | `http://localhost:8047` |
-| 4.6 | 1.6 | `http://localhost:8046` |
 
-Each has the superuser `admin`, with the password `nbpdns-lab-admin` and the
+It has the superuser `admin`, with the password `nbpdns-lab-admin` and the
 v2 API token `nbt_nbpdnslabadm.nbpdnsLabAdminTokenNotForProduction00000`.
 
 > [!WARNING]
@@ -66,7 +65,7 @@ make test-integration
 ```
 
 This starts the lab if it isn't running, then runs every test with the
-`integration` build tag, against both NetBox versions. Each test creates its
+`integration` build tag, against every NetBox in the lab. Each test creates its
 own DNS data, and users with their own API tokens, with names that contain a
 random ID, and removes them when it ends. Data you add to the lab yourself
 isn't touched.

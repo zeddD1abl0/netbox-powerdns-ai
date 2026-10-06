@@ -18,7 +18,8 @@ func WriteReference(w io.Writer) error {
 	p("# Supported versions\n\n")
 	p("nbpdns reads DNS data from these releases of NetBox and the\n")
 	p("[NetBox DNS plugin](https://github.com/peteeckel/netbox-plugin-dns). The\n")
-	p("development lab runs each pair, and the integration tests read from every one.\n\n")
+	p("development lab runs each pair, and the integration tests read from every one,\n")
+	p("so these are the releases that are tested.\n\n")
 	p("| NetBox | NetBox DNS plugin |\n|---|---|\n")
 	for _, r := range Supported {
 		p("| %s.x | %s.x |\n", r.NetBox, r.Plugin)

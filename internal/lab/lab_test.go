@@ -28,7 +28,7 @@ func TestURL(t *testing.T) {
 		t.Errorf("URL() = %q", got)
 	}
 	t.Setenv("DOCKER_HOST", "tcp://[fd00::1]:2375")
-	if got := NetBoxes[1].URL(); got != "http://[fd00::1]:8046" {
+	if got := NetBoxes[0].URL(); got != "http://[fd00::1]:8047" {
 		t.Errorf("URL() = %q", got)
 	}
 }

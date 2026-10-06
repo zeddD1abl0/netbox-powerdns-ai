@@ -45,8 +45,9 @@ tests need.
   `make generate-check` fails on a stale reference.
 - [ ] Every log line carries `trace_id` and `request_id`, and NetBox requests
   carry `traceparent`.
-- [ ] `make lab-up` starts NetBox 4.7 and 4.6 with the plugin. The integration
-  tests pass against both, with a least-privilege v2 token.
+- [ ] `make lab-up` starts NetBox 4.7 with the plugin. The integration tests
+  pass against it, with a least-privilege v2 token. (Narrowed from 4.7 and
+  4.6 on 2026-10-06; see below.)
 - [ ] Integration tests run in every GitLab and GitHub pipeline, and
   `make project-lint` confirms the CI files mirror `make ci`.
 - [ ] Hook pipe-tests run in `make test` (ITEM-0017).
@@ -91,6 +92,15 @@ tests need.
 > - **The lab builds no images.** Each NetBox container installs the pinned
 >   plugin as it starts, so there's no Dockerfile, and buildx isn't pinned
 >   (ITEM-0022).
+>
+> Changed after the first pipeline, on 2026-10-06:
+>
+> - **NetBox 4.7 only.** The integration job ran out of memory on the
+>   runners, mostly because the lab ran a NetBox and a PostgreSQL server for
+>   each of 4.7 and 4.6. The user narrowed the lab, the tests and the
+>   supported releases to NetBox 4.7 with the plugin 1.7.x; other releases
+>   are added as the runners have room (ADR-0023, which supersedes ADR-0020;
+>   ITEM-0028). Everything below that says 4.6 is overridden.
 
 ## Verification log
 

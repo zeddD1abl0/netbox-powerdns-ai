@@ -1,5 +1,5 @@
 // Package netbox reads DNS data from the NetBox DNS plugin, through NetBox's
-// REST API (ADR-0020). It only reads: every request is a GET.
+// REST API (ADR-0023). It only reads: every request is a GET.
 package netbox
 
 import (

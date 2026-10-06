@@ -16,7 +16,7 @@ All notable changes to this project are recorded here. The format follows
   inactive records listed. It reports problems in NetBox's data as warnings,
   and in its JSON output, without failing. A zone name in more than one view
   needs `--view`.
-- NetBox 4.7 and 4.6, with the DNS plugin 1.7.x and 1.6.x, are supported.
+- NetBox 4.7, with the DNS plugin 1.7.x, is supported.
   Lists are paged, records are read with bounded concurrency, and requests
   have a time limit and are retried when the failure may pass. TLS 1.2 or
   later is required, with an optional CA file. Plain `http://` works, with a
@@ -35,9 +35,9 @@ All notable changes to this project are recorded here. The format follows
   and are redacted everywhere they could be printed or logged. Unknown keys and
   variables are errors, and every problem is reported at once.
 - Configuration and command-line reference pages, generated from the code.
-- A development lab with NetBox 4.7 and 4.6, each with the NetBox DNS plugin,
-  in containers (`make lab-up`, `make lab-down`). Integration tests run
-  against both versions (`make test-integration`), in every pipeline.
+- A development lab with NetBox 4.7 and the NetBox DNS plugin, in containers
+  (`make lab-up`, `make lab-down`). Integration tests run against it
+  (`make test-integration`), in every pipeline.
 - Logs on standard error, as JSON or text (`log.format`) from a chosen level
   (`log.level`). Every line carries the run's `trace_id`, `span_id`, and
   `request_id`, and outgoing requests carry the W3C `traceparent` header.

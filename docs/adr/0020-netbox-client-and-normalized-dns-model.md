@@ -1,6 +1,6 @@
 ---
 title: "0020: NetBox client and normalized DNS model"
-status: accepted
+status: superseded by ADR-0023
 date: 2026-09-29
 decision-makers: [jordan]
 requirements: [REQ-024, REQ-027, REQ-040]

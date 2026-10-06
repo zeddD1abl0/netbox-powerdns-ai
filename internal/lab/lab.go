@@ -28,10 +28,10 @@ type NetBox struct {
 }
 
 // NetBoxes are the lab's NetBox instances, one per supported version
-// (REQ-040).
+// (REQ-040). Each one costs the CI job a NetBox and a PostgreSQL server, so
+// a version is only added when the runners have room for it (ADR-0023).
 var NetBoxes = []NetBox{
 	{Name: "netbox-47", Version: "4.7", PluginVersion: "1.7", Port: 8047},
-	{Name: "netbox-46", Version: "4.6", PluginVersion: "1.6", Port: 8046},
 }
 
 // URL returns the instance's base URL.

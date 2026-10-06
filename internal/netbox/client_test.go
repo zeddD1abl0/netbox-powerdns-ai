@@ -2,7 +2,7 @@ package netbox
 
 // These tests run the client against local HTTP servers that send only
 // status codes, headers and delays, and, where a body is needed, responses
-// recorded from the lab (ADR-0020). NetBox's own behavior is tested against
+// recorded from the lab (ADR-0023). NetBox's own behavior is tested against
 // the lab, in netbox_integration_test.go.
 
 import (

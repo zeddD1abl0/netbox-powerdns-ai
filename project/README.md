@@ -10,7 +10,7 @@
 | Milestone | Title | Status | Items closed |
 |---|---|---|---|
 | [M00](milestones/M00-foundation.md) | Foundation | done | 16 of 16 |
-| [M01](milestones/M01-netbox-read-path.md) | NetBox read path | in-progress | 10 of 10 |
+| [M01](milestones/M01-netbox-read-path.md) | NetBox read path | in-progress | 11 of 11 |
 | [M02](milestones/M02-powerdns-read-path.md) | PowerDNS read path | planned | — |
 | [M03](milestones/M03-drift-report.md) | Drift report | planned | — |
 | [M04](milestones/M04-service.md) | Service | planned | 0 of 1 |
@@ -43,6 +43,7 @@
 | [ITEM-0024](items/ITEM-0024-nbpdns-netbox-commands-and-docs.md) | nbpdns netbox commands and docs | feature | done 2026-10-06 | — |
 | [ITEM-0025](items/ITEM-0025-document-the-c-compiler-that-race-needs.md) | Document the C compiler that -race needs | bug | done 2026-09-29 | — |
 | [ITEM-0026](items/ITEM-0026-fix-the-m01-code-review-findings.md) | Fix the M01 code review findings | bug | done 2026-10-06 | — |
+| [ITEM-0028](items/ITEM-0028-test-and-support-only-netbox-4-7-to-fit-the-ci-run.md) | Test and support only NetBox 4.7, to fit the CI runners | task | done 2026-10-06 | — |
 
 ## Open items in other milestones
 
@@ -79,4 +80,4 @@
 
 ## Decisions
 
-22 ADRs (18 accepted, 4 superseded), listed in [docs/adr](../docs/adr/_index.md).
+23 ADRs (18 accepted, 5 superseded), listed in [docs/adr](../docs/adr/_index.md).

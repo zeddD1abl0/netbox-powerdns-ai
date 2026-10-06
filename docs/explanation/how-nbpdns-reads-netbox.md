@@ -52,7 +52,7 @@ nbpdns only sends `GET` requests. It never changes NetBox.
 
 NetBox also has a GraphQL API, which can fetch zones with their records in
 one query. nbpdns uses REST instead
-([ADR-0020](../adr/0020-netbox-client-and-normalized-dns-model.md)): the DNS
+([ADR-0023](../adr/0023-netbox-client-and-normalized-dns-model-with-netbox.md)): the DNS
 plugin's REST endpoints are stable, documented, and filterable, and paging
 them keeps each request small. GraphQL would add a second schema and query
 language to follow across NetBox releases, and its queries are harder to page

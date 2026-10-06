@@ -182,3 +182,19 @@ A review of the work in progress proposed defaults for three details of the
 | Should inactive records be shown by default? | "Yes, inactive records should just be shown" |
 
 The user then asked for M01 to be completed.
+
+## Answers, 2026-10-06 (the first M01 pipeline)
+
+The first pipeline with the integration job failed. The user said:
+
+> The pipeline died because it's quite significant in memory footprint and
+> the nodes running the jobs don't have much spare capacity at the moment. It
+> appears it runs up two separate NetBox instances and tests against both. If
+> that is the case, it needs to narrow down to just testing against 4.7, and
+> we'll add other versions and support from there.
+
+It was the case: the lab ran NetBox 4.7 and 4.6, each with its own
+PostgreSQL server. nbpdns now supports and tests NetBox 4.7 only, with the
+DNS plugin 1.7.x. More releases are added as the runners have room. This is
+recorded in ADR-0023, which supersedes ADR-0020, and REQ-040 is narrowed to
+match.

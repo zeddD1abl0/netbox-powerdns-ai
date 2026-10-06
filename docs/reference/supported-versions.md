@@ -10,12 +10,12 @@ weight: 30
 
 nbpdns reads DNS data from these releases of NetBox and the
 [NetBox DNS plugin](https://github.com/peteeckel/netbox-plugin-dns). The
-development lab runs each pair, and the integration tests read from every one.
+development lab runs each pair, and the integration tests read from every one,
+so these are the releases that are tested.
 
 | NetBox | NetBox DNS plugin |
 |---|---|
 | 4.7.x | 1.7.x |
-| 4.6.x | 1.6.x |
 
 nbpdns checks NetBox and the plugin against this table separately, since
 NetBox won't load a plugin release that doesn't support it. Before it reads,

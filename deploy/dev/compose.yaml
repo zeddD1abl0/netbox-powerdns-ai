@@ -1,12 +1,14 @@
-# The development lab (REQ-036): NetBox 4.7 and 4.6, each with the NetBox DNS
-# plugin, for the integration tests and the tutorials.
+# The development lab (REQ-036): NetBox 4.7 with the NetBox DNS plugin, for
+# the integration tests and the tutorials. It runs one NetBox per supported
+# release (internal/lab), and each costs the CI job a NetBox and a PostgreSQL
+# server, so a release is only added when the runners have room (ADR-0023).
 #
 #   make lab-up    start the lab, and wait until it's healthy
 #   make lab-down  remove the lab and its data
 #
-# NetBox 4.7 listens on port 8047 and NetBox 4.6 on 8046, on the Docker host:
-# localhost, or the host in DOCKER_HOST. Both have the superuser admin, with
-# the v2 API token nbt_nbpdnslabadm.nbpdnsLabAdminTokenNotForProduction00000.
+# NetBox 4.7 listens on port 8047 on the Docker host: localhost, or the host
+# in DOCKER_HOST. It has the superuser admin, with the v2 API token
+# nbt_nbpdnslabadm.nbpdnsLabAdminTokenNotForProduction00000.
 # The ports are published on LAB_BIND_ADDRESS, which the Makefile sets:
 # 127.0.0.1 on a local Docker host, and every interface on a remote one.
 #
@@ -42,7 +44,8 @@ x-netbox: &netbox
       echo 'PLUGINS = ["netbox_dns"]' > /etc/netbox/config/plugins.py &&
       exec /opt/netbox/docker-entrypoint.sh /opt/netbox/launch-netbox.sh
   healthcheck:
-    # netbox-docker's own check, which the 4.6 image doesn't ship as a script.
+    # netbox-docker's own check, which images before netbox-docker 5.1 don't
+    # ship as a script.
     test: curl -sf http://localhost:8080/login/ >/dev/null || exit 1
     # The first start applies every migration, which takes minutes.
     start_period: 900s
@@ -74,11 +77,6 @@ services:
     volumes:
       - postgres-47:/var/lib/postgresql
 
-  postgres-46:
-    <<: *postgres
-    volumes:
-      - postgres-46:/var/lib/postgresql
-
   valkey:
     image: docker.io/valkey/valkey:9.1-trixie@sha256:418652cfb58ef879d4978c33553735d7147016032d5aefaa14c828e611eb9dfd
     healthcheck:
@@ -104,23 +102,5 @@ services:
     ports:
       - "${LAB_BIND_ADDRESS:-127.0.0.1}:8047:8080"
 
-  netbox-46:
-    <<: *netbox
-    image: docker.io/netboxcommunity/netbox:v4.6.10-5.0.2@sha256:91b823a05cb51004f07acc2228ccc2993f38b0f0bf711b403b0fdf85e51277e8
-    environment:
-      <<: *netbox-env
-      NETBOX_DNS_VERSION: "1.6.1"
-      DB_HOST: postgres-46
-      REDIS_DATABASE: "2"
-      REDIS_CACHE_DATABASE: "3"
-    depends_on:
-      postgres-46:
-        condition: service_healthy
-      valkey:
-        condition: service_healthy
-    ports:
-      - "${LAB_BIND_ADDRESS:-127.0.0.1}:8046:8080"
-
 volumes:
   postgres-47:
-  postgres-46:

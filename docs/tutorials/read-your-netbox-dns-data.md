@@ -20,8 +20,7 @@ Run every command from the repository's root.
 
 ## Start the lab and build nbpdns
 
-1. Start the lab, which runs NetBox 4.7 and NetBox 4.6, each with the NetBox
-   DNS plugin:
+1. Start the lab, which runs NetBox 4.7 with the NetBox DNS plugin:
 
    ```shell
    make lab-up

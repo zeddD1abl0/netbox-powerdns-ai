@@ -55,7 +55,9 @@ unit-test:
     - make test
 
 # The lab runs in a Docker-in-Docker service, which needs a privileged
-# runner, like the self-hosted Kubernetes runners (Q-049).
+# runner, like the self-hosted Kubernetes runners (Q-049). With the lab's one
+# NetBox (ADR-0023), the job passes within 1.5 GiB of memory for the service
+# and 768 MiB for the job, and the service stores about 2 GB (ITEM-0028).
 integration-test:
   extends: .go
   stage: test

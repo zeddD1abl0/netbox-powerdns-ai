@@ -14,7 +14,7 @@ permission, and its token, then checks them with nbpdns.
 
 You need:
 
-- NetBox 4.7 or 4.6, with the NetBox DNS plugin (see
+- NetBox 4.7, with the NetBox DNS plugin (see
   [Supported versions](../reference/supported-versions.md));
 - a NetBox account that can manage users, permissions, and API tokens;
 - nbpdns, configured with NetBox's URL (see [Configure nbpdns](configure-nbpdns.md)).

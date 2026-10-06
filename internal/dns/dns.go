@@ -1,6 +1,6 @@
 // Package dns is nbpdns's normalized model of DNS data: zones and their
 // RRsets. NetBox's data is read into it (M01), and PowerDNS's (M02), so that
-// M03 can compare the two RRset by RRset. The rules come from ADR-0020:
+// M03 can compare the two RRset by RRset. The rules come from ADR-0023:
 //
 //   - Names are lowercase and absolute, ending with a dot.
 //   - Relative targets in CNAME, DNAME, MX, NS, PTR and SRV values are made
