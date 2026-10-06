@@ -1,9 +1,9 @@
 ---
 id: M01
 title: NetBox read path
-status: in-progress # planned | in-progress | done
+status: done # planned | in-progress | done
 started: 2026-09-26
-closed:
+closed: 2026-10-06
 ---
 
 # M01: NetBox read path
@@ -35,29 +35,39 @@ tests need.
 
 ## Acceptance criteria
 
-- [ ] ADR-0018 and ADR-0019 are accepted. The stubs M01 to M18 match the new
+- [x] ADR-0018 and ADR-0019 are accepted. The stubs M01 to M18 match the new
   list, `requirements.md` is remapped, and the `close-milestone` skill writes
-  MR descriptions.
-- [ ] `nbpdns` builds as a static binary. `version`, `config show`,
-  `completion` and the `netbox` commands work as designed.
-- [ ] Config precedence, `_FILE` secrets, strict unknown keys (file and env),
+  MR descriptions (ITEM-0018, ITEM-0019).
+- [x] `nbpdns` builds as a static binary. `version`, `config show`,
+  `completion` and the `netbox` commands work as designed (`make build`
+  gives a statically linked ELF; the manual verification of 2026-10-06).
+- [x] Config precedence, `_FILE` secrets, strict unknown keys (file and env),
   source reporting and redaction are covered by table-driven tests.
-  `make generate-check` fails on a stale reference.
-- [ ] Every log line carries `trace_id` and `request_id`, and NetBox requests
-  carry `traceparent`.
-- [ ] `make lab-up` starts NetBox 4.7 with the plugin. The integration tests
+  `make generate-check` fails on a stale reference (`internal/config`'s
+  `load_test.go` and `secret_test.go`; ITEM-0020).
+- [x] Every log line carries `trace_id` and `request_id`, and NetBox requests
+  carry `traceparent` (`internal/logging` and `internal/tracing` tests, and
+  `internal/netbox`'s `client_test.go`).
+- [x] `make lab-up` starts NetBox 4.7 with the plugin. The integration tests
   pass against it, with a least-privilege v2 token. (Narrowed from 4.7 and
-  4.6 on 2026-10-06; see below.)
+  4.6 on 2026-10-06; see below.) Passed locally and in three emulated CI
+  jobs on 2026-10-06.
 - [ ] Integration tests run in every GitLab and GitHub pipeline, and
-  `make project-lint` confirms the CI files mirror `make ci`.
-- [ ] Hook pipe-tests run in `make test` (ITEM-0017).
-- [ ] The prerequisites name the C compiler that `-race` needs (ITEM-0025).
-- [ ] The docs pages in the approved design exist, the generated references
-  are current, and the CHANGELOG is updated.
-- [ ] `/code-review high` and `/security-review` have run. M01 handles the
-  NetBox token, so the secrets trigger applies.
+  `make project-lint` confirms the CI files mirror `make ci`. GitLab passed
+  on `5e4f3d6` (reported by the user, 2026-10-06), and `make project-lint`
+  is clean; the GitHub result is still to come from the user.
+- [x] Hook pipe-tests run in `make test` (ITEM-0017).
+- [x] The prerequisites name the C compiler that `-race` needs (ITEM-0025,
+  ADR-0022).
+- [x] The docs pages in the approved design exist, the generated references
+  are current, and the CHANGELOG is updated (ITEM-0024; `make
+  generate-check`).
+- [x] `/code-review high` and `/security-review` have run. M01 handles the
+  NetBox token, so the secrets trigger applies (ITEM-0026; the security
+  review of 2026-10-06, below).
 - [ ] The manual verification is recorded, and the user has merged through an
-  MR with a merge commit.
+  MR with a merge commit. The verification is recorded below; the merge is
+  to come.
 
 ## Decided after approval
 
@@ -115,6 +125,67 @@ Append-only and dated. Record what was run and what was seen.
     it allows moving `main` without a commit (`git fetch . HEAD:main`,
     `git branch -f main`, `git update-ref`) and committing in a worktree on
     `main`. ITEM-0017 turns these cases into tests.
+- 2026-10-06: `/code-review high` on `main...m01-netbox-read-path` at
+  `a227636` found ten things, none blocking. Nine were fixed in ITEM-0026,
+  and one, a cost per record in the log handler that only grouped loggers
+  pay, is ITEM-0027, planned for M04.
+- 2026-10-06: The first real pipelines with the integration job failed: the
+  job needed more memory than the runner nodes had to spare. The user
+  narrowed the lab, the tests and support to NetBox 4.7 (ADR-0023,
+  ITEM-0028). In an emulated CI job, the resident peak of Docker-in-Docker
+  and the lab fell from 2,125 MiB to 1,119 MiB, and the job passed within
+  hard limits of 1.5 GiB for the service and 768 MiB for the job. The user
+  then reported that the GitLab pipeline on `5e4f3d6` passed.
+- 2026-10-06: Close checks, on `08785f0`.
+  - `make check` passes: vet and golangci-lint with 0 issues, the tests with
+    `-race`, govulncheck, gitleaks, Vale, the API ruleset self-test, project
+    lint and `generate-check`. `make build` and `make docs-links` pass.
+  - `make test-integration` passes against the local lab: every package,
+    with `internal/netbox` and `internal/cli` reading from NetBox 4.7.1 with
+    the plugin 1.7.2.
+  - **`/security-review`** on `main...m01-netbox-read-path`: no HIGH or
+    MEDIUM findings. It confirmed that the token can't reach another host
+    (redirects aren't followed; next-page links only lend their query), that
+    it doesn't reach logs, span attributes, errors or `config show`, and that
+    TLS verification is never weakened. Below its bar, but noted:
+    - `make lab-up` bound the lab to every interface for a `tcp://` Docker
+      host on `localhost`, against what the lab how-to says: fixed in
+      ITEM-0029;
+    - the CI's Docker-in-Docker service listens without TLS for the job's
+      length, as GitLab documents; on runners shared with other projects, a
+      NetworkPolicy or TLS-enabled Docker-in-Docker would close it;
+    - table output prints values of record types that nbpdns doesn't parse,
+      and NetBox's error details, without escaping terminal control
+      characters; NetBox is the operator's own source of truth.
+- 2026-10-06: **Manual verification**, against a fresh lab (`make lab-down`,
+  then `make lab-up`, healthy after 3m30s), with `bin/nbpdns` from
+  `make build`. The approved design's steps, as narrowed by ADR-0023, with
+  the data created through NetBox's REST API as the tutorial does, instead
+  of its UI:
+  1. The tutorial's name server, zone and seven records: each create
+     answered 201.
+  2. A user with only the view permission on the four `netbox_dns` object
+     types, and a v2 token, as in the read-only access guide; and a user with
+     no permissions, with its own token.
+  3. `config show`, with the reader's token from `NBPDNS_NETBOX_TOKEN_FILE`:
+     the token shows as `[redacted]` from `env NBPDNS_NETBOX_TOKEN_FILE`,
+     `log.format` and `netbox.url` from the file, and the rest as defaults.
+     The token isn't in the JSON output.
+  4. `netbox check`: NetBox 4.7.1 and `netbox_dns` 1.7.2 `ok`, the v2 token
+     accepted, each object type viewable (1 view, 1 zone, 1 name server, 9
+     records), and the `http://` warning; exit 0. `zones` and `records`, as
+     tables and as JSON, match the tutorial's output: 8 RRsets, the MX and
+     CNAME targets absolute, the TXT value quoted, SOA and NS managed, the
+     inactive CNAME listed, and no problems.
+  5. NetBox 4.6: not repeated, since it's no longer supported (ADR-0023).
+  6. The token without permissions: `check` fails each object type with
+     "the token's user can't view netbox_dns.view objects in NetBox (...);
+     give it the view permission on the DNS plugin's objects", exit 1, and
+     `zones` fails with the same message. A wrong v2 token: `check` stops at
+     "NetBox rejected the token (Invalid v2 token); check netbox.token", exit
+     1, and `records` fails with the same message.
+  7. At `--log-level debug`, a `records` run's log lines hold neither the
+     token nor its secret part.
 
 ## Approved design
 
