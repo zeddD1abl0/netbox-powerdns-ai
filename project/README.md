@@ -11,7 +11,7 @@
 |---|---|---|---|
 | [M00](milestones/M00-foundation.md) | Foundation | done | 16 of 16 |
 | [M01](milestones/M01-netbox-read-path.md) | NetBox read path | done | 12 of 12 |
-| [M02](milestones/M02-powerdns-read-path.md) | PowerDNS read path | in-progress | 6 of 7 |
+| [M02](milestones/M02-powerdns-read-path.md) | PowerDNS read path | in-progress | 7 of 8 |
 | [M03](milestones/M03-drift-report.md) | Drift report | planned | — |
 | [M04](milestones/M04-service.md) | Service | planned | 0 of 1 |
 | [M05](milestones/M05-rest-api.md) | REST API | planned | — |
@@ -40,6 +40,7 @@
 | [ITEM-0034](items/ITEM-0034-powerdns-lab-with-5-1-and-5-0-primaries.md) | PowerDNS lab with 5.1 and 5.0 primaries | task | done 2026-10-06 | — |
 | [ITEM-0035](items/ITEM-0035-powerdns-client.md) | PowerDNS client | feature | done 2026-10-06 | — |
 | [ITEM-0036](items/ITEM-0036-nbpdns-powerdns-commands-netbox-zones-group-docs-a.md) | nbpdns powerdns commands, netbox zones --group, docs and CHANGELOG | feature | done 2026-10-06 | — |
+| [ITEM-0037](items/ITEM-0037-test-and-support-only-powerdns-5-1-to-fit-the-ci-r.md) | Test and support only PowerDNS 5.1, to fit the CI runners | task | done 2026-10-06 | — |
 
 ## Open items in other milestones
 
@@ -75,4 +76,4 @@
 
 ## Decisions
 
-25 ADRs (20 accepted, 5 superseded), listed in [docs/adr](../docs/adr/_index.md).
+26 ADRs (20 accepted, 6 superseded), listed in [docs/adr](../docs/adr/_index.md).

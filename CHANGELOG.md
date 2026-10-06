@@ -27,7 +27,7 @@ All notable changes to this project are recorded here. The format follows
 - Documentation: a tutorial on reading PowerDNS zones, how-to guides on
   connecting nbpdns to PowerDNS and on putting the PowerDNS API behind a TLS
   proxy, and an explanation of how nbpdns reads PowerDNS.
-- PowerDNS Authoritative 5.1 and 5.0 are supported, read through each server
+- PowerDNS Authoritative 5.1 is supported, read through each server
   group's primary's HTTP API with its API key. Requests have a time limit and
   are retried when the failure may pass, redirects aren't followed, and TLS,
   a CA file, and a client certificate are supported. Plain `http://` works,
@@ -64,9 +64,9 @@ All notable changes to this project are recorded here. The format follows
   and are redacted everywhere they could be printed or logged. Unknown keys and
   variables are errors, and every problem is reported at once.
 - Configuration and command-line reference pages, generated from the code.
-- A development lab with NetBox 4.7 and the NetBox DNS plugin, in containers
-  (`make lab-up`, `make lab-down`). Integration tests run against it
-  (`make test-integration`), in every pipeline.
+- A development lab with NetBox 4.7 and the NetBox DNS plugin, and a PowerDNS
+  5.1 server, in containers (`make lab-up`, `make lab-down`). Integration
+  tests run against it (`make test-integration`), in every pipeline.
 - Logs on standard error, as JSON or text (`log.format`) from a chosen level
   (`log.level`). Every line carries the run's `trace_id`, `span_id`, and
   `request_id`, and outgoing requests carry the W3C `traceparent` header.

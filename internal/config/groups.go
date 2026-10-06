@@ -13,7 +13,7 @@ import (
 
 // GroupsKey is the config file key that declares the PowerDNS server
 // groups. Groups are structured resources, so only the config file sets
-// them: there's no environment variable or flag (ADR-0024).
+// them: there's no environment variable or flag (ADR-0026).
 const GroupsKey = "powerdns.groups"
 
 // A Group is a PowerDNS server group (ADR-0007): the NetBox views whose zones

@@ -57,8 +57,8 @@ func TestPowerDNSCommands(t *testing.T) {
 	})
 
 	t.Run("check with a wrong key", func(t *testing.T) {
-		code, out, stderr := run(t, configFile(t, labGroups("not-the-key", "_default_")), "powerdns", "check", "--group", "lab-b")
-		if code != exitError || !strings.Contains(out, "PowerDNS rejected the API key of server group lab-b") ||
+		code, out, stderr := run(t, configFile(t, labGroups("not-the-key", "_default_")), "powerdns", "check", "--group", "lab-a")
+		if code != exitError || !strings.Contains(out, "PowerDNS rejected the API key of server group lab-a") ||
 			!strings.Contains(stderr, "1 of 2 checks failed") {
 			t.Errorf("exit %d:\n%s\n%s", code, out, stderr)
 		}
@@ -78,14 +78,14 @@ func TestPowerDNSCommands(t *testing.T) {
 			}
 		}
 		code, out, _ = run(t, env, "powerdns", "zones", "--group", "lab-a")
-		if code != exitOK || !strings.Contains(out, fixtures["lab-a"].Zone) || strings.Contains(out, fixtures["lab-b"].Zone) {
+		if code != exitOK || !strings.Contains(out, fixtures["lab-a"].Zone) {
 			t.Errorf("exit %d:\n%s", code, out)
 		}
 	})
 
 	t.Run("records", func(t *testing.T) {
-		f := fixtures["lab-b"]
-		code, out, stderr := run(t, env, "powerdns", "records", "--group", "lab-b", "--zone", strings.ToUpper(strings.TrimSuffix(f.Zone, ".")), "-o", "json")
+		f := fixtures["lab-a"]
+		code, out, stderr := run(t, env, "powerdns", "records", "--group", "lab-a", "--zone", strings.ToUpper(strings.TrimSuffix(f.Zone, ".")), "-o", "json")
 		var gr struct {
 			Group string `json:"group"`
 			dns.Zone
@@ -94,11 +94,11 @@ func TestPowerDNSCommands(t *testing.T) {
 		if err := json.Unmarshal([]byte(out), &gr); err != nil || code != exitOK {
 			t.Fatalf("exit %d, %v: %s\n%s", code, err, out, stderr)
 		}
-		if gr.Group != "lab-b" || gr.Name != f.Zone || len(gr.RRsets) != len(f.RRsets) || gr.Problems == nil || len(gr.Problems) != 0 ||
+		if gr.Group != "lab-a" || gr.Name != f.Zone || len(gr.RRsets) != len(f.RRsets) || gr.Problems == nil || len(gr.Problems) != 0 ||
 			strings.Contains(out, `"view"`) {
 			t.Errorf("zone %s in %s, with %d RRsets and problems %v:\n%s", gr.Name, gr.Group, len(gr.RRsets), gr.Problems, out)
 		}
-		code, out, _ = run(t, env, "powerdns", "records", "--group", "lab-b", "--zone", f.Zone)
+		code, out, _ = run(t, env, "powerdns", "records", "--group", "lab-a", "--zone", f.Zone)
 		for _, row := range []string{"off." + f.Zone, "192.0.2.12", "disabled", `"h3,h2"`} {
 			if code != exitOK || !strings.Contains(out, row) {
 				t.Errorf("table has no %q:\n%s", row, out)

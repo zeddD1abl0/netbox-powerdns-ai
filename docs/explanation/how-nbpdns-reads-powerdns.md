@@ -33,7 +33,7 @@ and from M12 they learn which zones exist through catalog zones. From M13,
 nbpdns checks them with DNS queries.
 
 Server groups are declared in the config file, under `powerdns.groups`
-([ADR-0024](../adr/0024-read-powerdns-through-its-api-from-server-groups-i.md)).
+([ADR-0026](../adr/0026-read-powerdns-through-its-api-with-powerdns-5-1-on.md)).
 They're resources rather than settings, so the environment and flags can't
 declare them.
 

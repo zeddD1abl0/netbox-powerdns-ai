@@ -5,8 +5,8 @@ weight: 10
 
 # Run the development lab
 
-The development lab runs NetBox 4.7, with the NetBox DNS plugin, and two
-PowerDNS servers, in containers. The integration tests run against it, and
+The development lab runs NetBox 4.7, with the NetBox DNS plugin, and a
+PowerDNS 5.1 server, in containers. The integration tests run against it, and
 the tutorials use it. This guide starts the lab, reaches NetBox and PowerDNS,
 and removes the lab again.
 
@@ -16,7 +16,7 @@ You need:
 
 - the repository, and its [development prerequisites](../../README.md#development),
   which include Docker;
-- about 2.5 GB of free disk space and 1.5 GB of free memory.
+- about 2.2 GB of free disk space and 1.5 GB of free memory.
 
 The lab's own tool, docker-compose, is pinned in the repository and fetched on
 first use.
@@ -57,18 +57,18 @@ The lab runs one NetBox for each
 It has the superuser `admin`, with the password `nbpdns-lab-admin` and the
 v2 API token `nbt_nbpdnslabadm.nbpdnsLabAdminTokenNotForProduction00000`.
 
-The lab also runs one PowerDNS server for each supported PowerDNS release.
-Each is the primary of its own [server group](../reference/configuration.md#powerdnsgroups),
+The lab also runs one PowerDNS server for each
+[supported PowerDNS release](../reference/supported-versions.md#powerdns). Each
+is the primary of its own [server group](../reference/configuration.md#powerdnsgroups),
 with no secondaries:
 
 | Server group | PowerDNS | API URL |
 |---|---|---|
 | `lab-a` | 5.1 | `http://localhost:8151` |
-| `lab-b` | 5.0 | `http://localhost:8150` |
 
-Both have the API key `nbpdns-lab-powerdns-api-key-not-for-production`, and
-keep their zones inside their containers. Each API uses plain HTTP, so nbpdns
-warns that the key crosses the network unencrypted.
+It has the API key `nbpdns-lab-powerdns-api-key-not-for-production`, and keeps
+its zones inside its container. Its API uses plain HTTP, so nbpdns warns that
+the key crosses the network unencrypted.
 
 > [!WARNING]
 > These credentials are published in the repository, so the lab is for

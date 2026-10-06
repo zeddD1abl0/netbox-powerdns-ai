@@ -1,14 +1,14 @@
 ---
-title: "0024: Read PowerDNS through its API, from server groups in the config file"
-status: superseded by ADR-0026
+title: "0026: Read PowerDNS through its API, with PowerDNS 5.1 only"
+status: accepted
 date: 2026-10-06
 decision-makers: [jordan]
 requirements: [REQ-028, REQ-029, REQ-030, REQ-041, REQ-042]
 questions: [Q-021, Q-022, Q-039, Q-043, Q-053]
-supersedes:
+supersedes: ADR-0024
 ---
 
-# 0024: Read PowerDNS through its API, from server groups in the config file
+# 0026: Read PowerDNS through its API, with PowerDNS 5.1 only
 
 ## Context and problem statement
 
@@ -31,6 +31,17 @@ web server that serves the API speaks plain HTTP only; its own protections
 are the address it binds to and `webserver-allow-from`. M02 to M11 only
 read, but the key nbpdns holds can write.
 
+### Why this restates ADR-0024
+
+ADR-0024 supported PowerDNS 5.1 and 5.0, each the primary of a server group
+in the lab. The first pipeline with that lab failed: the integration job
+needed more memory than the runner nodes had to spare, as it had when the
+lab ran two NetBoxes (ADR-0023). The user decided on 2026-10-06: "Can we
+concentrate on just PowerDNS 5.1 for the moment".
+
+Accepted ADRs aren't edited, so this ADR restates ADR-0024 with the supported
+PowerDNS releases narrowed to 5.1. **The rest of the decision is unchanged.**
+
 ## Decision drivers
 
 - Read everything M03 needs from each group, through the API only (REQ-028).
@@ -41,6 +52,8 @@ read, but the key nbpdns holds can write.
 - Keep the API key, which can rewrite DNS, as safe as nbpdns can make it,
   and give operators a setup that keeps it off the network in clear.
 - Don't build abstractions before a second implementation needs them.
+- The integration job fits the CI runners, which have little memory to
+  spare.
 
 ## Considered options
 
@@ -48,7 +61,8 @@ read, but the key nbpdns holds can write.
 2. **Securing the API:** require HTTPS; allow `http://` only on the same
    host; or allow `http://` with a warning, with a TLS proxy as the
    reference setup. For the proxy: pass all methods, or only GET until M12.
-3. **Releases:** 5.1 only; 5.1 and 5.0; 5.1, 5.0 and 4.9.
+3. **Releases:** 5.1 only; 5.1 and 5.0; 5.1, 5.0 and 4.9. ADR-0024 chose 5.1
+   and 5.0; the runners couldn't fit the lab that needed.
 4. **Assigning zones to groups:** by NetBox view; by the zone's name servers;
    by a NetBox tag or custom field; or listed in the config file.
 5. **Where groups are declared:** the config file; environment variables and
@@ -81,15 +95,18 @@ TLS proxy that passes all methods.** The user chose both on 2026-10-06.
 - The key is a `config.Secret`: redacted wherever it could be printed or
   logged, and readable from a file.
 
-**Q-053: PowerDNS Authoritative 5.1 and 5.0.** 5.1 is the current release
-train (released 2026-06-03); 5.0 gets critical fixes until about March 2027;
-4.9 reached end of life around September 2026.
+**Q-053: PowerDNS Authoritative 5.1.** 5.1 is the current release train
+(released 2026-06-03). 5.0, which gets critical fixes until about March 2027,
+is no longer supported: the user chose 5.1 only on 2026-10-06, to fit the CI
+runners. 4.9 reached end of life around September 2026.
 - nbpdns reads `/api/v1/servers/{server_id}` for the daemon type and version.
   A server that isn't authoritative, such as a Recursor, is an error.
 - An unsupported release is a warning, and the command carries on;
   `nbpdns powerdns check` reports it as a failure, as for NetBox.
 - Each supported release runs in the lab, and the integration tests read
-  from it. A release is added to `Supported` only with its lab instance.
+  from it. A release is added to `Supported` only with its lab instance, and
+  only when the runners have room for one more PowerDNS server and its
+  image.
 
 **Assigning zones to groups: by NetBox view.** Each group lists the NetBox
 views it serves, and a view may be served by more than one group, as
@@ -138,14 +155,23 @@ own.
   the operator's own proxy rules stops a leaked key from writing.
 - Bad: groups can't come from the environment, so a container deployment
   needs a config file, even if its secrets come from files.
-- Bad: two PowerDNS releases to track, with the lab, as new trains appear.
+- Good: the lab runs one PowerDNS server, so the integration job needs less
+  memory and disk than with two.
+- Bad: deployments on PowerDNS 5.0 lose support. nbpdns still reads from
+  them, with a warning, but nothing tests it, and `nbpdns powerdns check`
+  fails.
+- Bad: the lab has one server group, so behavior across several groups is
+  tested against local test servers only, not the lab.
+- Bad: the supported release has to be updated, with the lab, as new trains
+  appear.
 
 ### Confirmation
 
 - `TestSupportedMatchesLab` fails if the supported PowerDNS releases and the
   lab's primaries differ.
-- Integration tests read fixtures from the lab's 5.1 and 5.0 primaries,
-  including a wrong key and an unknown `server_id`.
+- Integration tests read fixtures from the lab's 5.1 primary, including a
+  wrong key and an unknown `server_id`. The version check is also
+  unit-tested against a list of two releases.
 - Local test servers cover TLS, a CA file, a client certificate, redirects
   and retries.
 - The TLS proxy how-to is checked by hand against the lab, with a client
@@ -196,9 +222,10 @@ own.
 
 ## More information
 
-- ADR-0006 (PowerDNS through its API only), ADR-0007 (server groups and
-  catalog zones), ADR-0023 (the model).
+- ADR-0024, which this supersedes; ADR-0006 (PowerDNS through its API only),
+  ADR-0007 (server groups and catalog zones), ADR-0023 (the model).
 - The PowerDNS HTTP API: <https://doc.powerdns.com/authoritative/http-api/>.
 - The PowerDNS release lifecycle: <https://doc.powerdns.com/authoritative/appendices/EOL.html>.
-- Recorded in M02's design, 2026-10-06. Implemented by ITEM-0031 and
-  ITEM-0033 to ITEM-0036.
+- ADR-0024 was recorded in M02's design, 2026-10-06, and implemented by
+  ITEM-0031 and ITEM-0033 to ITEM-0036. This restatement is recorded by
+  ITEM-0037.

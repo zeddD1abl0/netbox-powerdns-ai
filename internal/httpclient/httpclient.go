@@ -1,5 +1,5 @@
 // Package httpclient is the HTTP client that nbpdns's API clients share
-// (ADR-0023, ADR-0024). It verifies TLS 1.2 or later against the system's
+// (ADR-0023, ADR-0026). It verifies TLS 1.2 or later against the system's
 // roots and an optional CA file, can present a client certificate, never
 // follows a redirect, sends W3C traceparent, and retries GET requests with
 // capped, jittered backoff that honors Retry-After. Each API client adds its

@@ -44,7 +44,6 @@ every one.
 | PowerDNS Authoritative Server |
 |---|
 | 5.1.x |
-| 5.0.x |
 
 Before it reads, each command asks the primary what it is:
 

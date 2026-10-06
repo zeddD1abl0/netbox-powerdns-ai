@@ -37,8 +37,9 @@ zones each group serves, by view. Read-only.
 
 ## Acceptance criteria
 
-- [ ] ADR-0024 and ADR-0025 are accepted. Q-021, Q-022, Q-039, Q-043 and Q-053
-  are answered, and REQ-041 and REQ-042 exist.
+- [ ] ADR-0024 and ADR-0025 are accepted, and ADR-0026 supersedes ADR-0024.
+  Q-021, Q-022, Q-039, Q-043 and Q-053 are answered, and REQ-041 and REQ-042
+  exist.
 - [ ] The NetBox client runs on `internal/httpclient`, with its tests
   unchanged and passing.
 - [ ] Every record type normalizes through miekg/dns. M01's tests still pass,
@@ -46,9 +47,9 @@ zones each group serves, by view. Read-only.
 - [ ] Server groups load from the config file, with strict fields, validation,
   key files, redaction and their sources in `config show`. Table-driven tests
   cover them, and the configuration reference documents them.
-- [ ] `make lab-up` starts PowerDNS 5.1 and 5.0 primaries beside NetBox 4.7.
-  The integration tests pass against both, and the job's memory is measured
-  and recorded.
+- [ ] `make lab-up` starts a PowerDNS 5.1 primary beside NetBox 4.7. The
+  integration tests pass against it, and the job's memory is measured and
+  recorded. (Narrowed from 5.1 and 5.0 on 2026-10-06; see below.)
 - [ ] `nbpdns powerdns check`, `zones` and `records`, and `nbpdns netbox zones
   --group`, work as designed, as tables and as JSON, with the exit codes.
 - [ ] The API key is never logged or printed. Requests carry `traceparent`,
@@ -81,6 +82,15 @@ zones each group serves, by view. Read-only.
 >   chooses its views (ITEM-0036).
 > - **An HTML error page gives its title** in both clients' errors, so a
 >   proxy's refusal reads on one line (ITEM-0036).
+>
+> Changed after the first pipeline, on 2026-10-06:
+>
+> - **PowerDNS 5.1 only.** The integration job ran out of memory on the
+>   runners again. The user narrowed the lab, the tests and the supported
+>   releases to PowerDNS 5.1, and the lab to one server group, `lab-a`;
+>   other releases are added as the runners have room (ADR-0026, which
+>   supersedes ADR-0024; ITEM-0037). Everything below that says 5.0 or
+>   `lab-b` is overridden.
 
 ## Verification log
 

@@ -2,7 +2,7 @@ package powerdns
 
 // These tests run the client against local HTTP servers that send only
 // status codes, headers and delays, and, where a body is needed, responses
-// recorded from the lab (ADR-0024). PowerDNS's own behavior is tested against
+// recorded from the lab (ADR-0026). PowerDNS's own behavior is tested against
 // the lab, in powerdns_integration_test.go. Transport behavior, such as
 // retries and TLS, is tested in internal/httpclient.
 
@@ -114,9 +114,9 @@ func TestServerCheck(t *testing.T) {
 		want            string // part of the error, or "" for supported
 	}{
 		{"authoritative", "5.1.4", ""},
-		{"authoritative", "5.0.7", ""},
 		{"authoritative", "v5.1.0", ""},
-		{"authoritative", "4.9.5", "runs PowerDNS 4.9.5, which isn't supported; nbpdns supports PowerDNS 5.1.x or 5.0.x"},
+		{"authoritative", "5.0.7", "runs PowerDNS 5.0.7, which isn't supported; nbpdns supports PowerDNS 5.1.x"},
+		{"authoritative", "4.9.5", "isn't supported"},
 		{"authoritative", "5.2.0-alpha1", "isn't supported"},
 		{"recursor", "5.1.4", "is a PowerDNS recursor, not an authoritative server"},
 	}
@@ -126,6 +126,23 @@ func TestServerCheck(t *testing.T) {
 		if (err == nil) != (tt.want == "") || (err != nil && !strings.Contains(err.Error(), tt.want)) {
 			t.Errorf("%s %s: %v, want an error containing %q", tt.daemon, tt.version, err, tt.want)
 		}
+	}
+}
+
+// TestServerReleases checks a server against a list of several releases, as
+// Supported was and will be again (ADR-0026).
+func TestServerReleases(t *testing.T) {
+	releases := []string{"5.1", "5.0"}
+	for _, tt := range []struct {
+		version string
+		want    bool
+	}{{"5.1.4", true}, {"5.0.7", true}, {"4.9.5", false}} {
+		if got := (&Server{DaemonType: "authoritative", Version: tt.version}).supported(releases); got != tt.want {
+			t.Errorf("%s: supported = %v, want %v", tt.version, got, tt.want)
+		}
+	}
+	if got := seriesText(releases); got != "5.1.x or 5.0.x" {
+		t.Errorf("seriesText = %q", got)
 	}
 }
 

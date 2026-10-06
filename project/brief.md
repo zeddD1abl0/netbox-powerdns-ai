@@ -230,3 +230,17 @@ The user then approved M02's plan, which also answers Q-021 (the API,
 directly), Q-039 (no backend interface until M03 needs one) and Q-043
 (server groups in the config file). They're recorded in ADR-0024 and
 ADR-0025, and as REQ-041 and REQ-042.
+
+## Answers, 2026-10-06 (the first M02 pipeline)
+
+The first pipeline with M02's lab failed for lack of memory on the runners
+again. The user said:
+
+> The pipeline has failed because of the amount of memory in use again. Can
+> we concentrate on just PowerDNS 5.1 for the moment
+
+nbpdns now supports and tests PowerDNS Authoritative 5.1 only, and the lab
+runs one PowerDNS server, the primary of the server group `lab-a`. This is
+recorded in ADR-0026, which supersedes ADR-0024, and REQ-041 is narrowed to
+match.
+

@@ -9,7 +9,7 @@ PowerDNS's API has no TLS of its own, and its key can change every zone on
 the server. This guide puts the API behind a TLS reverse proxy on the same
 host, so the key never crosses the network in clear text, and can also make
 the proxy demand a client certificate from nbpdns. It's the reference setup
-of [ADR-0024](../adr/0024-read-powerdns-through-its-api-from-server-groups-i.md),
+of [ADR-0026](../adr/0026-read-powerdns-through-its-api-with-powerdns-5-1-on.md),
 and uses nginx; any reverse proxy that terminates TLS works the same way.
 
 ## Before you start

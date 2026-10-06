@@ -29,8 +29,8 @@ may already be running.
    make lab-up
    ```
 
-   Besides NetBox, the lab runs two PowerDNS servers, each the primary of its
-   own server group: `lab-a` runs PowerDNS 5.1, and `lab-b` runs 5.0.
+   Besides NetBox, the lab runs a PowerDNS 5.1 server, the primary of the
+   server group `lab-a`.
    [Run the development lab](../how-to/run-the-development-lab.md) describes
    the lab in full.
 
@@ -91,7 +91,7 @@ nbpdns talks to, and the NetBox views whose zones it serves.
    printf '%s\n' "$PDNS_KEY" > pdns-lab.key
    ```
 
-2. Create a config file, `nbpdns.yaml`, that declares the lab's two groups and
+2. Create a config file, `nbpdns.yaml`, that declares the lab's group and
    asks for logs that are easy to read in a terminal:
 
    ```yaml
@@ -104,15 +104,11 @@ nbpdns talks to, and the NetBox views whose zones it serves.
          primary:
            url: http://localhost:8151
            api_key_file: pdns-lab.key
-       - name: lab-b
-         views: [_default_]
-         primary:
-           url: http://localhost:8150
-           api_key_file: pdns-lab.key
    ```
 
-   Both groups serve NetBox's default view, `_default_`. Server groups can only
-   be declared in the config file.
+   The group serves NetBox's default view, `_default_`. Server groups can only
+   be declared in the config file, and there can be as many as you have sites
+   or clusters.
 
 3. See the settings nbpdns has for lab-a:
 
@@ -144,23 +140,18 @@ bin/nbpdns powerdns check --config nbpdns.yaml
 ```
 
 ```text
-time=2026-10-06T14:39:38.244+10:00 level=WARN msg="a PowerDNS API URL uses http://, so its API key, which can change every zone, crosses the network unencrypted; put the API behind TLS" group=lab-a url=http://localhost:8151/ trace_id=e894… span_id=7482… request_id=ERPX…
-time=2026-10-06T14:39:38.247+10:00 level=WARN msg="a PowerDNS API URL uses http://, so its API key, which can change every zone, crosses the network unencrypted; put the API behind TLS" group=lab-b url=http://localhost:8150/ trace_id=e894… span_id=7482… request_id=ERPX…
+time=2026-10-06T15:15:33.994+10:00 level=WARN msg="a PowerDNS API URL uses http://, so its API key, which can change every zone, crosses the network unencrypted; put the API behind TLS" group=lab-a url=http://localhost:8151/ trace_id=7895… span_id=8404… request_id=6CXQ…
 GROUP  CHECK       RESULT   DETAIL
 lab-a  connection  warning  http://, so the API key, which can change every zone, crosses the network unencrypted
 lab-a  server      ok       PowerDNS Authoritative Server 5.1.4
 lab-a  key         ok       accepted
 lab-a  zones       ok       can read 1
-lab-b  connection  warning  http://, so the API key, which can change every zone, crosses the network unencrypted
-lab-b  server      ok       PowerDNS Authoritative Server 5.0.7
-lab-b  key         ok       accepted
-lab-b  zones       ok       can read 0
 ```
 
-The first two lines are log lines, on standard error. Neither lab server's API
-has TLS, so nbpdns warns, for each group, that a key that can change every
-zone crosses the network unencrypted. The table, on standard output, shows
-that each primary is a PowerDNS Authoritative Server of a supported release,
+The first line is a log line, on standard error. The lab server's API has no
+TLS, so nbpdns warns that a key that can change every zone crosses the
+network unencrypted. The table, on standard output, has rows for each group:
+its primary is a PowerDNS Authoritative Server of a supported release,
 accepted the key, and listed its zones. A warning doesn't fail the check.
 
 > [!WARNING]
@@ -168,7 +159,7 @@ accepted the key, and listed its zones. A warning doesn't fail the check.
 > [Put the PowerDNS API behind a TLS proxy](../how-to/put-the-powerdns-api-behind-a-tls-proxy.md)
 > explains.
 
-The rest of this tutorial leaves out the warnings.
+The rest of this tutorial leaves out the warning.
 
 ## List the zones
 
@@ -182,8 +173,8 @@ lab-a  tutorial.example.  Native  2026100601
 ```
 
 Your serial differs. You sent `1`, but PowerDNS sets the serial itself, from
-the date, whenever its API changes a zone. Add `--group lab-a` to list only
-one group's zones.
+the date, whenever its API changes a zone. With several groups declared, add
+`--group` to list only one group's zones.
 
 ## Read the zone's records
 
@@ -212,7 +203,8 @@ one group's zones.
    - The second `www` address is listed with its status, `disabled`.
      PowerDNS keeps it, but doesn't serve it.
 
-   With more than one group declared, `--group` says which primary to read.
+   `--group` says which group's primary to read. With only one group
+   declared, you can leave it out.
 
 2. Ask for the same records as JSON, which scripts can read:
 

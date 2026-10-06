@@ -45,7 +45,7 @@ func (n NetBox) URL() string {
 const PowerDNSAPIKey = "nbpdns-lab-powerdns-api-key-not-for-production" //nolint:gosec // The lab's published credential. gitleaks:allow
 
 // A PowerDNS is one of the lab's PowerDNS servers: the primary of one server
-// group (ADR-0024).
+// group (ADR-0026).
 type PowerDNS struct {
 	// Name is its compose service.
 	Name string
@@ -58,10 +58,11 @@ type PowerDNS struct {
 }
 
 // PowerDNSes are the lab's PowerDNS servers, one per supported release
-// (REQ-041), each the primary of its own group.
+// (REQ-041), each the primary of its own group. Each costs the CI job a
+// server and an image, so a release is only added when the runners have
+// room for it (ADR-0026).
 var PowerDNSes = []PowerDNS{
 	{Name: "powerdns-51", Group: "lab-a", Version: "5.1", Port: 8151},
-	{Name: "powerdns-50", Group: "lab-b", Version: "5.0", Port: 8150},
 }
 
 // URL returns the server's API base URL.

@@ -11,11 +11,11 @@ import (
 // Supported lists the PowerDNS Authoritative Server release series nbpdns
 // supports (REQ-041), newest first. The lab runs each one as the primary of
 // a server group (internal/lab), and the integration tests read from it, so
-// a release is only added here with its lab instance (ADR-0024).
-var Supported = []string{"5.1", "5.0"}
+// a release is only added here with its lab instance (ADR-0026).
+var Supported = []string{"5.1"}
 
 // SupportedSeries returns the supported release series, as text such as
-// "5.1.x or 5.0.x".
+// "5.1.x", or "5.1.x or 5.0.x" for more than one.
 func SupportedSeries() string { return seriesText(Supported) }
 
 func seriesText(releases []string) string {
@@ -71,7 +71,7 @@ func (c *Client) Server(ctx context.Context) (*Server, error) {
 
 // Connect reads what the server is, before a command reads its zones. A
 // server that isn't authoritative is an error. An unsupported release only
-// logs a warning, since reading may still work (ADR-0024).
+// logs a warning, since reading may still work (ADR-0026).
 func (c *Client) Connect(ctx context.Context) (*Server, error) {
 	s, err := c.Server(ctx)
 	if err != nil {

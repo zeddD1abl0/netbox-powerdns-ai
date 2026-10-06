@@ -48,7 +48,7 @@ for its commands and for reading the sources, with this registry on top.
 Some configuration isn't a single setting but a list of resources, each with
 fields of its own. The PowerDNS server groups are one: each group has a name,
 the NetBox views it serves, and its primary's URL and API key
-([ADR-0024](../adr/0024-read-powerdns-through-its-api-from-server-groups-i.md)).
+([ADR-0026](../adr/0026-read-powerdns-through-its-api-with-powerdns-5-1-on.md)).
 A list like that doesn't map onto environment variables and flags without an
 invented naming scheme, so only the config file declares it, under
 `powerdns.groups`.

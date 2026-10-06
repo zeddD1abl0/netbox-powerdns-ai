@@ -1,5 +1,5 @@
 // Package powerdns reads DNS data from PowerDNS Authoritative servers,
-// through their HTTP API (ADR-0006, ADR-0024): from each server group's
+// through their HTTP API (ADR-0006, ADR-0026): from each server group's
 // primary, into the model that NetBox's data is read into (internal/dns). It
 // only reads: every request is a GET.
 package powerdns
