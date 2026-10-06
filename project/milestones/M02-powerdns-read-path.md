@@ -37,31 +37,39 @@ zones each group serves, by view. Read-only.
 
 ## Acceptance criteria
 
-- [ ] ADR-0024 and ADR-0025 are accepted, and ADR-0026 supersedes ADR-0024.
+- [x] ADR-0024 and ADR-0025 are accepted, and ADR-0026 supersedes ADR-0024.
   Q-021, Q-022, Q-039, Q-043 and Q-053 are answered, and REQ-041 and REQ-042
-  exist.
-- [ ] The NetBox client runs on `internal/httpclient`, with its tests
-  unchanged and passing.
-- [ ] Every record type normalizes through miekg/dns. M01's tests still pass,
-  and NetBox's and PowerDNS's forms of the same data give one value.
-- [ ] Server groups load from the config file, with strict fields, validation,
+  exist (`project/requirements.md`).
+- [x] The NetBox client runs on `internal/httpclient`, with its tests
+  unchanged and passing (ITEM-0031; only the retry hook's type changed, and
+  two tests moved with their functions).
+- [x] Every record type normalizes through miekg/dns. M01's tests still pass,
+  and NetBox's and PowerDNS's forms of the same data give one value
+  (`TestValueAcrossSources`, the recorded PowerDNS fixture, and the manual
+  comparison below).
+- [x] Server groups load from the config file, with strict fields, validation,
   key files, redaction and their sources in `config show`. Table-driven tests
-  cover them, and the configuration reference documents them.
-- [ ] `make lab-up` starts a PowerDNS 5.1 primary beside NetBox 4.7. The
+  cover them, and the configuration reference documents them (ITEM-0033).
+- [x] `make lab-up` starts a PowerDNS 5.1 primary beside NetBox 4.7. The
   integration tests pass against it, and the job's memory is measured and
-  recorded. (Narrowed from 5.1 and 5.0 on 2026-10-06; see below.)
-- [ ] `nbpdns powerdns check`, `zones` and `records`, and `nbpdns netbox zones
-  --group`, work as designed, as tables and as JSON, with the exit codes.
-- [ ] The API key is never logged or printed. Requests carry `traceparent`,
+  recorded. (Narrowed from 5.1 and 5.0 on 2026-10-06; see below.) ITEM-0034
+  and ITEM-0037 record the measurements.
+- [x] `nbpdns powerdns check`, `zones` and `records`, and `nbpdns netbox zones
+  --group`, work as designed, as tables and as JSON, with the exit codes
+  (ITEM-0036, and the manual verification below).
+- [x] The API key is never logged or printed. Requests carry `traceparent`,
   `http://` warns, and redirects aren't followed. TLS, CA files and client
-  certificates are tested.
-- [ ] The docs pages above exist, the generated references are current, and
-  the CHANGELOG is updated.
-- [ ] `/code-review high` and `/security-review` have run, since M02 handles
-  API keys.
+  certificates are tested (`internal/httpclient` and `internal/powerdns`
+  tests; the security review below).
+- [x] The docs pages above exist, the generated references are current, and
+  the CHANGELOG is updated (ITEM-0036; `make generate-check`).
+- [x] `/code-review high` and `/security-review` have run, since M02 handles
+  API keys (ITEM-0038, ITEM-0039).
 - [ ] The manual verification is recorded. The GitLab pipeline passes, and
   so does GitHub's once ITEM-0030 restores the mirror. The user has merged
-  through an MR with a merge commit.
+  through an MR with a merge commit. The verification is recorded below, and
+  GitLab passed on `c5b4bea` (reported by the user, 2026-10-06); GitHub's
+  run and the merge are to come.
 
 ## Decided after approval
 
@@ -95,6 +103,69 @@ zones each group serves, by view. Read-only.
 ## Verification log
 
 Append-only and dated. Record what was run and what was seen.
+
+- 2026-10-06: The first pipeline with M02's lab (PowerDNS 5.1 and 5.0) ran
+  out of memory on the runners. The user narrowed to PowerDNS 5.1 (ADR-0026,
+  ITEM-0037), and PowerDNS now starts once NetBox is healthy. In the emulated
+  CI job, the resident peak of Docker-in-Docker and the lab fell from 1,279
+  MiB to 1,163 to 1,240 MiB; NetBox's first-start migrations vary by about
+  100 MiB from run to run. The user then reported that the GitLab pipeline on
+  `c5b4bea` passed.
+- 2026-10-06: `/code-review high` on `origin/main...m02-powerdns-read-path`
+  at `c5b4bea` found ten things, all fixed in ITEM-0038: a crash in the
+  error-page title search for characters that grow when lowercased; `powerdns
+  check` stopping at a group it couldn't build a client for; a false "out of
+  range" for digests given in chunks of digits; the root zone's ID dropped
+  from its URL; a 404 blaming only `server_id`; a credentials message that
+  named a token; two release checks; two tokenizers; one query per view in
+  `netbox zones --group`; and a secret that YAML reads as a number changing
+  silently.
+- 2026-10-06: **`/security-review`** on `origin/main...m02-powerdns-read-path`
+  at `258069b`: no finding at the report's bar. It confirmed that the API key
+  can't reach another host (no redirects followed; a zone ID from the server
+  is one escaped path segment; `server_id` is checked), that no key, token or
+  client private key reaches logs, spans, errors, `config show` or JSON,
+  that client certificates don't weaken TLS verification, that miekg/dns
+  parses RDATA only (no `$INCLUDE` or file access), and that a group's key
+  can't go to another group's URL. One candidate, rated 3 of 10 by its
+  filter, was fixed anyway: the error for a secret that YAML reads as a
+  number quoted the value (ITEM-0039).
+- 2026-10-06: Close checks, on `fc198ac`: `make check` passes (vet and
+  golangci-lint with 0 issues, the tests with `-race`, govulncheck, gitleaks,
+  Vale, the API ruleset self-test, project lint and `generate-check`).
+  `make test-integration` passes against the local lab, with every package,
+  `internal/powerdns` and `internal/cli` reading from PowerDNS 5.1.4.
+  `make docs-links` passes.
+- 2026-10-06: **Manual verification**, on a fresh lab (`make lab-down`, then
+  `make lab-up`; PowerDNS started after NetBox was healthy), with `bin/nbpdns`
+  from `make build`:
+  1. The tutorial: its zone created through PowerDNS's API (201); a config
+     file with group `lab-a` and its key in a file. `config show` lists the
+     key as `[redacted]`, from the file, and the key isn't in the JSON.
+     `powerdns check` passes every check, with the `http://` warning; `zones`
+     lists the zone.
+  2. Failures, each with exit 1: a wrong key fails the `key` check with
+     "PowerDNS rejected the API key of server group lab-a (Unauthorized)";
+     `server_id: nosuch` names the URL asked for, and both `server_id` and
+     `url` to check; a URL with nothing listening says PowerDNS isn't
+     reachable.
+  3. `records` lists the disabled `www` address as `disabled`, the MX name
+     lowercase, and the TLSA digest in uppercase.
+  4. The same zone, `same.example`, entered in NetBox in NetBox's style
+     (relative names, an unquoted CAA value, lowercase hex, an unquoted
+     `alpn`) and in PowerDNS in its own: `netbox records` and `powerdns
+     records` give the same TTLs and values for all seven RRsets other than
+     SOA and NS, with no problems on either side. PowerDNS refused the
+     HTTPS record written with a quoted `alpn`, since its API takes only its
+     own form; that matters for writing, and is ITEM-0040, in M12.
+  5. `netbox zones --group lab-a`, with `views: [same-view]`, lists only
+     `same.example.`.
+  6. The TLS proxy how-to: a temporary nginx 1.29 in front of lab-a's
+     primary, with a test CA and a client certificate. With `ca_file`,
+     `cert_file` and `key_file`, `powerdns check` passes over `https://`;
+     without the client certificate, it fails with "status 400: 400 No
+     required SSL certificate was sent", exit 1.
+  7. At `--log-level debug`, a `records` run's six log lines hold no key.
 
 ## Approved design
 
