@@ -52,7 +52,8 @@ v2 API token `nbt_nbpdnslabadm.nbpdnsLabAdminTokenNotForProduction00000`.
 > [!WARNING]
 > These credentials are published in the repository, so the lab is for
 > development only. On a local Docker host, its ports listen on `127.0.0.1`
-> only.
+> only. That includes a local Docker host reached over TCP, such as
+> `tcp://localhost:2375` or `tcp://127.0.0.1:2375`.
 
 If `DOCKER_HOST` names a remote Docker host, such as `tcp://docker:2375`, the
 lab runs there. Its ports are then published on every interface of that

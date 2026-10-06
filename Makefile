@@ -149,11 +149,12 @@ generate-check: ## Fail if a generated reference page is out of date
 # The lab (deploy/dev/compose.yaml, REQ-036) runs on the Docker host that
 # DOCKER_HOST names, or the local one.
 LAB_DIR := deploy/dev
-# The lab's credentials are public, so on a local Docker host its ports listen
-# on 127.0.0.1 only. A remote one (DOCKER_HOST=tcp://..., as with
-# Docker-in-Docker in CI) is reached by name, so they listen on every
-# interface there.
-LAB_BIND_ADDRESS := $(if $(filter tcp://%,$(DOCKER_HOST)),0.0.0.0,127.0.0.1)
+# The lab's credentials are public, so on a local Docker host, including one
+# reached over TCP on a loopback address, its ports listen on 127.0.0.1 only.
+# A remote one (DOCKER_HOST=tcp://..., as with Docker-in-Docker in CI) is
+# reached by name, so they listen on every interface there.
+LAB_LOOPBACK := tcp://localhost tcp://localhost:% tcp://127.% tcp://[::1] tcp://[::1]:%
+LAB_BIND_ADDRESS := $(if $(filter-out $(LAB_LOOPBACK),$(filter tcp://%,$(DOCKER_HOST))),0.0.0.0,127.0.0.1)
 LAB_COMPOSE = LAB_BIND_ADDRESS=$(LAB_BIND_ADDRESS) $(DOCKER_COMPOSE) --file $(LAB_DIR)/compose.yaml
 
 .PHONY: lab-up
