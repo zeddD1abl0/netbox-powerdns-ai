@@ -6,8 +6,8 @@ weight: 1
 # Documentation
 
 > [!NOTE]
-> The project is in M0 (Foundation). No product features exist yet, so these
-> sections are empty apart from the decision records and contributor guides.
+> nbpdns is in early development and has no release yet. Pages are added to
+> each section as the features they describe arrive.
 
 The documentation follows the [Diátaxis](https://diataxis.fr/) framework. Each
 page belongs to exactly one section.

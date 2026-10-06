@@ -1,0 +1,106 @@
+# The development lab (REQ-036): NetBox 4.7 with the NetBox DNS plugin, for
+# the integration tests and the tutorials. It runs one NetBox per supported
+# release (internal/lab), and each costs the CI job a NetBox and a PostgreSQL
+# server, so a release is only added when the runners have room (ADR-0023).
+#
+#   make lab-up    start the lab, and wait until it's healthy
+#   make lab-down  remove the lab and its data
+#
+# NetBox 4.7 listens on port 8047 on the Docker host: localhost, or the host
+# in DOCKER_HOST. It has the superuser admin, with the v2 API token
+# nbt_nbpdnslabadm.nbpdnsLabAdminTokenNotForProduction00000.
+# The ports are published on LAB_BIND_ADDRESS, which the Makefile sets:
+# 127.0.0.1 on a local Docker host, and every interface on a remote one.
+#
+# Every image is pinned by digest, and the plugin by version. The credentials
+# are for this lab only.
+#
+# Each NetBox container installs the DNS plugin and enables it as it starts,
+# then runs netbox-docker's own entrypoint. That needs no image build, which
+# since compose v5 would also need buildx pinned and a Dockerfile to maintain,
+# and no bind mount, which under Docker-in-Docker would resolve on the Docker
+# host rather than in the checkout.
+
+name: nbpdns-lab
+
+x-postgres: &postgres
+  image: docker.io/library/postgres:18-trixie@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+  environment:
+    POSTGRES_USER: netbox
+    POSTGRES_PASSWORD: nbpdns-lab-db # gitleaks:allow
+    POSTGRES_DB: netbox
+  healthcheck:
+    test: pg_isready -q -t 2 -d netbox -U netbox
+    start_period: 60s
+    start_interval: 2s
+    interval: 30s
+
+x-netbox: &netbox
+  command:
+    - sh
+    - -c
+    - >-
+      /usr/local/bin/uv pip install --quiet "netbox-plugin-dns==$${NETBOX_DNS_VERSION}" &&
+      echo 'PLUGINS = ["netbox_dns"]' > /etc/netbox/config/plugins.py &&
+      exec /opt/netbox/docker-entrypoint.sh /opt/netbox/launch-netbox.sh
+  healthcheck:
+    # netbox-docker's own check, which images before netbox-docker 5.1 don't
+    # ship as a script.
+    test: curl -sf http://localhost:8080/login/ >/dev/null || exit 1
+    # The first start applies every migration, which takes minutes.
+    start_period: 900s
+    start_interval: 5s
+    interval: 30s
+    timeout: 5s
+
+x-netbox-env: &netbox-env
+  DB_USER: netbox
+  DB_PASSWORD: nbpdns-lab-db # gitleaks:allow
+  DB_NAME: netbox
+  REDIS_HOST: valkey
+  REDIS_CACHE_HOST: valkey
+  SECRET_KEY: nbpdns-lab-secret-key-not-for-production-use-0000000000 # gitleaks:allow
+  API_TOKEN_PEPPER_1: nbpdns-lab-token-pepper-not-for-production-use-000000 # gitleaks:allow
+  SKIP_SUPERUSER: "false"
+  SUPERUSER_NAME: admin
+  SUPERUSER_EMAIL: admin@example.com
+  SUPERUSER_PASSWORD: nbpdns-lab-admin # gitleaks:allow
+  SUPERUSER_API_KEY: nbpdnslabadm # gitleaks:allow
+  SUPERUSER_API_TOKEN: nbpdnsLabAdminTokenNotForProduction00000 # gitleaks:allow
+  GRANIAN_WORKERS: "2"
+  # No calls out to GitHub for release checks.
+  RELEASE_CHECK_URL: ""
+
+services:
+  postgres-47:
+    <<: *postgres
+    volumes:
+      - postgres-47:/var/lib/postgresql
+
+  valkey:
+    image: docker.io/valkey/valkey:9.1-trixie@sha256:418652cfb58ef879d4978c33553735d7147016032d5aefaa14c828e611eb9dfd
+    healthcheck:
+      test: valkey-cli ping | grep -q PONG
+      start_period: 30s
+      start_interval: 1s
+      interval: 30s
+
+  netbox-47:
+    <<: *netbox
+    image: docker.io/netboxcommunity/netbox:v4.7.1-5.1.1@sha256:59e3e5954d0243d8648f2fa7ba82cf7c7770aaeef392026cca8b21cd67411e74
+    environment:
+      <<: *netbox-env
+      NETBOX_DNS_VERSION: "1.7.2"
+      DB_HOST: postgres-47
+      REDIS_DATABASE: "0"
+      REDIS_CACHE_DATABASE: "1"
+    depends_on:
+      postgres-47:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    ports:
+      - "${LAB_BIND_ADDRESS:-127.0.0.1}:8047:8080"
+
+volumes:
+  postgres-47:

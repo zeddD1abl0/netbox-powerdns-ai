@@ -9,8 +9,7 @@ lives in `project/`, and decisions live in `docs/adr/`.
 1. Read [`project/README.md`](project/README.md), the board. It shows the
    current milestone, the open items and the open questions.
 2. Read the current milestone's file in [`project/milestones/`](project/milestones/).
-3. Read only the items, ADRs and docs the task needs. Don't read whole
-   directories.
+3. Read only the items, ADRs and docs the task needs, not whole directories.
 
 ## Where things live
 
@@ -23,7 +22,7 @@ lives in `project/`, and decisions live in `docs/adr/`.
 | Decisions and their rationale | `docs/adr/nnnn-*.md` |
 | Product documentation (Diátaxis) | `docs/tutorials/`, `docs/how-to/`, `docs/reference/`, `docs/explanation/` |
 | How to write the docs | [`docs/contributing/documentation-style.md`](docs/contributing/documentation-style.md) |
-| API contract (from M1) | `api/openapi.yaml` |
+| API contract (from M05) | `api/openapi.yaml` |
 
 ## Workflow
 
@@ -37,9 +36,9 @@ lives in `project/`, and decisions live in `docs/adr/`.
     the milestone starts.
   - Commit when each item is done. Checkpoint commits are fine.
   - Use Conventional Commits, with a `Refs: ITEM-nnnn` trailer on every commit.
-  - Never commit to `main`, merge into `main`, or push. A hook blocks commits on
-    `main`.
-  - The user reviews the branch, merges it (not a squash merge) and pushes.
+  - Never commit to `main`, merge into it, or push; a hook blocks commits on
+    `main`. The user pushes the branch and merges it through a GitLab merge
+    request with a merge commit, never a squash ([ADR-0018](docs/adr/0018-merge-milestones-through-gitlab-merge-requests.md)).
 - Don't implement milestone N until milestone N-1 is **complete** (every item
   done, `make check` green) **and merged** (its branch is in `main`). If asked
   to start early, warn and list what's outstanding. The user may override.
@@ -51,11 +50,12 @@ lives in `project/`, and decisions live in `docs/adr/`.
 - Status lives in front matter: `open` → `in-progress` → `done`, or `blocked` or
   `wontfix`. Set `closed:` when an item is done or dropped.
 - **Files never move or get renamed.** Closing an item changes its status only.
+  The one exception: a planned milestone stub with no work yet may be
+  rewritten or renamed by a re-plan recorded in an ADR ([ADR-0019](docs/adr/0019-re-slice-the-milestones-into-smaller-steps.md)).
 - Item notes are append-only and dated (`YYYY-MM-DD`).
 - Before a session ends, append the state and next steps to the in-progress item's notes.
 - A decision with lasting consequences gets an ADR (`new-adr` skill,
-  `make adr TITLE="…"`). Accepted ADRs aren't edited: a new ADR supersedes
-  them.
+  `make adr TITLE="…"`). Accepted ADRs aren't edited; new ones supersede them.
 - A problem found while working becomes an item, not a code comment or a TODO.
 - When a question is answered, move it from **Open questions** to **Answered**
   in `project/requirements.md` with the date. Link the ADR or REQ it produced.
@@ -65,9 +65,9 @@ lives in `project/`, and decisions live in `docs/adr/`.
 
 ## Principles
 
-1. **Self-contained and not tied to a forge** ([ADR-0014](docs/adr/0014-toolchain-pinned-release-binaries-on-glibc-linux.md)).
+1. **Self-contained and not tied to a forge** ([ADR-0022](docs/adr/0022-toolchain-with-the-c-compiler-that-race-needs.md)).
    Develop on glibc Linux amd64; the prerequisites are Go, Docker, make, curl,
-   tar and sha256sum. Pin every tool: release binaries by SHA-256 in
+   tar, sha256sum and gcc (for `-race`). Pin every tool: release binaries by SHA-256 in
    `tools/tools.mk`, others in `tools/<name>/go.mod`. Elsewhere, `make shell`.
    CI files only call make targets. Vendor UI assets; no CDNs. Don't rely on
    forge features (issues, wiki, Pages).

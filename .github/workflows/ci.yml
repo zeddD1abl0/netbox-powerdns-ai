@@ -1,6 +1,6 @@
 # CI for nbpdns on GitHub, mirroring .gitlab-ci.yml's stages with `needs`
 # (ADR-0016): lint, then test, then build, then security. Every job only runs
-# make targets (ADR-0014). `make project-lint` checks that together the jobs
+# make targets (ADR-0022). `make project-lint` checks that together the jobs
 # run exactly what `make ci` runs, in the Makefile's CI_IMAGE.
 name: ci
 
@@ -27,7 +27,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - run: make vet lint
+      - run: make vet lint generate-check
 
   docs-lint:
     runs-on: ubuntu-latest
@@ -67,9 +67,38 @@ jobs:
           persist-credentials: false
       - run: make test
 
+  # The lab runs in a privileged Docker-in-Docker service.
+  integration-test:
+    needs: [go-lint, docs-lint, api-lint, project-lint]
+    runs-on: ubuntu-latest
+    container: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
+    services:
+      docker:
+        image: docker:29.8.1-dind@sha256:3f3c01aaaebf7cce837356b688b7c059a4749f10bd7660dec7c58fc454a283f0
+        options: --privileged
+        env:
+          DOCKER_TLS_CERTDIR: ""
+    env:
+      DOCKER_HOST: tcp://docker:2375
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: make test-integration
+
   # Stage: build
+  build:
+    needs: [unit-test, integration-test]
+    runs-on: ubuntu-latest
+    container: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: make build
+
   docs-site:
-    needs: [unit-test]
+    needs: [unit-test, integration-test]
     runs-on: ubuntu-latest
     container: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
     steps:
@@ -80,7 +109,7 @@ jobs:
 
   # Stage: security
   vuln:
-    needs: [docs-site]
+    needs: [build, docs-site]
     runs-on: ubuntu-latest
     container: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
     steps:
@@ -90,7 +119,7 @@ jobs:
       - run: make vuln
 
   secrets:
-    needs: [docs-site]
+    needs: [build, docs-site]
     runs-on: ubuntu-latest
     container: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
     steps:

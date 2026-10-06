@@ -6,11 +6,18 @@
 # command's text, so it's a safety net against mistakes, not a sandbox.
 input=$(cat)
 # Take the command from the hook input. Without jq, fall back to the whole
-# input: that can only produce extra denials, never miss a commit.
+# input with the JSON escapes that matter here undone (\\, \", \n, \t, \r), so
+# the command reads as jq would give it: that can only produce extra denials,
+# never miss a commit. \\ goes through a placeholder, so \\n stays \n.
 if command -v jq >/dev/null 2>&1; then
 	cmd=$(jq -r '.tool_input.command // empty' <<<"$input")
 else
-	cmd=$input
+	cmd=${input//\\\\/$'\x01'}
+	cmd=${cmd//\\\"/\"}
+	cmd=${cmd//\\n/$'\n'}
+	cmd=${cmd//\\t/$'\t'}
+	cmd=${cmd//\\r/$'\r'}
+	cmd=${cmd//$'\x01'/\\}
 fi
 
 # `git`, perhaps by path (/usr/bin/git), then any global options, then the

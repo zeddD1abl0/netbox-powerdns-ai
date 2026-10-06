@@ -10,4 +10,7 @@ Examples: the sync model, the audit chain, the threat model.
 
 For individual design decisions, see the [decision records](../adr/).
 
-No pages yet. The threat model is planned for M1.
+- [How nbpdns reads NetBox](how-nbpdns-reads-netbox.md)
+- [Configuration sources and precedence](configuration-sources-and-precedence.md)
+
+The threat model is planned for M16.

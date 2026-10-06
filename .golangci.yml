@@ -4,6 +4,8 @@ version: "2"
 
 run:
   timeout: 5m
+  # Lint the integration tests too, which carry this build tag.
+  build-tags: [integration]
 
 linters:
   # standard = errcheck, govet, ineffassign, staticcheck, unused.
@@ -21,12 +23,21 @@ linters:
     - noctx # HTTP requests built without a context
     - nolintlint # //nolint directives must be specific and explained
     - revive # the successor to golint
+    - sloglint # log/slog calls pass a context, so every line carries the trace and request IDs
     - rowserrcheck # sql.Rows.Err is checked
     - sqlclosecheck # sql.Rows and sql.Stmt are closed
     - unconvert # unnecessary type conversions
     - unparam # unused function parameters and results
     - usestdlibvars # use net/http constants instead of literals
   settings:
+    sloglint:
+      context: all # every call passes a context (CLAUDE.md: IDs on every line)
+      no-global: all # no package-level slog.Info: loggers are configured per run
+      static-msg: true
+      msg-style: lowercased
+      key-naming-case: snake
+      # Keys that slog or the logging handler sets on every line.
+      forbidden-keys: [time, level, msg, source, trace_id, span_id, request_id]
     misspell:
       locale: US # the Google developer documentation style guide uses US spelling
     nolintlint:
@@ -46,6 +57,15 @@ linters:
       - path: tools/projctl/
         linters: [gosec]
         text: "G122|G301|G302|G304|G306"
+      # Tests use fake credentials, to prove they're rejected or redacted.
+      - path: _test\.go
+        linters: [gosec]
+        text: "G101"
+      # hooktest runs the repository's own hooks, and the pinned tools the
+      # Makefile names in its environment, on scratch files.
+      - path: tools/hooktest/
+        linters: [gosec]
+        text: "G204|G703"
 
 formatters:
   enable:

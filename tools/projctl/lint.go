@@ -322,7 +322,7 @@ func lintLinks(root string) ([]Problem, error) {
 }
 
 // lintCI checks that forge CI files only run make targets, don't pull CI
-// logic in any other way (ADR-0014), and together run exactly what `make ci`
+// logic in any other way (ADR-0022), and together run exactly what `make ci`
 // runs, with every job in the Makefile's CI_IMAGE and none able to pass or be
 // skipped while its target fails (ADR-0016).
 func lintCI(root string) ([]Problem, error) {

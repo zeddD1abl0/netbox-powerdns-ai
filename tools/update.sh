@@ -1,5 +1,5 @@
 #!/bin/sh
-# Updates or checks the pinned tool binaries in tools/tools.mk (ADR-0014).
+# Updates or checks the pinned tool binaries in tools/tools.mk (ADR-0022).
 #
 #   tools/update.sh          move every tool to its latest release
 #   tools/update.sh --check  keep the versions; re-derive every pinned SHA-256
@@ -30,6 +30,13 @@ mkval() {
 	make --no-print-directory -s -f "$mk" --eval 'print-value: ; @echo $($(PRINT))' print-value PRINT="$name" "$@"
 }
 
+# tag PREFIX VERSION: the release tag for VERSION, v<VERSION> unless the tool
+# sets _TAG.
+tag() {
+	t=$(mkval "${1}_TAG" "${1}_VERSION=$2")
+	echo "${t:-v$2}"
+}
+
 api() {
 	if [ -n "${GITHUB_TOKEN:-}" ]; then
 		curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" "$1"
@@ -48,8 +55,18 @@ for entry in $(mkval BINARY_TOOLS); do
 	repo=$(mkval "${prefix}_REPO")
 	old=$(mkval "${prefix}_VERSION")
 	if [ "$mode" = latest ]; then
-		new=$(api "https://api.github.com/repos/$repo/releases/latest" |
-			sed -n -E 's/^ *"tag_name": *"v?([^"]+)".*/\1/p' | head -n 1)
+		latest=$(api "https://api.github.com/repos/$repo/releases/latest" |
+			sed -n -E 's/^ *"tag_name": *"([^"]+)".*/\1/p' | head -n 1)
+		# The version is the tag without the tool's tag prefix, such as v.
+		pfx=$(tag "$prefix" @)
+		pfx=${pfx%@}
+		case $latest in
+		"$pfx"*) new=${latest#"$pfx"} ;;
+		*)
+			echo "update: $repo: tag '$latest' doesn't start with '$pfx'" >&2
+			exit 1
+			;;
+		esac
 	else
 		new=$old
 	fi
@@ -63,7 +80,7 @@ for entry in $(mkval BINARY_TOOLS); do
 	esac
 
 	sums=$(mkval "${prefix}_CHECKSUMS" "${prefix}_VERSION=$new")
-	curl -fsSL -o "$tmp/sums" "https://github.com/$repo/releases/download/v$new/$sums"
+	curl -fsSL -o "$tmp/sums" "https://github.com/$repo/releases/download/$(tag "$prefix" "$new")/$sums"
 
 	sed -i -E "s/^(${prefix}_VERSION[[:space:]]*:= ).*/\\1$new/" "$out"
 	for platform in $(sed -n -E "s/^${prefix}_SHA256_([a-z0-9-]+).*/\\1/p" "$mk"); do

@@ -10,9 +10,9 @@ runs as a single binary or a container, and has a web UI, an API, SSO, and
 IaC-driven configuration.
 
 > [!NOTE]
-> This project is at **M0 (Foundation)**. There's no product code yet. The
-> scope is being settled; see the open questions in
-> [`project/requirements.md`](project/requirements.md).
+> This project is in early development and has no release yet. The
+> [project board](project/README.md) shows the current milestone and what
+> comes next.
 
 ## Where to look
 
@@ -28,13 +28,16 @@ IaC-driven configuration.
 
 Claude develops this project from start to finish, following
 [`CLAUDE.md`](CLAUDE.md). Development and CI run on glibc Linux amd64 (Debian
-or Ubuntu). The only prerequisites are Go, Docker, make, curl, tar, and
-sha256sum ([ADR-0014](docs/adr/0014-toolchain-pinned-release-binaries-on-glibc-linux.md)).
+or Ubuntu). The only prerequisites are Go, Docker, make, curl, tar,
+sha256sum, and a C compiler, which the race detector needs: on Debian or
+Ubuntu, `gcc` and `libc6-dev`
+([ADR-0022](docs/adr/0022-toolchain-with-the-c-compiler-that-race-needs.md)).
 Every other tool is pinned in the repository and fetched on first use. On
 other platforms, `make shell` runs everything inside the CI image.
 
 ```shell
 make            # list every target
+make build      # build bin/nbpdns
 make ci         # run exactly what CI runs
 make docs-serve # preview the documentation site
 ```

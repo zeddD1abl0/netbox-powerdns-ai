@@ -1,14 +1,16 @@
-# Pinned tool release binaries (ADR-0014), included by the Makefile.
+# Pinned tool release binaries (ADR-0022), included by the Makefile.
 #
 # Each tool has a repository, a version, and per platform an asset name and
 # the SHA-256 that the download must match. The URL is
-#   https://github.com/<REPO>/releases/download/v<VERSION>/<ASSET>
-# Only linux-amd64 is pinned for now. To add a platform, add an _ASSET_ and a
-# _SHA256_ line for it to every tool.
+#   https://github.com/<REPO>/releases/download/<TAG>/<ASSET>
+# where TAG is v<VERSION>, unless the tool sets _TAG. Only linux-amd64 is
+# pinned for now. To add a platform, add an _ASSET_ and a _SHA256_ line for it
+# to every tool.
 #
 # `make tools-update` rewrites the _VERSION and _SHA256_ lines from each
 # tool's latest release (tools/update.sh); _CHECKSUMS names that release's
-# checksums file. MEMBER is the binary's path inside the archive.
+# checksums file. MEMBER is the binary's path inside the .tar.gz asset, or -
+# when the asset is the binary itself.
 
 GOLANGCI_LINT_REPO                  := golangci/golangci-lint
 GOLANGCI_LINT_VERSION               := 2.14.0
@@ -52,5 +54,22 @@ HTMLTEST_ASSET_linux-amd64          = htmltest_$(HTMLTEST_VERSION)_linux_amd64.t
 HTMLTEST_SHA256_linux-amd64         := 775c597ee74899d6002cd2d93076f897f4ba68686bceabe2e5d72e84c57bc0fb
 HTMLTEST_MEMBER_linux-amd64         = htmltest
 
+JQ_REPO                             := jqlang/jq
+JQ_VERSION                          := 1.8.2
+JQ_TAG                              = jq-$(JQ_VERSION)
+JQ_CHECKSUMS                        = sha256sum.txt
+JQ_ASSET_linux-amd64                = jq-linux-amd64
+JQ_SHA256_linux-amd64               := b1c22172dd303f3be49e935aa56aa48a8b7a46e0bc838b4997d3bb451495870f
+JQ_MEMBER_linux-amd64               = -
+
+# docker-compose runs the development lab (deploy/dev/compose.yaml).
+DOCKER_COMPOSE_REPO                 := docker/compose
+DOCKER_COMPOSE_VERSION              := 5.5.1
+DOCKER_COMPOSE_CHECKSUMS            = checksums.txt
+DOCKER_COMPOSE_ASSET_linux-amd64    = docker-compose-linux-x86_64
+DOCKER_COMPOSE_SHA256_linux-amd64   := db1889184726840f75c4f9c001048430d4f25b3be3cb084d3ddd762bc0aed576
+DOCKER_COMPOSE_MEMBER_linux-amd64   = -
+
 # Tools pinned as release binaries, as <VARIABLE PREFIX>:<binary name>.
-BINARY_TOOLS := GOLANGCI_LINT:golangci-lint HUGO:hugo VALE:vale VACUUM:vacuum GITLEAKS:gitleaks HTMLTEST:htmltest
+BINARY_TOOLS := GOLANGCI_LINT:golangci-lint HUGO:hugo VALE:vale VACUUM:vacuum GITLEAKS:gitleaks HTMLTEST:htmltest JQ:jq \
+	DOCKER_COMPOSE:docker-compose

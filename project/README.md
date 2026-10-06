@@ -9,39 +9,58 @@
 | Milestone | Title | Status | Items closed |
 |---|---|---|---|
 | [M00](milestones/M00-foundation.md) | Foundation | done | 16 of 16 |
-| [M01](milestones/M01-service-skeleton.md) | Service skeleton | planned | 0 of 1 |
-| [M02](milestones/M02-identity.md) | Identity | planned | — |
-| [M03](milestones/M03-read-path-drift-report.md) | Read path and drift report | planned | — |
-| [M04](milestones/M04-write-path.md) | Write path | planned | — |
-| [M05](milestones/M05-siem-export.md) | SIEM export | planned | — |
-| [M06](milestones/M06-production-hardening.md) | Production hardening | planned | — |
-| [M07](milestones/M07-terraform-provider.md) | Terraform/OpenTofu provider | planned | — |
-| [M08](milestones/M08-ansible-collection-v1.md) | Ansible collection and v1.0 | planned | — |
+| [M01](milestones/M01-netbox-read-path.md) | NetBox read path | done | 12 of 12 |
+| [M02](milestones/M02-powerdns-read-path.md) | PowerDNS read path | planned | — |
+| [M03](milestones/M03-drift-report.md) | Drift report | planned | — |
+| [M04](milestones/M04-service.md) | Service | planned | 0 of 1 |
+| [M05](milestones/M05-rest-api.md) | REST API | planned | — |
+| [M06](milestones/M06-netbox-webhooks.md) | NetBox webhooks | planned | — |
+| [M07](milestones/M07-sqlite-persistence.md) | SQLite persistence | planned | — |
+| [M08](milestones/M08-postgresql-and-ha.md) | PostgreSQL and HA | planned | — |
+| [M09](milestones/M09-authentication.md) | Authentication | planned | — |
+| [M10](milestones/M10-sso-and-rbac.md) | SSO and RBAC | planned | — |
+| [M11](milestones/M11-web-ui.md) | Web UI | planned | — |
+| [M12](milestones/M12-write-path-plan-and-apply.md) | Write path: plan and apply | planned | — |
+| [M13](milestones/M13-change-safety.md) | Change safety | planned | — |
+| [M14](milestones/M14-brownfield-import.md) | Brownfield import | planned | — |
+| [M15](milestones/M15-siem-export.md) | SIEM export | planned | — |
+| [M16](milestones/M16-production-hardening.md) | Production hardening | planned | — |
+| [M17](milestones/M17-terraform-provider.md) | Terraform/OpenTofu provider | planned | — |
+| [M18](milestones/M18-ansible-collection-v1.md) | Ansible collection and v1.0 | planned | — |
 
 ## Open items in other milestones
 
 | Item | Title | Type | Status | Waiting on |
 |---|---|---|---|---|
-| [ITEM-0017](items/ITEM-0017-run-the-claude-code-hook-pipe-tests-in-make-test.md) | Run the Claude Code hook pipe-tests in make test | debt | open | — |
+| [ITEM-0027](items/ITEM-0027-avoid-rebuilding-the-log-handler-chain-per-record.md) | Avoid rebuilding the log handler chain per record for grouped loggers | debt | open | — |
 
 ## Open questions
 
-35 open (0 blocking), 21 answered. The questions and their proposed defaults are in [requirements.md](requirements.md#open-questions).
+34 open (0 blocking), 22 answered. The questions and their proposed defaults are in [requirements.md](requirements.md#open-questions).
 
 | Needed by | Open questions |
 |---|---|
-| M1 | Q-012, Q-016, Q-023, Q-024, Q-026, Q-035, Q-036, Q-038, Q-039, Q-041, Q-043, Q-050, Q-051 |
-| M1 (binary, image), M6 (rest) | Q-025 |
-| M2 | Q-015, Q-028, Q-029, Q-030, Q-031, Q-032, Q-040 |
-| M3 | Q-007, Q-017, Q-021, Q-022, Q-027, Q-037, Q-053, Q-054 |
-| M4 | Q-011, Q-013, Q-014 |
-| M5 | Q-033, Q-034 |
-| M7 | Q-042 |
+| M02 | Q-021, Q-022, Q-039, Q-043, Q-053 |
+| M03 | Q-017, Q-027 |
+| M04 | Q-038 |
+| M04 (binary, image), M16 (rest) | Q-025 |
+| M05 | Q-041 |
+| M06 | Q-037 |
+| M06 (triggers), M14 (import) | Q-054 |
+| M07 | Q-012, Q-023, Q-024, Q-035, Q-036 |
+| M07 (migrations), M16 (rest) | Q-026 |
+| M09 | Q-029, Q-031, Q-040 |
+| M10 | Q-015, Q-028, Q-030, Q-032 |
+| M11 | Q-016, Q-050, Q-051 |
+| M12 | Q-011 |
+| M13 | Q-013, Q-014 |
+| M15 | Q-033, Q-034 |
+| M17 | Q-042 |
 
 ## Requirements
 
-39 requirements, listed in [requirements.md](requirements.md#requirements). 26 aren't referenced by any item yet: REQ-002, REQ-003, REQ-004, REQ-005, REQ-006, REQ-007, REQ-008, REQ-009, REQ-010, REQ-011, REQ-014, REQ-015, REQ-016, REQ-017, REQ-023, REQ-024, REQ-027, REQ-028, REQ-029, REQ-030, REQ-031, REQ-032, REQ-033, REQ-034, REQ-035, REQ-036.
+40 requirements, listed in [requirements.md](requirements.md#requirements). 20 aren't referenced by any item yet: REQ-003, REQ-004, REQ-007, REQ-008, REQ-009, REQ-010, REQ-011, REQ-014, REQ-015, REQ-016, REQ-017, REQ-023, REQ-028, REQ-029, REQ-030, REQ-031, REQ-032, REQ-033, REQ-034, REQ-035.
 
 ## Decisions
 
-17 ADRs (14 accepted, 3 superseded), listed in [docs/adr](../docs/adr/_index.md).
+23 ADRs (18 accepted, 5 superseded), listed in [docs/adr](../docs/adr/_index.md).

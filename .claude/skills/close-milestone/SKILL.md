@@ -39,8 +39,30 @@ and report what's outstanding. Don't mark the milestone done.
    - Commit these changes on the branch.
 8. **Hand over.** Show the user:
    - a clean `git status`;
-   - the branch's commit list (`git log --oneline main..HEAD`) and a short
-     summary of what the milestone delivered;
-   - how to finish: review the branch, merge it into `main` with a merge
-     commit (not a squash, which would lose the per-item commits), then push;
+   - the branch's commit list (`git log --oneline main..HEAD`);
+   - the merge request's title and description, written as below, ready to
+     paste;
+   - how to finish (ADR-0018): push the branch, open a GitLab merge request
+     into `main`, and merge it with the **Merge commit** method. Never squash:
+     it loses the per-item commits. If GitLab isn't available, merge locally
+     with `git merge --no-ff`, then push `main` to both remotes;
    - a reminder that the next milestone won't start until the branch is merged.
+
+   **Title:** `Mnn: <milestone title>`, for example `M01: NetBox read path`.
+
+   **Description:** Markdown, with these sections in this order. Show paths
+   and commands as code, never as links: relative links don't resolve in a
+   merge request description.
+   1. **Summary:** what the milestone delivers and why, in two or three
+      sentences.
+   2. **What's included:** each item on one line (`ITEM-nnnn`, its title),
+      grouped by phase, then the new ADRs.
+   3. **Verification:** the checks and their results: `make check`, the
+      integration tests, the reviews, and the manual verification, summarized
+      from the milestone's verification log.
+   4. **Reviewing:** where to start reading, what deserves the closest look,
+      and how to try it locally.
+   5. **Known and deferred:** known problems, review findings left unfixed and
+      why, and work or questions moved to later milestones.
+   6. **Merging:** the method (a merge commit, no squash) and anything to do
+      after the merge.

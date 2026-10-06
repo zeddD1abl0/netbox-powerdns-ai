@@ -129,3 +129,72 @@ Measurement showed that building the eight tools from source needed about
 
 These are recorded in ADR-0014 (tool binaries), ADR-0015 (glibc images) and
 ADR-0016 (CI stages), and as REQ-038 and REQ-039.
+
+## Answers, 2026-09-27 (M01 design)
+
+These were given in the M01 design session. They weren't quoted at the time;
+this is the summary recorded under "Approved design" in
+[M01](milestones/M01-netbox-read-path.md).
+
+| Topic | Answer |
+|---|---|
+| Milestone size | Smaller milestones. Each merge should be a useful, logical step. M01 reads from the NetBox API; later milestones add PowerDNS, then the database (SQLite, then PostgreSQL). |
+| Authentication order | Read-only, unauthenticated features come first. Authentication arrives before anything can change state from outside. |
+| Merging | Through a GitLab merge request with a merge commit. GitHub is a push mirror. |
+| Libraries | Established libraries instead of custom modules: Cobra for the command line and Viper for configuration. For logging, the user compared slog with zap and chose `log/slog`. |
+| NetBox webhooks | Needed. Where they go was left to Claude; they got their own milestone, after the REST API. |
+| Q-007: supported versions | NetBox 4.7 and 4.6, with the DNS plugin 1.7.x and 1.6.x. |
+| CI | Integration tests against a real NetBox run in every pipeline, using Docker-in-Docker. |
+
+The resulting decisions are recorded in ADR-0018 (merging), ADR-0019 (the
+milestones), ADR-0020 (the NetBox client) and ADR-0021 (Cobra and Viper).
+
+## Answers, 2026-09-29 (review before M01 implementation)
+
+A review of the repository before implementation raised these questions. The
+user's answers are quoted.
+
+| Question | Answer |
+|---|---|
+| Is GitLab set to merge with a merge commit, with squash disabled? | "Merge commit with Squash disabled is done" |
+| May nbpdns reach NetBox over plain HTTP, which sends the token unencrypted? | "Allow over HTTP. Not all NetBox deployments will be secure. Add a warning to the configuration item" |
+| Should the normalized DNS model group records into RRsets, with the lowest TTL when a set's records disagree? | "RRSET with the lowest TTL sounds good to me" |
+| May retries, timeouts and TLS be tested against a local test server, since a real NetBox can't be made to fail on demand? | "Yes, test against a fake server" |
+| Should the hook tests live in their own module, `tools/hooktest`, with `jq` pinned as a release binary? | "Both of these seem fine to me" |
+
+The user didn't object to the other steps proposed in the same review:
+- ITEM-0025 fixes the prerequisites, which omit the C compiler that `-race`
+  needs;
+- ADR-0020 is written before ADR-0021, to keep the numbers in M01's design;
+- lint and vet also check files with the `integration` build tag.
+
+Runner capacity for the Docker-in-Docker job wasn't confirmed yet.
+
+## Answers, 2026-10-06 (finishing M01)
+
+A review of the work in progress proposed defaults for three details of the
+`nbpdns netbox` commands (ITEM-0024). The user's answers are quoted.
+
+| Question | Answer |
+|---|---|
+| When NetBox's data has problems that normalization works around, such as an RRset whose records disagree on TTL, should `nbpdns netbox records` report them and still succeed? | "Yes, just report the error, don't fail." |
+| When a zone name exists in more than one view and no `--view` is given, should the command fail and list the views? | "Yes, throw an error regarding multiple view names" |
+| Should inactive records be shown by default? | "Yes, inactive records should just be shown" |
+
+The user then asked for M01 to be completed.
+
+## Answers, 2026-10-06 (the first M01 pipeline)
+
+The first pipeline with the integration job failed. The user said:
+
+> The pipeline died because it's quite significant in memory footprint and
+> the nodes running the jobs don't have much spare capacity at the moment. It
+> appears it runs up two separate NetBox instances and tests against both. If
+> that is the case, it needs to narrow down to just testing against 4.7, and
+> we'll add other versions and support from there.
+
+It was the case: the lab ran NetBox 4.7 and 4.6, each with its own
+PostgreSQL server. nbpdns now supports and tests NetBox 4.7 only, with the
+DNS plugin 1.7.x. More releases are added as the runners have room. This is
+recorded in ADR-0023, which supersedes ADR-0020, and REQ-040 is narrowed to
+match.
