@@ -131,9 +131,7 @@ func (z *Zone) SetRecords(raw []RawRecord) []Problem {
 		})
 		z.RRsets = append(z.RRsets, *s)
 	}
-	slices.SortFunc(z.RRsets, func(a, b RRset) int {
-		return cmp.Or(CompareNames(a.Name, b.Name), cmp.Compare(typeRank(a.Type), typeRank(b.Type)), strings.Compare(a.Type, b.Type))
-	})
+	slices.SortFunc(z.RRsets, func(a, b RRset) int { return CompareRRsets(a.Name, a.Type, b.Name, b.Type) })
 	slices.SortFunc(probs, func(a, b Problem) int { return strings.Compare(a.String(), b.String()) })
 	return probs
 }
@@ -157,6 +155,13 @@ func rrsetTTL(zone string, s *RRset, probs []Problem) (uint32, []Problem) {
 			fmt.Sprintf("its active records have different TTLs, from %d to %d; the RRset uses %d", lo, hi, lo)})
 	}
 	return lo, probs
+}
+
+// CompareRRsets orders RRsets, by their owner names and types, canonically:
+// by name, as CompareNames does, then the SOA, then NS, then the other types
+// in alphabetical order.
+func CompareRRsets(aName, aType, bName, bType string) int {
+	return cmp.Or(CompareNames(aName, bName), cmp.Compare(typeRank(aType), typeRank(bType)), strings.Compare(aType, bType))
 }
 
 // typeRank puts SOA, then NS, before other types at the same name.
