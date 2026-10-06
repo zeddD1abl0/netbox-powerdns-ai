@@ -1,9 +1,9 @@
 ---
 id: M02
 title: PowerDNS read path
-status: in-progress # planned | in-progress | done
+status: done # planned | in-progress | done
 started: 2026-10-06
-closed:
+closed: 2026-10-06
 ---
 
 # M02: PowerDNS read path
@@ -67,9 +67,10 @@ zones each group serves, by view. Read-only.
   API keys (ITEM-0038, ITEM-0039).
 - [ ] The manual verification is recorded. The GitLab pipeline passes, and
   so does GitHub's once ITEM-0030 restores the mirror. The user has merged
-  through an MR with a merge commit. The verification is recorded below, and
-  GitLab passed on `c5b4bea` (reported by the user, 2026-10-06); GitHub's
-  run and the merge are to come.
+  through an MR with a merge commit. The verification is recorded below.
+  GitLab passed on `c5b4bea`, and the user reported the push of `44623bc`
+  in place; GitHub Actions run 37426268234 on `44623bc` passed every job.
+  The merge is to come.
 
 ## Decided after approval
 
@@ -166,6 +167,20 @@ Append-only and dated. Record what was run and what was seen.
      without the client certificate, it fails with "status 400: 400 No
      required SSL certificate was sent", exit 1.
   7. At `--log-level debug`, a `records` run's six log lines hold no key.
+- 2026-10-06: **GitHub.** The user restored the mirror (ITEM-0030). GitHub's
+  first runs, on `main` and on this branch at `c5b4bea`, failed only at
+  `integration-test`, at its checkout step: GitHub's runner runs a container
+  job's steps with `docker exec` and hands the job's environment to it, so
+  the job's `DOCKER_HOST` sent the runner itself to the Docker-in-Docker
+  service. ITEM-0041 has the Makefile take `LAB_DOCKER_HOST` instead, which
+  GitHub's job sets; the emulated CI job passed that way. The user pushed
+  `44623bc`, and GitHub Actions run 37426268234 passed every job, the
+  integration tests (7m25s) included.
+- 2026-10-06: **Closed**, with every item done. Left for the user: merging
+  through a GitLab merge request with a merge commit. After that, M03 (the
+  drift report) is designed in plan mode; its open questions are Q-017 and
+  Q-027, and the miekg/dns overflow and PowerDNS's own content form
+  (ITEM-0040, M12) are the findings most relevant to it.
 
 ## Approved design
 

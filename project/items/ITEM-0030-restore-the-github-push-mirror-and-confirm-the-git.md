@@ -2,12 +2,12 @@
 id: ITEM-0030
 title: Restore the GitHub push mirror and confirm the GitHub pipeline
 type: task # feature | bug | debt | task
-status: in-progress # open | in-progress | blocked | done | wontfix
+status: done # open | in-progress | blocked | done | wontfix
 milestone: M02
 requirements: [REQ-026, REQ-039]
 depends_on: []
 created: 2026-10-06
-closed:
+closed: 2026-10-06
 ---
 
 # ITEM-0030: Restore the GitHub push mirror and confirm the GitHub pipeline
@@ -26,8 +26,8 @@ the mirror, then confirm the GitHub workflow passes on the M01 merge.
 ## Acceptance criteria
 
 - [x] The GitLab push mirror to GitHub works again: GitHub's `main` is at GitLab's `main` (`7934f8b` or later).
-- [ ] The GitHub workflow passes on `main`, including `integration-test`, or each failure has an item.
-- [ ] M01's open GitHub criterion is ticked, with the run, in its milestone file.
+- [x] The GitHub workflow passes on `main`, including `integration-test`, or each failure has an item.
+- [x] M01's open GitHub criterion is ticked, with the run, in its milestone file.
 
 ## Notes
 
@@ -44,3 +44,8 @@ the mirror, then confirm the GitHub workflow passes on the M01 merge.
   failed at its checkout step, because the job's `DOCKER_HOST` redirected
   the runner's own docker commands. ITEM-0041 fixes that; this item's last
   criteria wait for GitHub's run of the fix.
+- 2026-10-06: Done. On `main` (`7934f8b`), GitHub's run failed only at
+  `integration-test`, for the reason ITEM-0041 fixed. With the fix,
+  GitHub Actions run 37426268234 on `m02-powerdns-read-path` (`44623bc`), which holds all of `main`,
+  passed every job, `integration-test` included; `main` runs it once M02 is
+  merged. M01's GitHub criterion is ticked with that run.
