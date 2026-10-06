@@ -181,6 +181,10 @@ nbpdns is designed and tested for 1,000 zones and 100,000 records per run
 - The comparison itself works in memory. A benchmark compares 1,000 zones of
   100 records on each side, with 1% of the records changed, in about a tenth
   of a second, allocating about 124 MB.
+- A run makes about one request per zone to each side, and most of its time
+  is NetBox's. At the target, in the development lab, a run takes about 55
+  seconds, almost all of it reading records from NetBox, and nbpdns uses
+  under 90 MB of memory.
 
 ## What it doesn't do yet
 

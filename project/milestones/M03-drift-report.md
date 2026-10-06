@@ -34,28 +34,134 @@ JSON, with exit codes that scripts can act on. Read-only.
 
 ## Acceptance criteria
 
-- [ ] ADR-0027 is accepted. Q-017 and Q-027 are answered, and REQ-043
-  exists.
-- [ ] Drift policies load from the config file, with strict validation, are
-  shown by `config show`, and are documented in the reference.
-- [ ] The comparison handles every case in ADR-0027, covered by table tests.
+- [x] ADR-0027 is accepted. Q-017 and Q-027 are answered, and REQ-043
+  exists (`project/requirements.md`).
+- [x] Drift policies load from the config file, with strict validation, are
+  shown by `config show`, and are documented in the reference (ITEM-0042;
+  case-only duplicates became an error in ITEM-0048).
+- [x] The comparison handles every case in ADR-0027, covered by table tests.
   The benchmark compares 1,000 zones and 100,000 records in under a second,
-  and its figures are recorded.
-- [ ] `nbpdns drift` reports as a table and as JSON, with `--group` and
-  `--zone`, and exits 0, 3, 1 or 2 as ADR-0027 says.
-- [ ] Integration tests cover every case of the drift fixture against the
+  and its figures are recorded (ITEM-0043: about 104 ms; rerun at the close,
+  103 to 107 ms).
+- [x] `nbpdns drift` reports as a table and as JSON, with `--group` and
+  `--zone`, and exits 0, 3, 1 or 2 as ADR-0027 says (ITEM-0044,
+  ITEM-0047, and the manual verification below).
+- [x] Integration tests cover every case of the drift fixture against the
   lab's NetBox 4.7 and PowerDNS 5.1, and a group that can't be read. The lab
-  gains no containers.
-- [ ] The docs pages above exist, the generated references are current, and
-  the CHANGELOG is updated.
-- [ ] `/code-review high` has run. `/security-review` runs if anything touches
-  secrets.
+  gains no containers (ITEM-0045; `deploy/` is unchanged).
+- [x] The docs pages above exist, the generated references are current, and
+  the CHANGELOG is updated (ITEM-0046; `make generate-check`, `make
+  docs-links`).
+- [x] `/code-review high` has run. `/security-review` runs if anything touches
+  secrets. The review's findings are fixed in ITEM-0048, or deferred in
+  ITEM-0049; M03 touches no secrets, so `/security-review` didn't run (see
+  below).
 - [ ] The manual verification is recorded. The GitLab and GitHub pipelines
   pass, and the user has merged through an MR with a merge commit.
+
+## Decided after approval
+
+> [!IMPORTANT]
+> Changed during implementation, on 2026-10-06, with the reasons recorded in
+> the items named. These override the approved design below.
+>
+> - **`--zone` for a zone that's nowhere fails**, with exit 1, when every
+>   group was read and neither side has the zone, so that a mistyped name
+>   isn't reported as in sync, as `powerdns records --zone` fails too
+>   (ITEM-0044).
+> - **The table gives each drifted zone's policy**, in a `POLICY` column,
+>   with `enforce` written as `enforce (from M12)`: this is how the report
+>   marks `enforce` zones as acting from M12 (ITEM-0047).
+> - **The table ends with the report's warnings**, which are still logged
+>   too (ITEM-0048).
+> - **`Run` lists every group's primary before it reads NetBox's records**,
+>   and reads them only for zones that a listed primary has (ITEM-0048).
+> - **`zone_policies` keys that differ only in case are an error**, since
+>   Viper merges them before nbpdns sees them (ITEM-0048).
+> - **A NetBox problem carries its zone's view** (`dns.Problem.View`), so a
+>   group's report keeps only its own zones' problems. `netbox.ZoneName`
+>   became `dns.ZoneName`, shared with `zone_policies` (ITEM-0048).
+> - **`Compare` takes the problems, not the policies**, which come with the
+>   group's configuration (ITEM-0043).
+> - **Groups are still compared in turn**, as designed; comparing them
+>   concurrently is ITEM-0049, in M04.
 
 ## Verification log
 
 Append-only and dated. Record what was run and what was seen.
+
+- 2026-10-06: `/code-review high` on `origin/main...m03-drift-report` at
+  `089121c` (the local `main` was behind `origin/main`, so the review used
+  `origin/main`) found eight things. ITEM-0048 fixes seven:
+  - `--zone` warned that every other zone's policy names a zone the group
+    doesn't serve;
+  - `zone_policies` keys that differ only in case were merged silently,
+    with either policy;
+  - a group's problems included those of same-named zones in other views;
+  - the help text and CHANGELOG said the readable groups are reported when
+    NetBox can't be read;
+  - warnings were missing from the table;
+  - the drift rule was counted in two places;
+  - `zoneKey` copied `netbox.ZoneName`;
+  - NetBox's records were read for zones no listed primary has.
+  The eighth, comparing groups concurrently, is ITEM-0049, in M04, since
+  the approved design reads groups in turn. While fixing them, NetBox's
+  `normalize` was found to rely on an evaluation order Go doesn't specify,
+  and was fixed too.
+- 2026-10-06: **`/security-review` didn't run.** M03 changes no
+  authentication, authorization, audit, secret handling or crypto. It reads
+  NetBox and the primaries through M02's clients, whose handling of the
+  token and key M02's security review covered. A failed group's error in
+  the report is the clients' existing message. The one new file read,
+  for `zone_policies` keys, reads the config file the user names, and its
+  error names only zone names.
+- 2026-10-06: Close checks, on `1369b7f`: `make check` passes (vet and
+  golangci-lint with 0 issues, the tests with `-race`, govulncheck, gitleaks,
+  Vale, the API ruleset self-test, project lint and `generate-check`).
+  `make test-integration` passes against the local lab, with
+  `internal/cli`'s `TestDrift` covering every case of the drift fixture on
+  NetBox 4.7.1 and PowerDNS 5.1.4. `make docs-links` passes. The lab gains
+  no containers. `BenchmarkCompareAtScale` takes 103 to 107 ms and
+  124 MB per comparison, over three runs, on a 16-thread workstation.
+- 2026-10-06: **Manual verification**, on a fresh lab (`make lab-down`, then
+  `make lab-up`), with `bin/nbpdns` from `make build`:
+  1. The tutorial, "Find drift between NetBox and PowerDNS": its shell and
+     YAML blocks, taken from the page and run in order, give the output the
+     page shows. The zone is first `missing` (exit 3). With the copy on
+     lab-a, the report lists one `missing`, one `extra` and two `changed`
+     RRsets (one by value, one by TTL), and not the SOA, whose serials
+     differ (exit 3). The JSON report matches the table. After the fix by
+     hand, the zone is in sync (exit 0). `legacy.example.`, only on lab-a,
+     is listed as unmanaged, and the status stays 0. `--zone drift.example`
+     doesn't read it.
+  2. Exit statuses: 0 in sync and 3 with drift, as above; 1 with the
+     primary's URL pointing at a closed port, with lab-a marked failed and
+     the reason given; 1 for `--zone nowhere.example`, naming the zone; 2
+     for an unknown flag.
+  3. Policies: with `zone_policies: {drift.example: ignore}`, the drifted
+     zone is listed under "Ignored zones, not compared" and the status is
+     0. With `drift_policy: enforce`, the drift row's policy reads
+     `enforce (from M12)`. `drift.example` and `Drift.Example` together are
+     an error naming both.
+- 2026-10-07: **Scale (REQ-043)**, on the same lab. A script created 1,000
+  zones in a NetBox view of their own, `scale`, each with 100 A records
+  (102,000 records with the plugin's SOA and NS), and 995 of them on lab-a,
+  with drift: 10 zones with a changed value, 5 with an extra TXT RRset, and
+  5 missing on the primary. NetBox took 89 seconds to create the zones and
+  about 75 minutes for the records, PowerDNS 5 seconds for its zones.
+  `nbpdns drift` with the group serving `scale`, three runs:
+  - The report is right every time: 980 zones in sync, 15 drift with 15
+    changes, 5 missing, no problems, no warnings; exit 3.
+  - 54 to 57 seconds wall-clock, and 85 to 87 MB resident at most
+    (`/usr/bin/time -v`).
+  - 1,995 requests, none retried: to NetBox, 1 status check, 2 pages of
+    zones, and 995 zones' records (the 5 missing on the primary weren't
+    read, as ITEM-0048 intends), with a median of 223 ms each; to lab-a, 1
+    server check, 1 zone list and 995 zones, at about 1 ms each.
+  - The time is NetBox's: at `netbox.concurrency` 4, its requests add up to
+    217 seconds, over 55 seconds of wall-clock. At 8 the run took as long,
+    since the lab's NetBox runs two Granian workers.
+  The explanation's scale section now gives these figures.
 
 ## Approved design
 

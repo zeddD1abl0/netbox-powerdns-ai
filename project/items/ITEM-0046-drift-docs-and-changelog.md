@@ -42,3 +42,6 @@ the generated references, and the CHANGELOG.
   the output the page shows. Writing the docs against ADR-0027 found that
   the table didn't mark `enforce` zones, which became ITEM-0047. `make
   docs-links` passes.
+- 2026-10-07: At M03's close, the explanation's scale section gained the
+  measured run: about one request per zone to each side, about 55 seconds
+  at the target in the lab, almost all of it NetBox's, and under 90 MB.
