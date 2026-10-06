@@ -36,12 +36,12 @@ func TestWriteDrift(t *testing.T) {
 		{Group: "site-a", Status: drift.StatusOK, Counts: drift.Counts{InSync: 1, Drift: 1, Missing: 1, Ignored: 1, Unmanaged: 1},
 			Zones: []drift.ZoneReport{
 				{Zone: "a.example.", State: drift.StateInSync},
-				{Zone: "b.example.", State: drift.StateDrift, Changes: []drift.Change{
+				{Zone: "b.example.", State: drift.StateDrift, Policy: "enforce", Changes: []drift.Change{
 					{Name: "www.b.example.", Type: "A", Kind: drift.ChangeChanged,
 						NetBox: &drift.Side{TTL: 300, Values: []string{"192.0.2.1", "192.0.2.2"}}, PowerDNS: &drift.Side{TTL: 600, Values: []string{"192.0.2.1"}}},
 					{Name: "old.b.example.", Type: "TXT", Kind: drift.ChangeExtra, PowerDNS: &drift.Side{TTL: 60, Values: []string{`"x"`}}},
 				}},
-				{Zone: "c.example.", State: drift.StateMissing},
+				{Zone: "c.example.", State: drift.StateMissing, Policy: "report"},
 				{Zone: "d.example.", State: drift.StateIgnored},
 			},
 			Unmanaged: []string{"z.example."},
@@ -57,9 +57,10 @@ func TestWriteDrift(t *testing.T) {
 		"site-a  ok      1        1      1        0         1        1",
 		"site-b  failed  0        0      0        0         0        0",
 		"\nDrift:\n",
-		"changed  www.b.example.  A     300 192.0.2.1, 192.0.2.2  600 192.0.2.1",
-		"extra    old.b.example.  TXT   -",
-		"zone missing on the primary",
+		"GROUP ZONE POLICY CHANGE NAME TYPE NETBOX POWERDNS",
+		"site-a b.example. enforce (from M12) changed www.b.example. A 300 192.0.2.1, 192.0.2.2 600 192.0.2.1",
+		"site-a b.example. enforce (from M12) extra old.b.example. TXT -",
+		"site-a c.example. report zone missing on the primary",
 		"\nUnmanaged zones, on a primary but not in its group's NetBox views:\n",
 		"site-a  z.example.",
 		"\nIgnored zones, not compared:\n",

@@ -150,14 +150,14 @@ func writeDrift(w io.Writer, r drift.Report) error {
 		for _, z := range g.Zones {
 			switch z.State {
 			case drift.StateMissing:
-				changes = append(changes, []string{g.Group, z.Zone, "zone missing on the primary", "", "", "", ""})
+				changes = append(changes, []string{g.Group, z.Zone, policy(z.Policy), "zone missing on the primary", "", "", "", ""})
 			case drift.StateInactive:
-				changes = append(changes, []string{g.Group, z.Zone, "zone served, but not active in NetBox", "", "", "", ""})
+				changes = append(changes, []string{g.Group, z.Zone, policy(z.Policy), "zone served, but not active in NetBox", "", "", "", ""})
 			case drift.StateIgnored:
 				ignored = append(ignored, []string{g.Group, z.Zone})
 			}
 			for _, c := range z.Changes {
-				changes = append(changes, []string{g.Group, z.Zone, c.Kind, c.Name, c.Type, side(c.NetBox), side(c.PowerDNS)})
+				changes = append(changes, []string{g.Group, z.Zone, policy(z.Policy), c.Kind, c.Name, c.Type, side(c.NetBox), side(c.PowerDNS)})
 			}
 		}
 		for _, z := range g.Unmanaged {
@@ -172,7 +172,7 @@ func writeDrift(w io.Writer, r drift.Report) error {
 		header []string
 		rows   [][]string
 	}{
-		{"Drift", []string{"GROUP", "ZONE", "CHANGE", "NAME", "TYPE", "NETBOX", "POWERDNS"}, changes},
+		{"Drift", []string{"GROUP", "ZONE", "POLICY", "CHANGE", "NAME", "TYPE", "NETBOX", "POWERDNS"}, changes},
 		{"Unmanaged zones, on a primary but not in its group's NetBox views", []string{"GROUP", "ZONE"}, unmanaged},
 		{"Ignored zones, not compared", []string{"GROUP", "ZONE"}, ignored},
 		{"Groups that couldn't be read", []string{"GROUP", "ERROR"}, failed},
@@ -190,6 +190,15 @@ func writeDrift(w io.Writer, r drift.Report) error {
 		}
 	}
 	return nil
+}
+
+// policy writes a zone's drift policy. Nothing is written until M12, so
+// enforce is marked as acting from then (ADR-0027).
+func policy(p string) string {
+	if p == config.PolicyEnforce {
+		return p + " (from M12)"
+	}
+	return p
 }
 
 // side writes an RRset as one side serves it: its TTL, then its values.

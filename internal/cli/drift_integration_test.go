@@ -20,8 +20,8 @@ func TestDrift(t *testing.T) {
 	nb, p := lab.NetBoxes[0], lab.PowerDNSes[0]
 	f := lab.NewDriftFixture(t, nb, p)
 	group := func(name, url string) string {
-		return fmt.Sprintf("    - name: %s\n      views: [%s]\n      zone_policies: {%s: ignore}\n      primary: {url: %q, api_key: %q}\n",
-			name, f.View, strings.TrimSuffix(f.Ignored, "."), url, lab.PowerDNSAPIKey)
+		return fmt.Sprintf("    - name: %s\n      views: [%s]\n      zone_policies: {%s: ignore, %s: enforce}\n      primary: {url: %q, api_key: %q}\n",
+			name, f.View, strings.TrimSuffix(f.Ignored, "."), strings.TrimSuffix(f.Drift, "."), url, lab.PowerDNSAPIKey)
 	}
 	env := func(groups ...string) map[string]string {
 		e := configFile(t, "powerdns:\n  groups:\n"+strings.Join(groups, ""))
@@ -76,6 +76,9 @@ func TestDrift(t *testing.T) {
 		if z := zones[f.Ignored]; z.Policy != "ignore" || len(z.Changes) != 0 {
 			t.Errorf("zone %s: policy %q, changes %+v", z.Zone, z.Policy, z.Changes)
 		}
+		if z, m := zones[f.Drift], zones[f.Missing]; z.Policy != "enforce" || m.Policy != "report" {
+			t.Errorf("policies %q and %q, want enforce and report", z.Policy, m.Policy)
+		}
 
 		d := f.Drift
 		changes := map[[2]string]drift.Change{}
@@ -111,12 +114,12 @@ func TestDrift(t *testing.T) {
 		d := f.Drift
 		norm := oneSpace(out)
 		for _, row := range []string{
-			fmt.Sprintf("lab-a %s missing gone.%s A 3600 192.0.2.20 -", d, d),
-			fmt.Sprintf(`lab-a %s extra stray.%s TXT - 3600 "stray"`, d, d),
-			fmt.Sprintf("lab-a %s changed www.%s A 3600 192.0.2.10 3600 192.0.2.99", d, d),
-			fmt.Sprintf("lab-a %s changed mail.%s A 300 192.0.2.25 600 192.0.2.25", d, d),
-			"lab-a " + f.Missing + " zone missing on the primary",
-			"lab-a " + f.Parked + " zone served, but not active in NetBox",
+			fmt.Sprintf("lab-a %s enforce (from M12) missing gone.%s A 3600 192.0.2.20 -", d, d),
+			fmt.Sprintf(`lab-a %s enforce (from M12) extra stray.%s TXT - 3600 "stray"`, d, d),
+			fmt.Sprintf("lab-a %s enforce (from M12) changed www.%s A 3600 192.0.2.10 3600 192.0.2.99", d, d),
+			fmt.Sprintf("lab-a %s enforce (from M12) changed mail.%s A 300 192.0.2.25 600 192.0.2.25", d, d),
+			"lab-a " + f.Missing + " report zone missing on the primary",
+			"lab-a " + f.Parked + " report zone served, but not active in NetBox",
 			"Ignored zones, not compared:\nGROUP ZONE\nlab-a " + f.Ignored,
 			"lab-a " + f.Unmanaged,
 		} {

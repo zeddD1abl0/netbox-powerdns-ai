@@ -12,7 +12,7 @@
 | [M00](milestones/M00-foundation.md) | Foundation | done | 16 of 16 |
 | [M01](milestones/M01-netbox-read-path.md) | NetBox read path | done | 12 of 12 |
 | [M02](milestones/M02-powerdns-read-path.md) | PowerDNS read path | done | 11 of 11 |
-| [M03](milestones/M03-drift-report.md) | Drift report | in-progress | 4 of 5 |
+| [M03](milestones/M03-drift-report.md) | Drift report | in-progress | 5 of 6 |
 | [M04](milestones/M04-service.md) | Service | planned | 0 of 1 |
 | [M05](milestones/M05-rest-api.md) | REST API | planned | — |
 | [M06](milestones/M06-netbox-webhooks.md) | NetBox webhooks | planned | — |
@@ -38,6 +38,7 @@
 | [ITEM-0043](items/ITEM-0043-compare-zones-and-report-drift.md) | Compare zones and report drift | feature | done 2026-10-06 | — |
 | [ITEM-0044](items/ITEM-0044-nbpdns-drift-command.md) | nbpdns drift command | feature | done 2026-10-06 | — |
 | [ITEM-0045](items/ITEM-0045-drift-fixture-and-integration-tests.md) | Drift fixture and integration tests | task | done 2026-10-06 | — |
+| [ITEM-0047](items/ITEM-0047-mark-enforce-zones-in-the-drift-report.md) | Mark enforce zones in the drift report | bug | done 2026-10-06 | — |
 
 ## Open items in other milestones
 
