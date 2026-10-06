@@ -16,6 +16,17 @@ All notable changes to this project are recorded here. The format follows
   inactive records listed. It reports problems in NetBox's data as warnings,
   and in its JSON output, without failing. A zone name in more than one view
   needs `--view`.
+- `nbpdns powerdns check`, `zones`, and `records`: read each PowerDNS server
+  group's primary, as a table or JSON, for every group or one (`--group`).
+  `check` reports each primary's release and whether it accepts the key and
+  lists its zones. `records` shows a zone in the same normalized form as
+  `nbpdns netbox records`, with records PowerDNS doesn't serve listed as
+  `disabled`.
+- `nbpdns netbox zones --group` lists the NetBox zones a server group serves,
+  through its views, and warns about a zone name that's in two of them.
+- Documentation: a tutorial on reading PowerDNS zones, how-to guides on
+  connecting nbpdns to PowerDNS and on putting the PowerDNS API behind a TLS
+  proxy, and an explanation of how nbpdns reads PowerDNS.
 - PowerDNS Authoritative 5.1 and 5.0 are supported, read through each server
   group's primary's HTTP API with its API key. Requests have a time limit and
   are retried when the failure may pass, redirects aren't followed, and TLS,

@@ -38,6 +38,7 @@ SCIM
 RBAC
 TSIG
 anycast
+nginx
 DNSSEC
 DNSsync
 AXFR

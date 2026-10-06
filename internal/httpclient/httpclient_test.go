@@ -520,3 +520,20 @@ func TestBadTLSFiles(t *testing.T) {
 		}
 	}
 }
+
+func TestTextDetail(t *testing.T) {
+	long := strings.Repeat("é", 150) // 300 bytes, 2 to a character
+	tests := []struct{ body, want string }{
+		{"Not Found\n", "Not Found"},
+		{"two\n  lines", "two lines"},
+		{"bad \xff byte", "bad byte"},
+		{"<html><head><TITLE> 502 Bad Gateway </TITLE></head><body>...</body></html>", "502 Bad Gateway"},
+		{long, long[:200]},
+		{"x" + long, ("x" + long)[:199]},
+	}
+	for _, tt := range tests {
+		if got := TextDetail([]byte(tt.body)); got != tt.want {
+			t.Errorf("TextDetail(%.20q) = %.20q, want %.20q", tt.body, got, tt.want)
+		}
+	}
+}

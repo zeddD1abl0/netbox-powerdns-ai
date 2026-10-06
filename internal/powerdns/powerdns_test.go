@@ -315,7 +315,10 @@ func TestDetail(t *testing.T) {
 	tests := []struct{ body, want string }{
 		{`{"error": "Not Found"}`, "Not Found"},
 		{"Not Found\n", "Not Found"},
-		{"bad \xff byte", "bad  byte"},
+		{"bad \xff byte", "bad byte"},
+		{"two\nlines", "two lines"},
+		{"<html>\n<head><title>400 No required SSL certificate was sent</title></head>\n<body>…</body></html>",
+			"400 No required SSL certificate was sent"},
 		{long, long[:200]},
 		// 200 bytes would split a character, so the last half goes.
 		{"x" + long, ("x" + long)[:199]},

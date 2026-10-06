@@ -14,7 +14,6 @@ import (
 	"net/url"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"go.opentelemetry.io/otel/trace"
 
@@ -154,7 +153,8 @@ func (c *Client) get(ctx context.Context, u *url.URL, out any, notFound func() e
 }
 
 // detail extracts PowerDNS's explanation from an error response: its "error"
-// field, or else the start of the text. PowerDNS 5.0 answers some errors in
+// field; or, from a proxy in front of the API, an HTML page's title; or else
+// the start of the text, on one line. PowerDNS 5.0 answers some errors in
 // plain text.
 func detail(body []byte) string {
 	var v struct {
@@ -163,12 +163,5 @@ func detail(body []byte) string {
 	if json.Unmarshal(body, &v) == nil && v.Error != "" {
 		return v.Error
 	}
-	s := strings.ToValidUTF8(strings.TrimSpace(string(body)), "")
-	if len(s) > 200 {
-		s = s[:200]
-		for !utf8.ValidString(s) {
-			s = s[:len(s)-1]
-		}
-	}
-	return s
+	return httpclient.TextDetail(body)
 }

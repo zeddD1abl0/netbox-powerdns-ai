@@ -24,6 +24,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode/utf8"
 
 	"go.opentelemetry.io/otel/trace"
 
@@ -263,6 +264,24 @@ func (c *Client) try(ctx context.Context, u *url.URL, header http.Header, out an
 		return retryAfterHeader(resp.Header.Get("Retry-After"), time.Now()), retryableError{se}
 	}
 	return 0, se
+}
+
+// TextDetail returns an error answer's text for an error message: an HTML
+// page's title, such as a proxy's error page has, or else the text itself,
+// on one line, up to 200 bytes.
+func TextDetail(body []byte) string {
+	s := strings.Join(strings.Fields(strings.ToValidUTF8(string(body), "")), " ")
+	lower := strings.ToLower(s)
+	if i, j := strings.Index(lower, "<title>"), strings.Index(lower, "</title>"); i >= 0 && j > i {
+		s = strings.TrimSpace(s[i+len("<title>") : j])
+	}
+	if len(s) > 200 {
+		s = s[:200]
+		for !utf8.ValidString(s) {
+			s = s[:len(s)-1]
+		}
+	}
+	return s
 }
 
 // A Retry says how often, and after how long, to retry a request.

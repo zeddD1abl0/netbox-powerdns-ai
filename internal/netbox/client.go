@@ -203,7 +203,7 @@ func objectType(path string) string {
 func detail(body []byte) string {
 	var v map[string]any
 	if json.Unmarshal(body, &v) != nil {
-		return strings.TrimSpace(string(body[:min(len(body), 200)]))
+		return httpclient.TextDetail(body)
 	}
 	if d, ok := v["detail"].(string); ok {
 		return d
