@@ -1,0 +1,40 @@
+---
+id: ITEM-0030
+title: Restore the GitHub push mirror and confirm the GitHub pipeline
+type: task # feature | bug | debt | task
+status: blocked # open | in-progress | blocked | done | wontfix
+milestone: M02
+requirements: [REQ-026, REQ-039]
+depends_on: []
+created: 2026-10-06
+closed:
+---
+
+# ITEM-0030: Restore the GitHub push mirror and confirm the GitHub pipeline
+
+## Goal
+
+GitHub is a push mirror of every branch, configured in GitLab (ADR-0018), and
+its workflow is how the project shows it isn't tied to one forge (ADR-0003,
+REQ-026). The mirror stopped after M00: on 2026-10-06, GitHub's `main` was
+still at `fcbdaeb`, the M01 branch was never mirrored, and the last Actions
+run was on 2026-09-26. So the GitHub workflow, including its
+`integration-test` job, has never run M01's code, and M01's criterion
+"Integration tests run in every GitLab and GitHub pipeline" is open. Restore
+the mirror, then confirm the GitHub workflow passes on the M01 merge.
+
+## Acceptance criteria
+
+- [ ] The GitLab push mirror to GitHub works again: GitHub's `main` is at GitLab's `main` (`7934f8b` or later).
+- [ ] The GitHub workflow passes on `main`, including `integration-test`, or each failure has an item.
+- [ ] M01's open GitHub criterion is ticked, with the run, in its milestone file.
+
+## Notes
+
+<!-- Append-only. Start each note with the date: "- YYYY-MM-DD: …" -->
+- 2026-10-06: Found when recording M01's merge. `git ls-remote` on the
+  GitHub repository listed only `refs/heads/main` at `fcbdaeb`. GitHub's
+  public API listed four Actions runs, the last on 2026-09-26 for `main` at
+  `fcbdaeb`, all successful. Blocked on the user: the mirror's settings, and
+  any error it reports, are in GitLab under Settings, then Repository, then
+  Mirroring repositories. A common cause is an expired GitHub token.

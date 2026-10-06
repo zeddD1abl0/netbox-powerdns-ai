@@ -55,7 +55,8 @@ tests need.
 - [ ] Integration tests run in every GitLab and GitHub pipeline, and
   `make project-lint` confirms the CI files mirror `make ci`. GitLab passed
   on `5e4f3d6` (reported by the user, 2026-10-06), and `make project-lint`
-  is clean; the GitHub result is still to come from the user.
+  is clean. GitHub hasn't run M01: its push mirror stopped after M00, so
+  this stays open until ITEM-0030 restores it.
 - [x] Hook pipe-tests run in `make test` (ITEM-0017).
 - [x] The prerequisites name the C compiler that `-race` needs (ITEM-0025,
   ADR-0022).
@@ -65,9 +66,9 @@ tests need.
 - [x] `/code-review high` and `/security-review` have run. M01 handles the
   NetBox token, so the secrets trigger applies (ITEM-0026; the security
   review of 2026-10-06, below).
-- [ ] The manual verification is recorded, and the user has merged through an
-  MR with a merge commit. The verification is recorded below; the merge is
-  to come.
+- [x] The manual verification is recorded, and the user has merged through an
+  MR with a merge commit: merge request !2, merge commit `7934f8b`, on
+  2026-10-06.
 
 ## Decided after approval
 
@@ -186,6 +187,13 @@ Append-only and dated. Record what was run and what was seen.
      1, and `records` fails with the same message.
   7. At `--log-level debug`, a `records` run's log lines hold neither the
      token nor its secret part.
+- 2026-10-06: **Merged.** The user merged `m01-netbox-read-path` through
+  GitLab merge request !2. `main` is at the merge commit `7934f8b`, whose
+  parents are the old `main`, `fcbdaeb`, and the branch tip, `2042fab`, so
+  every per-item commit is kept (ADR-0018). The GitHub mirror didn't follow:
+  GitHub's `main` is still `fcbdaeb`, the M01 branch never reached GitHub,
+  and its last Actions run was on 2026-09-26. The GitHub criterion above
+  stays open, tracked as ITEM-0030.
 
 ## Approved design
 
