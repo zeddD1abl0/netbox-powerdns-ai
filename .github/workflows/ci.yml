@@ -67,7 +67,10 @@ jobs:
           persist-credentials: false
       - run: make test
 
-  # The lab runs in a privileged Docker-in-Docker service.
+  # The lab runs in a privileged Docker-in-Docker service. The runner hands
+  # this job's env to its own docker commands too, so the lab's Docker host
+  # is LAB_DOCKER_HOST, which the Makefile exports as DOCKER_HOST, and not
+  # DOCKER_HOST itself, which would point the runner at the service.
   integration-test:
     needs: [go-lint, docs-lint, api-lint, project-lint]
     runs-on: ubuntu-latest
@@ -79,7 +82,7 @@ jobs:
         env:
           DOCKER_TLS_CERTDIR: ""
     env:
-      DOCKER_HOST: tcp://docker:2375
+      LAB_DOCKER_HOST: tcp://docker:2375
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

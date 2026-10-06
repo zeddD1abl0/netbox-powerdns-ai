@@ -78,7 +78,10 @@ the key crosses the network unencrypted.
 
 If `DOCKER_HOST` names a remote Docker host, such as `tcp://docker:2375`, the
 lab runs there. Its ports are then published on every interface of that
-host, and the tests reach them through its name.
+host, and the tests reach them through its name. `LAB_DOCKER_HOST`, if set,
+takes the place of `DOCKER_HOST` for the lab and the tests only. GitHub's CI
+job uses it, since a variable named `DOCKER_HOST` there would also redirect
+the runner's own Docker commands.
 
 ## Run the integration tests
 

@@ -2,7 +2,7 @@
 id: ITEM-0030
 title: Restore the GitHub push mirror and confirm the GitHub pipeline
 type: task # feature | bug | debt | task
-status: blocked # open | in-progress | blocked | done | wontfix
+status: in-progress # open | in-progress | blocked | done | wontfix
 milestone: M02
 requirements: [REQ-026, REQ-039]
 depends_on: []
@@ -25,7 +25,7 @@ the mirror, then confirm the GitHub workflow passes on the M01 merge.
 
 ## Acceptance criteria
 
-- [ ] The GitLab push mirror to GitHub works again: GitHub's `main` is at GitLab's `main` (`7934f8b` or later).
+- [x] The GitLab push mirror to GitHub works again: GitHub's `main` is at GitLab's `main` (`7934f8b` or later).
 - [ ] The GitHub workflow passes on `main`, including `integration-test`, or each failure has an item.
 - [ ] M01's open GitHub criterion is ticked, with the run, in its milestone file.
 
@@ -38,3 +38,9 @@ the mirror, then confirm the GitHub workflow passes on the M01 merge.
   `fcbdaeb`, all successful. Blocked on the user: the mirror's settings, and
   any error it reports, are in GitLab under Settings, then Repository, then
   Mirroring repositories. A common cause is an expired GitHub token.
+- 2026-10-06: The user restored the mirror. GitHub's `main` is at `7934f8b`
+  and `m02-powerdns-read-path` at `c5b4bea`, as on GitLab. GitHub then ran
+  the workflow on both: every job passed but `integration-test`, which
+  failed at its checkout step, because the job's `DOCKER_HOST` redirected
+  the runner's own docker commands. ITEM-0041 fixes that; this item's last
+  criteria wait for GitHub's run of the fix.
