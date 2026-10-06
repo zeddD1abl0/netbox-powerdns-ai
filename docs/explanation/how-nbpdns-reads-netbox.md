@@ -115,10 +115,11 @@ or more values. nbpdns normalizes the data like this:
 | What | Rule |
 |---|---|
 | Names | Lowercase and absolute, ending with a dot. A record named `@` takes the zone's name. Internationalized names stay in their ASCII form, starting with `xn--`, as NetBox stores them. |
-| Names inside values | Made absolute against the zone: the targets of `CNAME`, `DNAME`, `NS`, `PTR`, `MX`, and `SRV` records, and the two names in the `SOA` record. |
-| Addresses | `A` and `AAAA` values in their canonical form, such as `2001:db8::10`. |
+| Values | Parsed as their record type and written in one canonical form, so that the same data reads the same from NetBox and from PowerDNS. For example, `0 issue letsencrypt.org` becomes `0 issue "letsencrypt.org"`, and `2001:DB8::0:10` becomes `2001:db8::10`. Every type is parsed with the [miekg/dns](https://codeberg.org/miekg/dns) library ([ADR-0025](../adr/0025-normalize-record-data-with-miekg-dns-v2.md)), except `TXT` and `SPF`. |
+| Names inside values | Lowercase, and made absolute against the zone: the targets of `CNAME`, `MX`, `SRV`, `HTTPS`, and `SVCB` records, the names in an `SOA` record, and every other name a value holds. |
+| Hex inside values | Uppercase, as in the digests of `DS`, `SSHFP`, and `TLSA` records. Base64, such as a `DNSKEY`'s key, and text keep their case. |
 | `TXT` and `SPF` values | Each string in double quotes, with `"` and `\` escaped by a backslash, bytes outside printable ASCII written as `\DDD`, and one space between strings. No string is longer than 255 bytes. A value that starts with a quote is read as zone-file strings; any other value is one string. |
-| Other values | Runs of spaces become one space. |
+| Types the library doesn't know | Kept as NetBox holds them, with runs of spaces made one space. |
 | A record's TTL | Its own, or else the zone's default TTL. |
 | An RRset's TTL | The lowest TTL of its active records, or of all its records if none is active. |
 | Status | Each value keeps its record's status, and whether it's active: the record and its zone both active. Inactive records are kept, and shown. |
@@ -130,7 +131,8 @@ Sometimes the data needs a rule to work around it. Two cases:
 
 - the active records of one RRset have different TTLs: the RRset takes the
   lowest;
-- a value doesn't parse as its record type: it's kept as NetBox holds it.
+- a value doesn't parse as its record type, or holds a number too big for
+  its field, such as an `SRV` port of 70000: it's kept as NetBox holds it.
 
 nbpdns reports each case as a **problem**, so that it can be fixed in NetBox,
 and carries on. `nbpdns netbox records` logs a warning for each problem, and

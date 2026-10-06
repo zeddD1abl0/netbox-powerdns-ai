@@ -1,11 +1,13 @@
 // Package dns is nbpdns's normalized model of DNS data: zones and their
 // RRsets. NetBox's data is read into it (M01), and PowerDNS's (M02), so that
-// M03 can compare the two RRset by RRset. The rules come from ADR-0023:
+// M03 can compare the two RRset by RRset. The rules come from ADR-0023 and
+// ADR-0025:
 //
 //   - Names are lowercase and absolute, ending with a dot.
-//   - Relative targets in CNAME, DNAME, MX, NS, PTR and SRV values are made
-//     absolute against the zone.
-//   - A and AAAA addresses are in their canonical text form.
+//   - Values are parsed as their type with miekg/dns and printed in its
+//     canonical text, with every name inside them made absolute against the
+//     zone and lowercase, and hex uppercase. A number too big for its field
+//     is an error, not a smaller number.
 //   - TXT and SPF values are canonical: each string in double quotes, with "
 //     and \ escaped, strings separated by one space, none longer than 255
 //     bytes.

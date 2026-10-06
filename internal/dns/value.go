@@ -4,9 +4,11 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
-	"net/netip"
+	"reflect"
 	"strconv"
 	"strings"
+
+	mdns "codeberg.org/miekg/dns"
 )
 
 // maxStringLen is the longest character string a TXT record can hold.
@@ -47,65 +49,128 @@ func CompareNames(a, b string) int {
 }
 
 // Value returns a record's data in normalized form: typ is the record's type,
-// and origin its zone, for relative names. If the data doesn't parse as its
-// type, Value returns it with its whitespace collapsed, and an error.
+// and origin its zone, for relative names. Every type that miekg/dns knows
+// is parsed as its RDATA and printed as the library's canonical text, with
+// domain names in lowercase and hex in uppercase (ADR-0025). TXT and SPF follow M01's
+// own rule, so that NetBox's unquoted values stay one string. If the data
+// doesn't parse as its type, Value returns it with its whitespace collapsed,
+// and an error. A type the library doesn't know is returned that way too,
+// with no error.
 func Value(typ, value, origin string) (string, error) {
-	f := strings.Fields(value)
-	asIs := strings.Join(f, " ")
-	var err error
-	switch typ {
-	case "A", "AAAA":
-		a, perr := netip.ParseAddr(strings.TrimSpace(value))
-		if perr == nil && (typ == "A") == a.Is4() {
-			return a.String(), nil
+	asIs := strings.Join(strings.Fields(value), " ")
+	if typ == "TXT" || typ == "SPF" {
+		s, err := canonicalTXT(value)
+		if err != nil {
+			return asIs, err
 		}
-		err = fmt.Errorf("%q isn't an %s address", strings.TrimSpace(value), typ)
-	case "CNAME", "DNAME", "NS", "PTR":
-		if len(f) == 1 {
-			return Name(f[0], origin), nil
-		}
-		err = fmt.Errorf("want one name, got %q", value)
-	case "MX":
-		if len(f) == 2 {
-			if pref, perr := strconv.ParseUint(f[0], 10, 16); perr == nil {
-				return fmt.Sprintf("%d %s", pref, Name(f[1], origin)), nil
-			}
-		}
-		err = fmt.Errorf("want a preference and a name, got %q", value)
-	case "SRV":
-		if len(f) == 4 {
-			nums, nerr := uint16s(f[:3])
-			if nerr == nil {
-				return fmt.Sprintf("%d %d %d %s", nums[0], nums[1], nums[2], Name(f[3], origin)), nil
-			}
-		}
-		err = fmt.Errorf("want a priority, weight, port and target, got %q", value)
-	case "SOA":
-		if len(f) == 7 {
-			return strings.Join(append([]string{Name(f[0], origin), Name(f[1], origin)}, f[2:]...), " "), nil
-		}
-		err = fmt.Errorf("want seven SOA fields, got %q", value)
-	case "TXT", "SPF":
-		var s string
-		if s, err = canonicalTXT(value); err == nil {
-			return s, nil
-		}
-	default:
+		return s, nil
+	}
+	t, ok := mdns.StringToType[typ]
+	if !ok {
 		return asIs, nil
 	}
-	return asIs, err
-}
-
-func uint16s(fields []string) ([]uint64, error) {
-	out := make([]uint64, len(fields))
-	for i, s := range fields {
-		n, err := strconv.ParseUint(s, 10, 16)
-		if err != nil {
-			return nil, err
-		}
-		out[i] = n
+	rd, err := mdns.NewData(t, strings.TrimSpace(value), Name("", origin))
+	if err != nil {
+		return asIs, fmt.Errorf("%q isn't %s data: %w", asIs, typ, err)
+	}
+	out := canonical(rd)
+	if n, changed := changedNumber(asIs, out); changed {
+		// miekg/dns keeps a number too big for its field modulo the field's
+		// size, so that 70000 in a 16-bit field would become 4464.
+		return asIs, fmt.Errorf("%q isn't %s data: %s is out of range", asIs, typ, n)
 	}
 	return out, nil
+}
+
+// canonical prints rd with its domain names made lowercase and its hex
+// uppercase, since DNS compares both without regard to case and miekg/dns
+// prints some types' hex in uppercase whatever case it was given. Other
+// fields, such as base64 keys and text, keep their case.
+func canonical(rd mdns.RDATA) string {
+	if reflect.TypeOf(rd).Kind() != reflect.Struct {
+		return rd.String()
+	}
+	v := reflect.New(reflect.TypeOf(rd)).Elem()
+	v.Set(reflect.ValueOf(rd))
+	for i := range v.NumField() {
+		f, fold := v.Field(i), folding(v.Type().Field(i).Tag.Get("dns"))
+		if !f.CanSet() || fold == nil {
+			continue
+		}
+		switch {
+		case f.Kind() == reflect.String:
+			f.SetString(fold(f.String()))
+		case f.Kind() == reflect.Slice && f.Type().Elem().Kind() == reflect.String:
+			for j := range f.Len() {
+				f.Index(j).SetString(fold(f.Index(j).String()))
+			}
+		}
+	}
+	return v.Interface().(mdns.RDATA).String()
+}
+
+// folding returns how to fold the case of a field with a miekg/dns tag: a
+// domain name to lowercase, hex to uppercase, or nil to keep it as it is.
+func folding(tag string) func(string) string {
+	switch {
+	case tag == "name" || tag == "cname" || tag == "mname":
+		return strings.ToLower
+	case tag == "hex" || strings.HasPrefix(tag, "size-hex"):
+		return strings.ToUpper
+	}
+	return nil
+}
+
+// changedNumber returns the first number in the input in that differs from
+// the number in the same place in the printed data out, if there is one.
+// Only places where both hold a plain decimal number are compared, so 010
+// and 10 are the same number.
+func changedNumber(in, out string) (string, bool) {
+	a, b := fields(in), fields(out)
+	for i := range min(len(a), len(b)) {
+		if isDigits(a[i]) && isDigits(b[i]) && trimZeros(a[i]) != trimZeros(b[i]) {
+			return a[i], true
+		}
+	}
+	return "", false
+}
+
+// fields splits zone-file text at whitespace outside double quotes.
+func fields(s string) []string {
+	var (
+		out              []string
+		b                strings.Builder
+		quoted, escaping bool
+	)
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case escaping:
+			escaping = false
+		case c == '\\':
+			escaping = true
+		case c == '"':
+			quoted = !quoted
+		case !quoted && (c == ' ' || c == '\t'):
+			if b.Len() > 0 {
+				out = append(out, b.String())
+				b.Reset()
+			}
+			continue
+		}
+		b.WriteByte(c)
+	}
+	if b.Len() > 0 {
+		out = append(out, b.String())
+	}
+	return out
+}
+
+func trimZeros(s string) string {
+	if t := strings.TrimLeft(s, "0"); t != "" {
+		return t
+	}
+	return "0"
 }
 
 // canonicalTXT returns a TXT value in canonical form. A value that starts

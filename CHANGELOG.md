@@ -16,6 +16,11 @@ All notable changes to this project are recorded here. The format follows
   inactive records listed. It reports problems in NetBox's data as warnings,
   and in its JSON output, without failing. A zone name in more than one view
   needs `--view`.
+- Record values of every type are normalized into one canonical form, parsed
+  with the miekg/dns library, so that the same data reads the same from
+  NetBox and from PowerDNS: names inside values lowercase and absolute, hex
+  uppercase. A number too big for its field, such as an `SRV` port of 70000,
+  is reported as a problem rather than accepted.
 - NetBox 4.7, with the DNS plugin 1.7.x, is supported.
   Lists are paged, records are read with bounded concurrency, and requests
   have a time limit and are retried when the failure may pass. TLS 1.2 or
