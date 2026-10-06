@@ -18,6 +18,9 @@ All notable changes to this project are recorded here. The format follows
   policy, with `enforce` marked as acting from M12. It exits 0 with no
   drift, 3 with drift, and 1 when NetBox or a primary can't be read, with
   the other groups still reported.
+- Documentation: a tutorial on finding drift between NetBox and PowerDNS, a
+  how-to guide on setting a zone's drift policy, and an explanation of how
+  nbpdns finds drift.
 - `nbpdns netbox check`, `zones`, and `records`: read DNS data from the NetBox
   DNS plugin, through NetBox's REST API, with a read-only token. `check`
   reports NetBox's and the plugin's releases, and whether the token can view
