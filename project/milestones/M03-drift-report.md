@@ -1,9 +1,9 @@
 ---
 id: M03
 title: Drift report
-status: in-progress # planned | in-progress | done
+status: done # planned | in-progress | done
 started: 2026-10-06
-closed:
+closed: 2026-10-07
 ---
 
 # M03: Drift report
@@ -57,7 +57,10 @@ JSON, with exit codes that scripts can act on. Read-only.
   ITEM-0049; M03 touches no secrets, so `/security-review` didn't run (see
   below).
 - [ ] The manual verification is recorded. The GitLab and GitHub pipelines
-  pass, and the user has merged through an MR with a merge commit.
+  pass, and the user has merged through an MR with a merge commit. The
+  verification is recorded below. On `597ae3a`, the user reported that the
+  pipeline passed, and GitHub Actions run 37479147765 passed every job. The
+  merge is to come.
 
 ## Decided after approval
 
@@ -162,6 +165,14 @@ Append-only and dated. Record what was run and what was seen.
     217 seconds, over 55 seconds of wall-clock. At 8 the run took as long,
     since the lab's NetBox runs two Granian workers.
   The explanation's scale section now gives these figures.
+- 2026-10-07: **Pipelines.** The user pushed `m03-drift-report` at
+  `597ae3a`, and reported that the pipeline passed. GitHub Actions run
+  37479147765 on `597ae3a` passed every job: the lint jobs, `unit-test`,
+  `integration-test` (7m42s), `build`, `docs-site`, `secrets` and `vuln`.
+- 2026-10-07: **Closed**, with every item done. Left for the user: merging
+  through a GitLab merge request with a merge commit. After that, M04 (the
+  service) is designed in plan mode; ITEM-0049, comparing server groups
+  concurrently, is already in it.
 
 ## Approved design
 
