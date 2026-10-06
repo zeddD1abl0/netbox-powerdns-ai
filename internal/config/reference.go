@@ -37,6 +37,7 @@ func WriteReference(w io.Writer) error {
 	for _, k := range ks {
 		p("| [`%s`](#%s) | %s | %s |\n", k.Name, anchor(k.Name), k.typ, code(k.Default))
 	}
+	p("| [`%s`](#%s) | list of server groups, config file only | none |\n", GroupsKey, anchor(GroupsKey))
 
 	for _, k := range ks {
 		p("\n## `%s`\n\n", k.Name)
@@ -53,12 +54,46 @@ func WriteReference(w io.Writer) error {
 		}
 	}
 
+	writeGroupsReference(p)
+
 	p("\n## Example config file\n\n")
 	p("Every key except the secrets, with its default:\n\n")
 	p("```yaml\n%s```\n", exampleYAML(ks))
 
 	_, err := io.WriteString(w, b.String())
 	return err
+}
+
+// writeGroupsReference writes the section on powerdns.groups, from its
+// fields.
+func writeGroupsReference(p func(string, ...any)) {
+	p("\n## `%s`\n\n", GroupsKey)
+	p("%s\n\n", wrap("The PowerDNS server groups. Each entry is one group: the NetBox views whose "+
+		"zones it serves, and its primary, the server nbpdns reads through the PowerDNS API. "+
+		"A view may be served by more than one group, as independent sites can serve the same zones.", 79))
+	p("%s\n\n", wrap("Groups are resources, not settings, so only the config file declares them: "+
+		"there's no environment variable or flag. `nbpdns config show` lists each field of each group, "+
+		"such as `powerdns.groups.site-a.primary.url`. An unknown field is an error.", 79))
+	p("| Field | Type | Default | Description |\n|---|---|---|---|\n")
+	for _, f := range GroupFields() {
+		def := code(f.Default)
+		if f.Required {
+			def = "required"
+		}
+		p("| `%s` | %s | %s | %s |\n", f.Name, f.Type, def, f.Summary)
+	}
+	p("\n> [!WARNING]\n%s\n", quote(wrap("A PowerDNS API key can't be limited: it can change every zone, record, "+
+		"TSIG key and DNSSEC key on its server. With an `http://` `primary.url`, the key crosses the network "+
+		"unencrypted, and anyone on the path can read it. Put the API behind a TLS proxy wherever you can; "+
+		"nbpdns logs a warning each time it connects to a primary over `http://`.", 77)))
+	p("\nFor example:\n\n")
+	p("```yaml\npowerdns:\n  groups:\n")
+	p("    - name: site-a\n      views: [_default_]\n      primary:\n")
+	p("        url: https://pdns-a.example.com:8443\n        api_key_file: /run/secrets/pdns-site-a\n")
+	p("        ca_file: /etc/nbpdns/pdns-ca.pem\n")
+	p("    - name: site-b\n      views: [_default_, internal]\n      primary:\n")
+	p("        url: https://pdns-b.example.com:8443\n        api_key_file: /run/secrets/pdns-site-b\n")
+	p("```\n")
 }
 
 // exampleYAML renders every non-secret key with its default, nested the way

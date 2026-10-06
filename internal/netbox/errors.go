@@ -3,20 +3,13 @@ package netbox
 import (
 	"fmt"
 	"strings"
+
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/httpclient"
 )
 
 // UnreachableError means NetBox couldn't be reached, or didn't answer in
 // time, after every retry.
-type UnreachableError struct {
-	URL string
-	Err error
-}
-
-func (e *UnreachableError) Error() string {
-	return fmt.Sprintf("NetBox at %s isn't reachable: %v", e.URL, e.Err)
-}
-
-func (e *UnreachableError) Unwrap() error { return e.Err }
+type UnreachableError = httpclient.UnreachableError
 
 // AuthError means NetBox rejected the token, or none was sent.
 type AuthError struct {

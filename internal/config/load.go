@@ -107,7 +107,7 @@ func (l *Loader) Load() (*Config, []Setting, error) {
 	errs = append(errs, unknownEnv(ks)...)
 	errs = append(errs, unknownFileKeys(ks, v, path)...)
 
-	settings := make([]Setting, 0, len(ks))
+	settings := make([]Setting, 0, len(ks)+1)
 	for _, k := range ks {
 		raw, src, err := l.resolve(k, v, path)
 		if err == nil {
@@ -118,6 +118,11 @@ func (l *Loader) Load() (*Config, []Setting, error) {
 		}
 		settings = append(settings, Setting{Key: k.Name, Value: k.show(), Source: src})
 	}
+	groups, groupSettings, groupErrs := loadGroups(v, path)
+	cfg.PowerDNS.Groups = groups
+	settings = append(settings, groupSettings...)
+	errs = append(errs, groupErrs...)
+	slices.SortStableFunc(settings, func(a, b Setting) int { return strings.Compare(a.Key, b.Key) })
 	return cfg, settings, errors.Join(errs...)
 }
 
@@ -198,7 +203,7 @@ func unknownEnv(ks []Key) []error {
 // configuration key. Keys from the defaults, the environment and the flags
 // are all declared, so any other key came from the file.
 func unknownFileKeys(ks []Key, v *viper.Viper, path string) []error {
-	known := []string{}
+	known := []string{GroupsKey}
 	for _, k := range ks {
 		known = append(known, k.Name)
 		if k.Secret {

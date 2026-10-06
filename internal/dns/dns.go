@@ -1,11 +1,13 @@
 // Package dns is nbpdns's normalized model of DNS data: zones and their
 // RRsets. NetBox's data is read into it (M01), and PowerDNS's (M02), so that
-// M03 can compare the two RRset by RRset. The rules come from ADR-0023:
+// M03 can compare the two RRset by RRset. The rules come from ADR-0023 and
+// ADR-0025:
 //
 //   - Names are lowercase and absolute, ending with a dot.
-//   - Relative targets in CNAME, DNAME, MX, NS, PTR and SRV values are made
-//     absolute against the zone.
-//   - A and AAAA addresses are in their canonical text form.
+//   - Values are parsed as their type with miekg/dns and printed in its
+//     canonical text, with every name inside them made absolute against the
+//     zone and lowercase, and hex uppercase. A number too big for its field
+//     is an error, not a smaller number.
 //   - TXT and SPF values are canonical: each string in double quotes, with "
 //     and \ escaped, strings separated by one space, none longer than 255
 //     bytes.
@@ -27,14 +29,16 @@ import (
 type Zone struct {
 	// Name is the zone's absolute name, such as example.com.
 	Name string `json:"name"`
-	// View is the NetBox DNS view the zone is in.
-	View string `json:"view"`
-	// Status is the zone's status in its source, such as active.
-	Status string `json:"status"`
+	// View is the NetBox DNS view the zone is in. PowerDNS zones have none.
+	View string `json:"view,omitempty"`
+	// Status is the zone's status in NetBox, such as active. PowerDNS zones
+	// have none.
+	Status string `json:"status,omitempty"`
 	// Active reports whether the zone's status is one that's published.
 	Active bool `json:"active"`
-	// DefaultTTL is the TTL of records that set none.
-	DefaultTTL uint32 `json:"default_ttl"`
+	// DefaultTTL is the TTL of NetBox records that set none. PowerDNS zones
+	// have none.
+	DefaultTTL uint32 `json:"default_ttl,omitempty"`
 	// SOASerial is the zone's SOA serial number.
 	SOASerial uint32 `json:"soa_serial"`
 	// Nameservers are the zone's name servers, as absolute names.

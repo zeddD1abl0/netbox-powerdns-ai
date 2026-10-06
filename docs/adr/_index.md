@@ -37,5 +37,8 @@ from [`template.md`](template.md).
 | [0021](0021-cobra-and-viper-for-commands-and-configuration.md) | Cobra and Viper for commands and configuration | accepted |
 | [0022](0022-toolchain-with-the-c-compiler-that-race-needs.md) | Toolchain with the C compiler that -race needs | accepted |
 | [0023](0023-netbox-client-and-normalized-dns-model-with-netbox.md) | NetBox client and normalized DNS model, with NetBox 4.7 only | accepted |
+| [0024](0024-read-powerdns-through-its-api-from-server-groups-i.md) | Read PowerDNS through its API, from server groups in the config file | superseded by ADR-0026 |
+| [0025](0025-normalize-record-data-with-miekg-dns-v2.md) | Normalize record data with miekg/dns v2 | accepted |
+| [0026](0026-read-powerdns-through-its-api-with-powerdns-5-1-on.md) | Read PowerDNS through its API, with PowerDNS 5.1 only | accepted |
 
 <!-- projctl:adr-index:end -->

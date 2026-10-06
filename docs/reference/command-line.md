@@ -35,6 +35,8 @@ in the [configuration reference](configuration.md).
 | `--netbox-token` | `string` | none | The NetBox API token that nbpdns reads with. |
 | `--netbox-token-file` | `path` | none | Read `netbox.token` from this file. |
 | `--netbox-url` | `url` | none | NetBox's base URL, such as `https://netbox.example.com`. |
+| `--powerdns-concurrency` | `integer` | `4` | How many requests to each PowerDNS API may be in flight at once. |
+| `--powerdns-timeout` | `duration` | `30s` | How long one request to a PowerDNS API may take. |
 
 ## Commands
 
@@ -183,15 +185,89 @@ List the zones in NetBox's DNS plugin, with each one's view, status, SOA
 serial, default TTL, and name servers. Names are absolute and lowercase, in
 their ASCII form, as nbpdns compares them.
 
+With --group, list only the zones that a PowerDNS server group serves: those
+in the views it lists. One PowerDNS server holds one zone of each name, so a
+zone name in two of those views is logged as a problem.
+
 ```text
 nbpdns netbox zones [flags]
 ```
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--group` | `string` | none | Only list the zones this PowerDNS server group serves. |
 | `-o`, `--output` | `format` | `table` | The output format: `table` or `json`. |
 | `--status` | `string` | none | Only list the zones with this status, such as `active`. |
 | `--view` | `string` | none | Only list the zones in this view. |
+
+### `nbpdns powerdns`
+
+Read the zones and records of each PowerDNS server group's primary, through
+the PowerDNS API. Server groups are declared in the config file. These
+commands only read: nbpdns never changes PowerDNS.
+
+```text
+nbpdns powerdns [command]
+```
+
+Subcommands: [`check`](#nbpdns-powerdns-check), [`records`](#nbpdns-powerdns-records), and [`zones`](#nbpdns-powerdns-zones).
+
+### `nbpdns powerdns check`
+
+Check that nbpdns can read each server group's primary: that its API answers,
+is a PowerDNS Authoritative Server of a supported release, accepts the API
+key, and lists its zones.
+
+Each check passes, warns, or fails. If any check fails, nbpdns exits with
+status 1. A warning, such as for an http:// URL, doesn't fail the check.
+
+```text
+nbpdns powerdns check [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--group` | `string` | none | Only check this server group. |
+| `-o`, `--output` | `format` | `table` | The output format: `table` or `json`. |
+
+### `nbpdns powerdns records`
+
+List the records of one zone on a server group's primary, as nbpdns normalizes
+them: grouped into RRsets, with absolute lowercase names, canonical values,
+and each RRset's TTL. Records that PowerDNS keeps but doesn't serve are
+listed too, with their status.
+
+Give the zone's name in its ASCII form. If more than one server group is
+declared, choose one with --group.
+
+Where PowerDNS's data has a problem that nbpdns works around, such as a value
+that doesn't parse as its type, nbpdns logs a warning for each one and lists
+it under "problems" in JSON output. Problems don't make the command fail.
+
+```text
+nbpdns powerdns records --zone NAME [--group GROUP] [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--group` | `string` | none | The server group, if more than one is declared. |
+| `-o`, `--output` | `format` | `table` | The output format: `table` or `json`. |
+| `--zone` | `string` | none | The zone's name, such as `example.com`. Required. |
+
+### `nbpdns powerdns zones`
+
+List the zones on each server group's primary, with each one's kind, SOA
+serial, and the catalog zone it's a member of, if any. Names are absolute
+and lowercase, as nbpdns compares them.
+
+```text
+nbpdns powerdns zones [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--group` | `string` | none | Only list this server group's zones. |
+| `-o`, `--output` | `format` | `table` | The output format: `table` or `json`. |
 
 ### `nbpdns version`
 

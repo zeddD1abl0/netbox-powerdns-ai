@@ -141,3 +141,76 @@ func TestSetRecords(t *testing.T) {
 		}
 	}
 }
+
+// TestValueAcrossSources gives the same data as NetBox's DNS plugin keeps it,
+// entered relative and in any case, and as PowerDNS keeps it, absolute and
+// in its own text, and expects one value from both (ADR-0025).
+func TestValueAcrossSources(t *testing.T) {
+	const hex = "ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789"
+	lower := strings.ToLower(hex)
+	// Hex is compared in uppercase, which miekg/dns prints for some types
+	// whatever case it's given.
+	tests := []struct {
+		typ, netbox, powerdns, want string
+	}{
+		{"CAA", `0 issue letsencrypt.org`, `0 issue "letsencrypt.org"`, `0 issue "letsencrypt.org"`},
+		{"TLSA", "3 1 1 " + lower, "3 1 1 " + hex, "3 1 1 " + hex},
+		{"SSHFP", "4 2 " + lower, "4 2 " + hex, "4 2 " + hex},
+		{"DS", "12345 13 2 " + lower, "12345 13 2 " + hex, "12345 13 2 " + hex},
+		{"HTTPS", `1 . alpn=h3,h2 ipv4hint=192.0.2.1`, `1 . alpn="h3,h2" ipv4hint=192.0.2.1`, `1 . alpn="h3,h2" ipv4hint="192.0.2.1"`},
+		{"SVCB", `1 Svc port=8443`, `1 svc.example.com. port="8443"`, `1 svc.example.com. port="8443"`},
+		{"NAPTR", `100 10 "S" "SIP+D2U" "" _sip._udp`, `100 10 "S" "SIP+D2U" "" _sip._udp.example.com.`,
+			`100 10 "S" "SIP+D2U" "" _sip._udp.example.com.`},
+		{"LOC", "52 22 23 N 4 53 32 E -2m 0m 10000m 10m", "52 22 23.000 N 4 53 32.000 E -2.00m 0.00m 10000.00m 10.00m",
+			"52 22 23.000 N 04 53 32.000 E -2m 0.00m 10000m 10m"},
+		{"TXT", "v=spf1 mx -all", `"v=spf1 mx -all"`, `"v=spf1 mx -all"`},
+		{"MX", "10 Mail", "10 mail.example.com.", "10 mail.example.com."},
+		{"SRV", "10 5 5060 SIP", "10 5 5060 sip.example.com.", "10 5 5060 sip.example.com."},
+		{"SOA", "ns1 hostmaster 2026100601 43200 7200 2419200 3600",
+			"ns1.example.com. hostmaster.example.com. 2026100601 43200 7200 2419200 3600",
+			"ns1.example.com. hostmaster.example.com. 2026100601 43200 7200 2419200 3600"},
+		{"AAAA", "2001:DB8::0:1", "2001:db8::1", "2001:db8::1"},
+	}
+	for _, tt := range tests {
+		for _, in := range []string{tt.netbox, tt.powerdns} {
+			if got, err := Value(tt.typ, in, "example.com."); got != tt.want || err != nil {
+				t.Errorf("Value(%s, %q) = %q, %v; want %q", tt.typ, in, got, err, tt.want)
+			}
+		}
+	}
+}
+
+// TestValueOutOfRange checks numbers too big for their fields, which
+// miekg/dns would otherwise keep modulo the field's size.
+func TestValueOutOfRange(t *testing.T) {
+	tests := []struct{ typ, value string }{
+		{"MX", "70000 mail"},
+		{"SRV", "70000 1 1 web"},
+		{"CAA", `300 issue "x"`},
+		{"TLSA", "300 1 1 abcd"},
+		{"DS", "70000 13 2 abcd"},
+		{"HTTPS", "70000 . alpn=h2"},
+		{"SOA", "ns1 h 99999999999 1 1 1 1"},
+	}
+	for _, tt := range tests {
+		if got, err := Value(tt.typ, tt.value, "example.com."); err == nil || got != tt.value {
+			t.Errorf("Value(%s, %q) = %q, %v; want it kept as given, with an error", tt.typ, tt.value, got, err)
+		}
+	}
+	// Hex or base64 given in chunks is printed as one field; chunks that are
+	// all digits aren't numbers out of range.
+	for _, tt := range []struct{ typ, value, want string }{
+		{"DS", "12345 8 2 1234 5678", "12345 8 2 12345678"},
+		{"TLSA", "3 1 1 0123 4567 89ab", "3 1 1 0123456789AB"},
+		{"SSHFP", "4 2 1234 5678", "4 2 12345678"},
+	} {
+		if got, err := Value(tt.typ, tt.value, "example.com."); got != tt.want || err != nil {
+			t.Errorf("Value(%s, %q) = %q, %v; want %q", tt.typ, tt.value, got, err, tt.want)
+		}
+	}
+	// Numbers written with leading zeros, or printed differently, aren't
+	// out of range.
+	if got, err := Value("MX", "010 mail", "example.com."); got != "10 mail.example.com." || err != nil {
+		t.Errorf("Value(MX, 010 mail) = %q, %v", got, err)
+	}
+}

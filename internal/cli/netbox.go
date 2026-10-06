@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -183,15 +184,30 @@ func newNetBoxZonesCmd(a *app) *cobra.Command {
 		Short: "List the zones in NetBox",
 		Long: "List the zones in NetBox's DNS plugin, with each one's view, status, SOA\n" +
 			"serial, default TTL, and name servers. Names are absolute and lowercase, in\n" +
-			"their ASCII form, as nbpdns compares them.",
+			"their ASCII form, as nbpdns compares them.\n\n" +
+			"With --group, list only the zones that a PowerDNS server group serves: those\n" +
+			"in the views it lists. One PowerDNS server holds one zone of each name, so a\n" +
+			"zone name in two of those views is logged as a problem.",
 		Args: usageArgs(cobra.NoArgs),
 	}
 	output := addOutputFlag(cmd)
 	view := cmd.Flags().String("view", "", "Only list the zones in this view.")
 	status := cmd.Flags().String("status", "", "Only list the zones with this status, such as active.")
 	_ = cmd.Flags().SetAnnotation("status", config.MarkdownUsage, []string{"Only list the zones with this status, such as `active`."})
+	group := addGroupFlag(cmd, "Only list the zones this PowerDNS server group serves.", "Only list the zones this PowerDNS server group serves.")
 	cmd.RunE = func(cmd *cobra.Command, _ []string) error {
+		if *view != "" && *group != "" {
+			return usageError{errors.New("--view and --group can't be used together; a group chooses its views")}
+		}
 		return a.run(cmd, func(ctx context.Context, s *session) error {
+			views := []string{*view}
+			if *group != "" {
+				groups, err := s.groups(*group)
+				if err != nil {
+					return err
+				}
+				views = groups[0].Views
+			}
 			c, err := s.netbox(ctx)
 			if err != nil {
 				return err
@@ -200,9 +216,15 @@ func newNetBoxZonesCmd(a *app) *cobra.Command {
 			if _, err := c.Connect(ctx); err != nil {
 				return err
 			}
-			zones, err := c.Zones(ctx, netbox.ZoneFilter{View: *view, Status: *status})
+			zones, err := c.Zones(ctx, netbox.ZoneFilter{Views: views, Status: *status})
 			if err != nil {
 				return err
+			}
+			if *group != "" {
+				for _, p := range sharedNames(*group, zones) {
+					s.log.WarnContext(ctx, "a PowerDNS server group serves two zones of one name, which one server can't hold",
+						"group", *group, "zone", p.Zone, "problem", p.Detail)
+				}
 			}
 			out := make([]dns.Zone, len(zones))
 			for i, z := range zones {
@@ -223,6 +245,25 @@ func newNetBoxZonesCmd(a *app) *cobra.Command {
 		})
 	}
 	return cmd
+}
+
+// sharedNames returns a problem for each zone name that's in more than one
+// of zones' views, which group serves.
+func sharedNames(group string, zones []netbox.Zone) []dns.Problem {
+	views := map[string][]string{}
+	for _, z := range zones {
+		name := dns.Name(z.Name, ".")
+		views[name] = append(views[name], z.View.Name)
+	}
+	var probs []dns.Problem
+	for _, name := range slices.Sorted(maps.Keys(views)) {
+		if vs := views[name]; len(vs) > 1 {
+			slices.Sort(vs)
+			probs = append(probs, dns.Problem{Zone: name,
+				Detail: fmt.Sprintf("server group %s serves it from the views %s", group, strings.Join(vs, ", "))})
+		}
+	}
+	return probs
 }
 
 // zoneRecords is the JSON output of `nbpdns netbox records`.

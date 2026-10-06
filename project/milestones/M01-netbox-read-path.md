@@ -52,10 +52,12 @@ tests need.
   pass against it, with a least-privilege v2 token. (Narrowed from 4.7 and
   4.6 on 2026-10-06; see below.) Passed locally and in three emulated CI
   jobs on 2026-10-06.
-- [ ] Integration tests run in every GitLab and GitHub pipeline, and
+- [x] Integration tests run in every GitLab and GitHub pipeline, and
   `make project-lint` confirms the CI files mirror `make ci`. GitLab passed
   on `5e4f3d6` (reported by the user, 2026-10-06), and `make project-lint`
-  is clean; the GitHub result is still to come from the user.
+  is clean. GitHub first ran them once ITEM-0030 restored the mirror; with
+  ITEM-0041's fix, GitHub Actions run 37426268234 on `44623bc`, M02's
+  branch, which holds all of M01, passed them (2026-10-06).
 - [x] Hook pipe-tests run in `make test` (ITEM-0017).
 - [x] The prerequisites name the C compiler that `-race` needs (ITEM-0025,
   ADR-0022).
@@ -65,9 +67,9 @@ tests need.
 - [x] `/code-review high` and `/security-review` have run. M01 handles the
   NetBox token, so the secrets trigger applies (ITEM-0026; the security
   review of 2026-10-06, below).
-- [ ] The manual verification is recorded, and the user has merged through an
-  MR with a merge commit. The verification is recorded below; the merge is
-  to come.
+- [x] The manual verification is recorded, and the user has merged through an
+  MR with a merge commit: merge request !2, merge commit `7934f8b`, on
+  2026-10-06.
 
 ## Decided after approval
 
@@ -186,6 +188,19 @@ Append-only and dated. Record what was run and what was seen.
      1, and `records` fails with the same message.
   7. At `--log-level debug`, a `records` run's log lines hold neither the
      token nor its secret part.
+- 2026-10-06: **Merged.** The user merged `m01-netbox-read-path` through
+  GitLab merge request !2. `main` is at the merge commit `7934f8b`, whose
+  parents are the old `main`, `fcbdaeb`, and the branch tip, `2042fab`, so
+  every per-item commit is kept (ADR-0018). The GitHub mirror didn't follow:
+  GitHub's `main` is still `fcbdaeb`, the M01 branch never reached GitHub,
+  and its last Actions run was on 2026-09-26. The GitHub criterion above
+  stays open, tracked as ITEM-0030.
+- 2026-10-06: **GitHub.** The user restored the mirror. GitHub's first run of
+  M01's code, on `main` (`7934f8b`), failed at `integration-test`, which had
+  never run on GitHub: the job's `DOCKER_HOST` redirected the runner's own
+  docker commands. ITEM-0041, in M02, fixed it, and GitHub Actions run
+  37426268234 on `44623bc`, which holds all of M01, passed every job. The
+  GitHub criterion above is ticked.
 
 ## Approved design
 

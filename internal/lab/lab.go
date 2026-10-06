@@ -1,6 +1,6 @@
 // Package lab describes the development lab, deploy/dev/compose.yaml, for
-// integration tests: where each NetBox listens, and how to reach it as its
-// admin. `make test-integration` starts the lab before it runs the tests,
+// integration tests: where each NetBox and PowerDNS server listens, and how to
+// reach it as its admin. `make test-integration` starts the lab before it runs the tests,
 // which have the build tag "integration".
 package lab
 
@@ -37,6 +37,37 @@ var NetBoxes = []NetBox{
 // URL returns the instance's base URL.
 func (n NetBox) URL() string {
 	return "http://" + net.JoinHostPort(Host(), strconv.Itoa(n.Port))
+}
+
+// PowerDNSAPIKey is the API key of every lab PowerDNS server. PowerDNS has
+// one key per server, so tests create fixtures with the key that nbpdns
+// reads with.
+const PowerDNSAPIKey = "nbpdns-lab-powerdns-api-key-not-for-production" //nolint:gosec // The lab's published credential. gitleaks:allow
+
+// A PowerDNS is one of the lab's PowerDNS servers: the primary of one server
+// group (ADR-0026).
+type PowerDNS struct {
+	// Name is its compose service.
+	Name string
+	// Group is the server group it's the primary of.
+	Group string
+	// Version is the PowerDNS release series it runs, such as 5.1.
+	Version string
+	// Port is its API's port on the lab's host.
+	Port int
+}
+
+// PowerDNSes are the lab's PowerDNS servers, one per supported release
+// (REQ-041), each the primary of its own group. Each costs the CI job a
+// server and an image, so a release is only added when the runners have
+// room for it (ADR-0026).
+var PowerDNSes = []PowerDNS{
+	{Name: "powerdns-51", Group: "lab-a", Version: "5.1", Port: 8151},
+}
+
+// URL returns the server's API base URL.
+func (p PowerDNS) URL() string {
+	return "http://" + net.JoinHostPort(Host(), strconv.Itoa(p.Port))
 }
 
 // Host returns the host that the lab's ports are published on: the host of

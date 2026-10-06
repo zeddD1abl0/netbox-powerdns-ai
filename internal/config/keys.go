@@ -9,8 +9,9 @@ import (
 // Config is nbpdns's configuration, with the defaults, the config file, the
 // environment and the flags applied.
 type Config struct {
-	Log    LogConfig
-	NetBox NetBoxConfig
+	Log      LogConfig
+	NetBox   NetBoxConfig
+	PowerDNS PowerDNSConfig
 }
 
 // LogConfig configures the operational log, written to standard error.
@@ -27,6 +28,24 @@ type NetBoxConfig struct {
 	Timeout     time.Duration
 	PageSize    int
 	Concurrency int
+}
+
+// PowerDNSConfig says how to read the PowerDNS server groups.
+type PowerDNSConfig struct {
+	Timeout     time.Duration
+	Concurrency int
+	// Groups come from the config file's powerdns.groups (ADR-0026).
+	Groups []Group
+}
+
+// Group returns the group named name.
+func (c PowerDNSConfig) Group(name string) (Group, bool) {
+	for _, g := range c.Groups {
+		if g.Name == name {
+			return g, true
+		}
+	}
+	return Group{}, false
 }
 
 // keys declares every configuration key, bound to a field of c, sorted by
@@ -82,6 +101,17 @@ func keys(c *Config) []Key {
 		intKey(&c.NetBox.Concurrency, Key{
 			Name:    "netbox.concurrency",
 			Summary: "How many requests to NetBox may be in flight at once.",
+			Default: "4",
+		}, 1, 32),
+		durationKey(&c.PowerDNS.Timeout, Key{
+			Name:    "powerdns.timeout",
+			Summary: "How long one request to a PowerDNS API may take.",
+			Details: "Write it with a unit, such as `30s` or `2m`.",
+			Default: "30s",
+		}),
+		intKey(&c.PowerDNS.Concurrency, Key{
+			Name:    "powerdns.concurrency",
+			Summary: "How many requests to each PowerDNS API may be in flight at once.",
 			Default: "4",
 		}, 1, 32),
 	}

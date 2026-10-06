@@ -147,7 +147,13 @@ generate-check: ## Fail if a generated reference page is out of date
 ##@ Development lab
 
 # The lab (deploy/dev/compose.yaml, REQ-036) runs on the Docker host that
-# DOCKER_HOST names, or the local one.
+# DOCKER_HOST names, or the local one. LAB_DOCKER_HOST, if set, takes its
+# place: a GitHub container job hands its environment to the runner's own
+# docker commands too, so a DOCKER_HOST there would send them to the job's
+# Docker-in-Docker service, which only the job can reach (ITEM-0041).
+ifdef LAB_DOCKER_HOST
+export DOCKER_HOST := $(LAB_DOCKER_HOST)
+endif
 LAB_DIR := deploy/dev
 # The lab's credentials are public, so on a local Docker host, including one
 # reached over TCP on a loopback address, its ports listen on 127.0.0.1 only.

@@ -16,6 +16,35 @@ All notable changes to this project are recorded here. The format follows
   inactive records listed. It reports problems in NetBox's data as warnings,
   and in its JSON output, without failing. A zone name in more than one view
   needs `--view`.
+- `nbpdns powerdns check`, `zones`, and `records`: read each PowerDNS server
+  group's primary, as a table or JSON, for every group or one (`--group`).
+  `check` reports each primary's release and whether it accepts the key and
+  lists its zones. `records` shows a zone in the same normalized form as
+  `nbpdns netbox records`, with records PowerDNS doesn't serve listed as
+  `disabled`.
+- `nbpdns netbox zones --group` lists the NetBox zones a server group serves,
+  through its views, and warns about a zone name that's in two of them.
+- Documentation: a tutorial on reading PowerDNS zones, how-to guides on
+  connecting nbpdns to PowerDNS and on putting the PowerDNS API behind a TLS
+  proxy, and an explanation of how nbpdns reads PowerDNS.
+- PowerDNS Authoritative 5.1 is supported, read through each server
+  group's primary's HTTP API with its API key. Requests have a time limit and
+  are retried when the failure may pass, redirects aren't followed, and TLS,
+  a CA file, and a client certificate are supported. Plain `http://` works,
+  with a warning. A server that isn't authoritative is an error, and an
+  unsupported release a warning.
+- PowerDNS server groups, declared in the config file under
+  `powerdns.groups`: each a name, the NetBox views it serves, and its
+  primary's API URL, API key or key file, server ID, CA file, and client
+  certificate. Fields are checked strictly, every problem is reported at
+  once, and `nbpdns config show` lists each field with the key redacted.
+  `powerdns.timeout` and `powerdns.concurrency` set how requests to PowerDNS
+  behave.
+- Record values of every type are normalized into one canonical form, parsed
+  with the miekg/dns library, so that the same data reads the same from
+  NetBox and from PowerDNS: names inside values lowercase and absolute, hex
+  uppercase. A number too big for its field, such as an `SRV` port of 70000,
+  is reported as a problem rather than accepted.
 - NetBox 4.7, with the DNS plugin 1.7.x, is supported.
   Lists are paged, records are read with bounded concurrency, and requests
   have a time limit and are retried when the failure may pass. TLS 1.2 or
@@ -32,12 +61,14 @@ All notable changes to this project are recorded here. The format follows
   apart.
 - Configuration from flags, `NBPDNS_` environment variables, and a YAML config
   file, in that order of precedence. Secrets can be read from files (`_FILE`),
-  and are redacted everywhere they could be printed or logged. Unknown keys and
+  and are redacted everywhere they could be printed or logged. A secret in
+  the config file must be a string: one that YAML reads as a number is an
+  error, rather than silently changed. Unknown keys and
   variables are errors, and every problem is reported at once.
 - Configuration and command-line reference pages, generated from the code.
-- A development lab with NetBox 4.7 and the NetBox DNS plugin, in containers
-  (`make lab-up`, `make lab-down`). Integration tests run against it
-  (`make test-integration`), in every pipeline.
+- A development lab with NetBox 4.7 and the NetBox DNS plugin, and a PowerDNS
+  5.1 server, in containers (`make lab-up`, `make lab-down`). Integration
+  tests run against it (`make test-integration`), in every pipeline.
 - Logs on standard error, as JSON or text (`log.format`) from a chosen level
   (`log.level`). Every line carries the run's `trace_id`, `span_id`, and
   `request_id`, and outgoing requests carry the W3C `traceparent` header.

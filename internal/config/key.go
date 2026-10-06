@@ -129,7 +129,7 @@ func secretKey(dst *Secret, k Key) Key {
 	k.Secret = true
 	k.typ, k.flagType = "string, secret", "string"
 	k.parse = func(raw any) error {
-		s, err := toString(raw)
+		s, err := secretString(raw)
 		if err != nil {
 			return err
 		}
@@ -203,11 +203,30 @@ func checkURL(s string) error {
 	case u.Host == "":
 		return fmt.Errorf("%q has no host", s)
 	case u.User != nil:
-		return errors.New("the URL mustn't contain credentials; set the token instead")
+		return errors.New("the URL mustn't contain credentials; set the token or API key in its own key")
 	case u.RawQuery != "" || u.Fragment != "":
 		return fmt.Errorf("%q mustn't have a query or fragment", s)
 	}
 	return nil
+}
+
+// secretString accepts only a string. A secret that YAML reads as a number
+// or a boolean would come back in Go's form, such as 1e+10 for 1e10, and
+// silently stop matching. The error names only the kind of value it got,
+// never the value, which is the secret.
+func secretString(raw any) (string, error) {
+	switch v := raw.(type) {
+	case string:
+		return v, nil
+	case int, int64, uint64, float64:
+		return "", errors.New("want a string, not a number; put it in quotes")
+	case bool:
+		return "", errors.New("want a string, not true or false; put it in quotes")
+	case map[string]any, []any, nil:
+		return "", fmt.Errorf("want a string, not %s", describe(raw))
+	default:
+		return "", errors.New("want a string; put it in quotes")
+	}
 }
 
 // toString accepts a string, or a YAML scalar that reads as one.

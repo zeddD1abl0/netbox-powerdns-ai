@@ -10,7 +10,7 @@
 |---|---|---|---|
 | [M00](milestones/M00-foundation.md) | Foundation | done | 16 of 16 |
 | [M01](milestones/M01-netbox-read-path.md) | NetBox read path | done | 12 of 12 |
-| [M02](milestones/M02-powerdns-read-path.md) | PowerDNS read path | planned | — |
+| [M02](milestones/M02-powerdns-read-path.md) | PowerDNS read path | done | 11 of 11 |
 | [M03](milestones/M03-drift-report.md) | Drift report | planned | — |
 | [M04](milestones/M04-service.md) | Service | planned | 0 of 1 |
 | [M05](milestones/M05-rest-api.md) | REST API | planned | — |
@@ -20,7 +20,7 @@
 | [M09](milestones/M09-authentication.md) | Authentication | planned | — |
 | [M10](milestones/M10-sso-and-rbac.md) | SSO and RBAC | planned | — |
 | [M11](milestones/M11-web-ui.md) | Web UI | planned | — |
-| [M12](milestones/M12-write-path-plan-and-apply.md) | Write path: plan and apply | planned | — |
+| [M12](milestones/M12-write-path-plan-and-apply.md) | Write path: plan and apply | planned | 0 of 1 |
 | [M13](milestones/M13-change-safety.md) | Change safety | planned | — |
 | [M14](milestones/M14-brownfield-import.md) | Brownfield import | planned | — |
 | [M15](milestones/M15-siem-export.md) | SIEM export | planned | — |
@@ -33,14 +33,14 @@
 | Item | Title | Type | Status | Waiting on |
 |---|---|---|---|---|
 | [ITEM-0027](items/ITEM-0027-avoid-rebuilding-the-log-handler-chain-per-record.md) | Avoid rebuilding the log handler chain per record for grouped loggers | debt | open | — |
+| [ITEM-0040](items/ITEM-0040-write-record-values-to-powerdns-in-its-own-text-fo.md) | Write record values to PowerDNS in its own text form | task | open | — |
 
 ## Open questions
 
-34 open (0 blocking), 22 answered. The questions and their proposed defaults are in [requirements.md](requirements.md#open-questions).
+29 open (0 blocking), 27 answered. The questions and their proposed defaults are in [requirements.md](requirements.md#open-questions).
 
 | Needed by | Open questions |
 |---|---|
-| M02 | Q-021, Q-022, Q-039, Q-043, Q-053 |
 | M03 | Q-017, Q-027 |
 | M04 | Q-038 |
 | M04 (binary, image), M16 (rest) | Q-025 |
@@ -59,8 +59,8 @@
 
 ## Requirements
 
-40 requirements, listed in [requirements.md](requirements.md#requirements). 20 aren't referenced by any item yet: REQ-003, REQ-004, REQ-007, REQ-008, REQ-009, REQ-010, REQ-011, REQ-014, REQ-015, REQ-016, REQ-017, REQ-023, REQ-028, REQ-029, REQ-030, REQ-031, REQ-032, REQ-033, REQ-034, REQ-035.
+42 requirements, listed in [requirements.md](requirements.md#requirements). 17 aren't referenced by any item yet: REQ-003, REQ-004, REQ-007, REQ-008, REQ-009, REQ-010, REQ-011, REQ-014, REQ-015, REQ-016, REQ-017, REQ-023, REQ-031, REQ-032, REQ-033, REQ-034, REQ-035.
 
 ## Decisions
 
-23 ADRs (18 accepted, 5 superseded), listed in [docs/adr](../docs/adr/_index.md).
+26 ADRs (20 accepted, 6 superseded), listed in [docs/adr](../docs/adr/_index.md).

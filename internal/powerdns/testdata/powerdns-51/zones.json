@@ -1,0 +1,38 @@
+[
+  {
+    "account": "",
+    "catalog": "",
+    "id": "rec.nbpdns.example.",
+    "kind": "Native",
+    "last_check": 0,
+    "masters": [],
+    "name": "rec.nbpdns.example.",
+    "notified_serial": 0,
+    "serial": 2026100601,
+    "url": "/api/v1/servers/localhost/zones/rec.nbpdns.example."
+  },
+  {
+    "account": "",
+    "catalog": "",
+    "id": "rec-b.nbpdns.example.",
+    "kind": "Native",
+    "last_check": 0,
+    "masters": [],
+    "name": "rec-b.nbpdns.example.",
+    "notified_serial": 0,
+    "serial": 2026100601,
+    "url": "/api/v1/servers/localhost/zones/rec-b.nbpdns.example."
+  },
+  {
+    "account": "",
+    "catalog": "",
+    "id": "rec-c.nbpdns.example.",
+    "kind": "Native",
+    "last_check": 0,
+    "masters": [],
+    "name": "rec-c.nbpdns.example.",
+    "notified_serial": 0,
+    "serial": 2026100601,
+    "url": "/api/v1/servers/localhost/zones/rec-c.nbpdns.example."
+  }
+]

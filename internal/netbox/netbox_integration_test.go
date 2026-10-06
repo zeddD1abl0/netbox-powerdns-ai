@@ -75,7 +75,7 @@ func TestLab(t *testing.T) {
 					}
 				}
 
-				zones, err := c.Zones(t.Context(), ZoneFilter{View: f.View, Status: "active"})
+				zones, err := c.Zones(t.Context(), ZoneFilter{Views: []string{f.View}, Status: "active"})
 				if err != nil || len(zones) != 1 || zones[0].Name != f.Zone {
 					t.Fatalf("zones in %s: %+v, %v", f.View, zones, err)
 				}
@@ -87,7 +87,7 @@ func TestLab(t *testing.T) {
 				// 39 records at 10 a page.
 				pages := 0
 				for line := range strings.Lines(logs.String()) {
-					if strings.Contains(line, `msg="request to NetBox"`) && strings.Contains(line, "/netbox-dns/records/?") && strings.Contains(line, "zone_id=") {
+					if strings.Contains(line, `msg="http request" service=NetBox`) && strings.Contains(line, "/netbox-dns/records/?") && strings.Contains(line, "zone_id=") {
 						pages++
 					}
 				}
@@ -117,7 +117,7 @@ func TestLab(t *testing.T) {
 					t.Errorf("FindZone of a missing zone: %v", err)
 				}
 				var api *APIError
-				if _, err = c.Zones(t.Context(), ZoneFilter{View: "no-such-view-" + f.ID}); !errors.As(err, &api) || api.Status != 400 ||
+				if _, err = c.Zones(t.Context(), ZoneFilter{Views: []string{"no-such-view-" + f.ID}}); !errors.As(err, &api) || api.Status != 400 ||
 					!strings.Contains(api.Detail, "view") {
 					t.Errorf("zones in a missing view: %v", err)
 				}

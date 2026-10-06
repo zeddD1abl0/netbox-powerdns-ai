@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -77,10 +78,11 @@ func TestLoadDefaults(t *testing.T) {
 		t.Fatalf("Load() error = %v", err)
 	}
 	want := Config{
-		Log:    LogConfig{Level: "info", Format: "json"},
-		NetBox: NetBoxConfig{Timeout: 30 * time.Second, PageSize: 500, Concurrency: 4},
+		Log:      LogConfig{Level: "info", Format: "json"},
+		NetBox:   NetBoxConfig{Timeout: 30 * time.Second, PageSize: 500, Concurrency: 4},
+		PowerDNS: PowerDNSConfig{Timeout: 30 * time.Second, Concurrency: 4},
 	}
-	if *cfg != want {
+	if !reflect.DeepEqual(*cfg, want) {
 		t.Errorf("Load() = %+v, want %+v", *cfg, want)
 	}
 	for _, s := range settings {
@@ -211,7 +213,9 @@ func TestLoadErrors(t *testing.T) {
 		{"URL with another scheme", "", map[string]string{"NBPDNS_NETBOX_URL": "ftp://netbox.example.com"}, nil,
 			[]string{"needs an http:// or https:// scheme"}},
 		{"URL with credentials", "", map[string]string{"NBPDNS_NETBOX_URL": "https://user:pw@netbox.example.com"}, nil,
-			[]string{"mustn't contain credentials"}},
+			[]string{"mustn't contain credentials; set the token or API key in its own key"}},
+		{"a token that YAML reads as a number", "netbox:\n  token: 12345\n", nil, nil,
+			[]string{"netbox.token (from file", "want a string, not a number; put it in quotes"}},
 		{"URL with a query", "", map[string]string{"NBPDNS_NETBOX_URL": "https://netbox.example.com/?x=1"}, nil,
 			[]string{"mustn't have a query"}},
 		{"a mapping for a string", "netbox:\n  url:\n    host: x\n", nil, nil,
