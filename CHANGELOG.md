@@ -16,6 +16,13 @@ All notable changes to this project are recorded here. The format follows
   inactive records listed. It reports problems in NetBox's data as warnings,
   and in its JSON output, without failing. A zone name in more than one view
   needs `--view`.
+- PowerDNS server groups, declared in the config file under
+  `powerdns.groups`: each a name, the NetBox views it serves, and its
+  primary's API URL, API key or key file, server ID, CA file, and client
+  certificate. Fields are checked strictly, every problem is reported at
+  once, and `nbpdns config show` lists each field with the key redacted.
+  `powerdns.timeout` and `powerdns.concurrency` set how requests to PowerDNS
+  behave.
 - Record values of every type are normalized into one canonical form, parsed
   with the miekg/dns library, so that the same data reads the same from
   NetBox and from PowerDNS: names inside values lowercase and absolute, hex

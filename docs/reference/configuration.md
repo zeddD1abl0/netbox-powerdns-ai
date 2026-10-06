@@ -37,6 +37,9 @@ a secret's value.
 | [`netbox.timeout`](#netboxtimeout) | duration | `30s` |
 | [`netbox.token`](#netboxtoken) | string, secret | none |
 | [`netbox.url`](#netboxurl) | an `http` or `https` URL | none |
+| [`powerdns.concurrency`](#powerdnsconcurrency) | integer, 1 to 32 | `4` |
+| [`powerdns.timeout`](#powerdnstimeout) | duration | `30s` |
+| [`powerdns.groups`](#powerdnsgroups) | list of server groups, config file only | none |
 
 ## `log.format`
 
@@ -126,6 +129,74 @@ reads from NetBox needs it.
 > anyone on the path can read it. Use `https://` wherever NetBox offers it.
 > nbpdns logs a warning each time it connects to NetBox over `http://`.
 
+## `powerdns.concurrency`
+
+How many requests to each PowerDNS API may be in flight at once.
+
+- **Type:** integer, 1 to 32
+- **Default:** `4`
+- **Environment variable:** `NBPDNS_POWERDNS_CONCURRENCY`
+- **Flag:** `--powerdns-concurrency`
+
+## `powerdns.timeout`
+
+How long one request to a PowerDNS API may take. Write it with a unit, such as
+`30s` or `2m`.
+
+- **Type:** duration
+- **Default:** `30s`
+- **Environment variable:** `NBPDNS_POWERDNS_TIMEOUT`
+- **Flag:** `--powerdns-timeout`
+
+## `powerdns.groups`
+
+The PowerDNS server groups. Each entry is one group: the NetBox views whose
+zones it serves, and its primary, the server nbpdns reads through the PowerDNS
+API. A view may be served by more than one group, as independent sites can
+serve the same zones.
+
+Groups are resources, not settings, so only the config file declares them:
+there's no environment variable or flag. `nbpdns config show` lists each field
+of each group, such as `powerdns.groups.site-a.primary.url`. An unknown field
+is an error.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `name` | string: lowercase letters, digits and `-` | required | The group's name, unique among the groups. Commands take it as `--group`. |
+| `views` | list of strings | required | The NetBox views whose zones the group serves. A view may be served by more than one group. |
+| `primary.url` | an `http` or `https` URL | required | The primary's PowerDNS API: its web server, or a TLS proxy in front of it, such as `https://pdns-a.example.com:8443`. |
+| `primary.api_key` | string, secret | none | The PowerDNS API key, sent as `X-API-Key`. Set this or `primary.api_key_file`. |
+| `primary.api_key_file` | path | none | A file that holds the API key, without a final newline if it has one. Set this or `primary.api_key`. |
+| `primary.server_id` | string | `localhost` | The server's ID, which the PowerDNS API puts in its paths. PowerDNS calls its own server `localhost`. |
+| `primary.ca_file` | path | none | A PEM file of CA certificates to trust for the primary, as well as the system's. |
+| `primary.cert_file` | path | none | A PEM client certificate to present, for a TLS proxy that requires one. Set it with `primary.key_file`. |
+| `primary.key_file` | path | none | The client certificate's PEM private key. |
+
+> [!WARNING]
+> A PowerDNS API key can't be limited: it can change every zone, record, TSIG
+> key and DNSSEC key on its server. With an `http://` `primary.url`, the key
+> crosses the network unencrypted, and anyone on the path can read it. Put the
+> API behind a TLS proxy wherever you can; nbpdns logs a warning each time it
+> connects to a primary over `http://`.
+
+For example:
+
+```yaml
+powerdns:
+  groups:
+    - name: site-a
+      views: [_default_]
+      primary:
+        url: https://pdns-a.example.com:8443
+        api_key_file: /run/secrets/pdns-site-a
+        ca_file: /etc/nbpdns/pdns-ca.pem
+    - name: site-b
+      views: [_default_, internal]
+      primary:
+        url: https://pdns-b.example.com:8443
+        api_key_file: /run/secrets/pdns-site-b
+```
+
 ## Example config file
 
 Every key except the secrets, with its default:
@@ -140,4 +211,7 @@ netbox:
   page_size: 500
   timeout: 30s
   url: ""
+powerdns:
+  concurrency: 4
+  timeout: 30s
 ```

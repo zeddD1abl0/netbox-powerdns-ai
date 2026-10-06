@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -77,10 +78,11 @@ func TestLoadDefaults(t *testing.T) {
 		t.Fatalf("Load() error = %v", err)
 	}
 	want := Config{
-		Log:    LogConfig{Level: "info", Format: "json"},
-		NetBox: NetBoxConfig{Timeout: 30 * time.Second, PageSize: 500, Concurrency: 4},
+		Log:      LogConfig{Level: "info", Format: "json"},
+		NetBox:   NetBoxConfig{Timeout: 30 * time.Second, PageSize: 500, Concurrency: 4},
+		PowerDNS: PowerDNSConfig{Timeout: 30 * time.Second, Concurrency: 4},
 	}
-	if *cfg != want {
+	if !reflect.DeepEqual(*cfg, want) {
 		t.Errorf("Load() = %+v, want %+v", *cfg, want)
 	}
 	for _, s := range settings {

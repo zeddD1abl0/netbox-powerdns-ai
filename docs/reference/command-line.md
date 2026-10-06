@@ -35,6 +35,8 @@ in the [configuration reference](configuration.md).
 | `--netbox-token` | `string` | none | The NetBox API token that nbpdns reads with. |
 | `--netbox-token-file` | `path` | none | Read `netbox.token` from this file. |
 | `--netbox-url` | `url` | none | NetBox's base URL, such as `https://netbox.example.com`. |
+| `--powerdns-concurrency` | `integer` | `4` | How many requests to each PowerDNS API may be in flight at once. |
+| `--powerdns-timeout` | `duration` | `30s` | How long one request to a PowerDNS API may take. |
 
 ## Commands
 

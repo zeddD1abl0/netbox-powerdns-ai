@@ -127,8 +127,9 @@ func TestConfigShow(t *testing.T) {
 			t.Errorf("netbox.token setting = %+v", s)
 		}
 	}
-	if len(settings) != len(config.Keys()) {
-		t.Errorf("got %d settings, want one per key (%d)", len(settings), len(config.Keys()))
+	// One per key, and one saying no server groups are declared.
+	if len(settings) != len(config.Keys())+1 {
+		t.Errorf("got %d settings, want one per key and one for %s (%d)", len(settings), config.GroupsKey, len(config.Keys())+1)
 	}
 }
 
