@@ -49,3 +49,6 @@ the mirror, then confirm the GitHub workflow passes on the M01 merge.
   GitHub Actions run 37426268234 on `m02-powerdns-read-path` (`44623bc`), which holds all of `main`,
   passed every job, `integration-test` included; `main` runs it once M02 is
   merged. M01's GitHub criterion is ticked with that run.
+- 2026-10-06: After M02's merge, the mirror carried `main` (`d96f5ca`) to
+  GitHub, and GitHub Actions run 37438635140 on `main` passed every job,
+  `integration-test` included.
