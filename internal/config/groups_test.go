@@ -142,6 +142,8 @@ func TestGroupErrors(t *testing.T) {
 		{"a missing key file", groupsYAML(group("a", replace("  api_key: k", "  api_key_file: /does/not/exist")...)), []string{"primary.api_key_file: reading the secret file"}},
 		{"a certificate without its key", groupsYAML(group("a", append(ok, "  cert_file: /c.pem")...)), []string{"primary.cert_file and primary.key_file go together"}},
 		{"a bad server ID", groupsYAML(group("a", append(ok, "  server_id: a/b")...)), []string{`primary.server_id: "a/b" isn't a server ID`}},
+		{"a key that YAML reads as a number", groupsYAML(group("a", replace("  api_key: k", "  api_key: 1e10")...)),
+			[]string{"primary.api_key: want a string, not 1e+10; put it in quotes"}},
 		{"two groups with one name", groupsYAML(group("a", ok...), group("a", ok...)), []string{"powerdns.groups[1] (a)", "another group is named a"}},
 		{"every problem at once", groupsYAML(entry("views: v", "primary:", "  url: x"), group("Bad", ok...)),
 			[]string{"powerdns.groups[0]", "name isn't set", "views: want a list", "primary.url:", "neither primary.api_key", "powerdns.groups[1] (Bad)"}},

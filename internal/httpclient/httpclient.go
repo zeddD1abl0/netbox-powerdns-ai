@@ -271,7 +271,13 @@ func (c *Client) try(ctx context.Context, u *url.URL, header http.Header, out an
 // on one line, up to 200 bytes.
 func TextDetail(body []byte) string {
 	s := strings.Join(strings.Fields(strings.ToValidUTF8(string(body), "")), " ")
-	lower := strings.ToLower(s)
+	// Only ASCII letters are made lowercase, so lower has s's byte offsets.
+	lower := strings.Map(func(r rune) rune {
+		if 'A' <= r && r <= 'Z' {
+			return r + 'a' - 'A'
+		}
+		return r
+	}, s)
 	if i, j := strings.Index(lower, "<title>"), strings.Index(lower, "</title>"); i >= 0 && j > i {
 		s = strings.TrimSpace(s[i+len("<title>") : j])
 	}

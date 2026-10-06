@@ -80,7 +80,7 @@ func TestRecordedFixture(t *testing.T) {
 					t.Fatalf("%s: %v", name, err)
 				}
 			}
-			if err := server.Check(p.Group); err != nil || !strings.HasPrefix(server.Version, p.Version+".") {
+			if err := server.check(p.Group, Supported); err != nil || !strings.HasPrefix(server.Version, p.Version+".") {
 				t.Errorf("server %+v: %v", server, err)
 			}
 			names := make([]string, len(zones))
@@ -122,7 +122,7 @@ func TestServerCheck(t *testing.T) {
 	}
 	for _, tt := range tests {
 		s := &Server{DaemonType: tt.daemon, Version: tt.version}
-		err := s.Check("site-a")
+		err := s.check("site-a", Supported)
 		if (err == nil) != (tt.want == "") || (err != nil && !strings.Contains(err.Error(), tt.want)) {
 			t.Errorf("%s %s: %v, want an error containing %q", tt.daemon, tt.version, err, tt.want)
 		}
@@ -171,7 +171,9 @@ func TestErrors(t *testing.T) {
 			func(c *Client) error { _, err := c.Connect(t.Context()); return err },
 			func(err error) bool {
 				var e *ServerNotFoundError
-				return errors.As(err, &e) && e.ServerID == "localhost"
+				return errors.As(err, &e) && e.ServerID == "localhost" && strings.HasSuffix(e.URL, "/api/v1/servers/localhost") &&
+					strings.Contains(err.Error(), "check powerdns.groups.test.primary.server_id") &&
+					strings.Contains(err.Error(), "powerdns.groups.test.primary.url is the address in front of /api/v1")
 			}},
 		{"no such server, in plain text", status(http.StatusNotFound, "Not Found"),
 			func(c *Client) error { _, err := c.Server(t.Context()); return err },
@@ -213,6 +215,16 @@ func TestErrors(t *testing.T) {
 			if err == nil && z.ID != "rec.nbpdns.example." {
 				err = fmt.Errorf("found %+v", z)
 			}
+			return err
+		}, func(err error) bool { return err == nil }},
+		{"the root zone's data", func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.EscapedPath() != "/api/v1/servers/localhost/zones/." {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			_, _ = w.Write(zone)
+		}, func(c *Client) error {
+			_, err := c.ZoneData(t.Context(), Zone{ID: ".", Name: "."})
 			return err
 		}, func(err error) bool { return err == nil }},
 		{"a zone's data", func(w http.ResponseWriter, r *http.Request) {

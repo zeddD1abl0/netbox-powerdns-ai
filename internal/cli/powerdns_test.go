@@ -112,3 +112,30 @@ func TestSharedNames(t *testing.T) {
 		t.Errorf("problems = %+v", probs)
 	}
 }
+
+// TestPowerDNSCheckGroupWithoutClient checks that a group nbpdns can't build
+// a client for, such as one whose CA file is missing, fails its own check,
+// and doesn't stop the other groups being checked.
+func TestPowerDNSCheckGroupWithoutClient(t *testing.T) {
+	env := configFile(t, `powerdns:
+  groups:
+    - name: site-a
+      views: [_default_]
+      primary: {url: "https://127.0.0.1:1", api_key: k, ca_file: /does/not/exist.pem}
+    - name: site-b
+      views: [_default_]
+      primary: {url: "https://127.0.0.1:1", api_key: k, ca_file: /does/not/exist/either.pem}
+`)
+	code, out, stderr := run(t, env, "powerdns", "check")
+	if code != exitError || !strings.Contains(stderr, "2 of 2 checks failed") {
+		t.Errorf("exit %d:\n%s\n%s", code, out, stderr)
+	}
+	for _, row := range []string{
+		"site-a  connection  failed  powerdns.groups.site-a.primary.ca_file:",
+		"site-b  connection  failed  powerdns.groups.site-b.primary.ca_file:",
+	} {
+		if !strings.Contains(out, row) {
+			t.Errorf("no %q in:\n%s", row, out)
+		}
+	}
+}

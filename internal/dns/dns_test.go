@@ -197,6 +197,17 @@ func TestValueOutOfRange(t *testing.T) {
 			t.Errorf("Value(%s, %q) = %q, %v; want it kept as given, with an error", tt.typ, tt.value, got, err)
 		}
 	}
+	// Hex or base64 given in chunks is printed as one field; chunks that are
+	// all digits aren't numbers out of range.
+	for _, tt := range []struct{ typ, value, want string }{
+		{"DS", "12345 8 2 1234 5678", "12345 8 2 12345678"},
+		{"TLSA", "3 1 1 0123 4567 89ab", "3 1 1 0123456789AB"},
+		{"SSHFP", "4 2 1234 5678", "4 2 12345678"},
+	} {
+		if got, err := Value(tt.typ, tt.value, "example.com."); got != tt.want || err != nil {
+			t.Errorf("Value(%s, %q) = %q, %v; want %q", tt.typ, tt.value, got, err, tt.want)
+		}
+	}
 	// Numbers written with leading zeros, or printed differently, aren't
 	// out of range.
 	if got, err := Value("MX", "010 mail", "example.com."); got != "10 mail.example.com." || err != nil {

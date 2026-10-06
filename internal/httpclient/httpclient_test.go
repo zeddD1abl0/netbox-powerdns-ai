@@ -528,6 +528,9 @@ func TestTextDetail(t *testing.T) {
 		{"two\n  lines", "two lines"},
 		{"bad \xff byte", "bad byte"},
 		{"<html><head><TITLE> 502 Bad Gateway </TITLE></head><body>...</body></html>", "502 Bad Gateway"},
+		// Ⱥ is 2 bytes, and 3 in lowercase, which mustn't shift the title.
+		{"<title>ȺȺȺȺȺȺȺȺȺȺ</title>", "ȺȺȺȺȺȺȺȺȺȺ"},
+		{"ȺȺȺ <title>x</title>", "x"},
 		{long, long[:200]},
 		{"x" + long, ("x" + long)[:199]},
 	}

@@ -2,6 +2,7 @@ package powerdns
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"slices"
@@ -42,9 +43,6 @@ type Server struct {
 // Server.
 func (s *Server) Authoritative() bool { return s.DaemonType == authoritative }
 
-// Supported reports whether the server runs a supported release.
-func (s *Server) Supported() bool { return s.supported(Supported) }
-
 func (s *Server) supported(releases []string) bool {
 	return slices.Contains(releases, series(s.Version))
 }
@@ -62,7 +60,7 @@ func series(version string) string {
 // Server reads what the API reports about the server.
 func (c *Client) Server(ctx context.Context) (*Server, error) {
 	var s Server
-	notFound := func() error { return &ServerNotFoundError{Group: c.group, ServerID: c.serverID} }
+	notFound := func() error { return &ServerNotFoundError{Group: c.group, ServerID: c.serverID, URL: c.url.String()} }
 	if err := c.get(ctx, c.url, &s, notFound); err != nil {
 		return nil, err
 	}
@@ -77,25 +75,27 @@ func (c *Client) Connect(ctx context.Context) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !s.Authoritative() {
-		return nil, &NotAuthoritativeError{Group: c.group, DaemonType: s.DaemonType}
-	}
-	if !s.supported(c.supported) {
-		err := &VersionError{Group: c.group, Version: s.Version, supported: c.supported}
+	var ve *VersionError
+	switch err := c.Check(s); {
+	case errors.As(err, &ve):
 		c.log.WarnContext(ctx, "this PowerDNS release isn't supported, so reading from it may fail or give wrong results",
 			"group", c.group, "err", err)
+	case err != nil:
+		return nil, err
 	}
 	return s, nil
 }
 
-// Check returns an error if s isn't an authoritative server, or if it isn't
-// a supported release.
-func (s *Server) Check(group string) error {
+// Check returns a *NotAuthoritativeError if s isn't an authoritative
+// server, or a *VersionError if it isn't a release the client supports.
+func (c *Client) Check(s *Server) error { return s.check(c.group, c.supported) }
+
+func (s *Server) check(group string, releases []string) error {
 	if !s.Authoritative() {
 		return &NotAuthoritativeError{Group: group, DaemonType: s.DaemonType}
 	}
-	if !s.Supported() {
-		return &VersionError{Group: group, Version: s.Version, supported: Supported}
+	if !s.supported(releases) {
+		return &VersionError{Group: group, Version: s.Version, supported: releases}
 	}
 	return nil
 }

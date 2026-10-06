@@ -137,7 +137,7 @@ func GroupFields() []Field {
 			Name: "primary.api_key", Type: "string, secret", Secret: true,
 			Summary: "The PowerDNS API key, sent as `X-API-Key`. Set this or `primary.api_key_file`.",
 			parse: func(g *Group, raw any) error {
-				s, err := toString(raw)
+				s, err := secretString(raw)
 				if err == nil {
 					err = nonEmpty(s)
 				}

@@ -100,10 +100,7 @@ func newPowerDNSCheckCmd(a *app) *cobra.Command {
 			}
 			r := powerDNSReport{OK: true}
 			for _, g := range groups {
-				gc, err := checkGroup(ctx, s, g)
-				if err != nil {
-					return err
-				}
+				gc := checkGroup(ctx, s, g)
 				r.OK = r.OK && gc.OK
 				r.Groups = append(r.Groups, gc)
 			}
@@ -134,18 +131,21 @@ func newPowerDNSCheckCmd(a *app) *cobra.Command {
 }
 
 // checkGroup checks group g's primary. It stops early when the checks left
-// can't pass: when the API can't be reached or rejects the key, or when the
-// server isn't an authoritative one.
-func checkGroup(ctx context.Context, s *session, g config.Group) (groupCheck, error) {
-	c, err := s.powerdns(ctx, g)
-	if err != nil {
-		return groupCheck{}, err
-	}
-	defer c.Close()
-	r := groupCheck{Group: g.Name, URL: c.URL()}
+// can't pass: when there's no client for it, such as for a CA file that
+// can't be read; when the API can't be reached or rejects the key; or when
+// the server isn't an authoritative one.
+func checkGroup(ctx context.Context, s *session, g config.Group) groupCheck {
+	r := groupCheck{Group: g.Name, URL: g.Primary.URL}
 	add := func(name, result, detail string) {
 		r.Checks = append(r.Checks, checkResult{Name: name, Result: result, Detail: detail})
 	}
+	c, err := s.powerdns(ctx, g)
+	if err != nil {
+		add("connection", checkFailed, err.Error())
+		return r
+	}
+	defer c.Close()
+	r.URL = c.URL()
 	if c.Encrypted() {
 		add("connection", checkOK, "https://")
 	} else {
@@ -160,10 +160,10 @@ func checkGroup(ctx context.Context, s *session, g config.Group) (groupCheck, er
 	case err != nil:
 		add("server", checkFailed, err.Error())
 	case !server.Authoritative():
-		add("server", checkFailed, server.Check(g.Name).Error())
+		add("server", checkFailed, c.Check(server).Error())
 	default:
 		r.Version = server.Version
-		if err := server.Check(g.Name); err != nil {
+		if err := c.Check(server); err != nil {
 			add("server", checkFailed, err.Error())
 		} else {
 			add("server", checkOK, "PowerDNS Authoritative Server "+server.Version)
@@ -176,7 +176,7 @@ func checkGroup(ctx context.Context, s *session, g config.Group) (groupCheck, er
 		}
 	}
 	r.OK = !slices.ContainsFunc(r.Checks, func(c checkResult) bool { return c.Result == checkFailed })
-	return r, nil
+	return r
 }
 
 func writePowerDNSCheckTable(w io.Writer, r powerDNSReport) error {

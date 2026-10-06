@@ -124,10 +124,17 @@ func folding(tag string) func(string) string {
 // changedNumber returns the first number in the input in that differs from
 // the number in the same place in the printed data out, if there is one.
 // Only places where both hold a plain decimal number are compared, so 010
-// and 10 are the same number.
+// and 10 are the same number. miekg/dns prints hex or base64 that was given
+// in chunks as one field, which shifts the fields after it, so the
+// comparison stops at a printed field that starts with the input's field and
+// the one after it. A number kept modulo its size is never longer than it
+// was, so it can't look like that.
 func changedNumber(in, out string) (string, bool) {
 	a, b := fields(in), fields(out)
 	for i := range min(len(a), len(b)) {
+		if i+1 < len(a) && strings.HasPrefix(b[i], a[i]+a[i+1]) {
+			break
+		}
 		if isDigits(a[i]) && isDigits(b[i]) && trimZeros(a[i]) != trimZeros(b[i]) {
 			return a[i], true
 		}
@@ -135,33 +142,31 @@ func changedNumber(in, out string) (string, bool) {
 	return "", false
 }
 
-// fields splits zone-file text at whitespace outside double quotes.
+// fields splits zone-file text into its fields, each as written, quotes and
+// escapes included. A field that doesn't end, such as an unclosed quote,
+// runs to the end of the text.
 func fields(s string) []string {
-	var (
-		out              []string
-		b                strings.Builder
-		quoted, escaping bool
-	)
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		switch {
-		case escaping:
-			escaping = false
-		case c == '\\':
-			escaping = true
-		case c == '"':
-			quoted = !quoted
-		case !quoted && (c == ' ' || c == '\t'):
-			if b.Len() > 0 {
-				out = append(out, b.String())
-				b.Reset()
-			}
+	var out []string
+	for i := 0; i < len(s); {
+		start := i
+		switch s[i] {
+		case ' ', '\t':
+			i++
 			continue
+		case '"':
+			_, n, err := unescape(s[i+1:], true)
+			if err != nil {
+				return append(out, s[start:])
+			}
+			i += 1 + n
+		default:
+			_, n, err := unescape(s[i:], false)
+			if err != nil {
+				return append(out, s[start:])
+			}
+			i += n
 		}
-		b.WriteByte(c)
-	}
-	if b.Len() > 0 {
-		out = append(out, b.String())
+		out = append(out, s[start:i])
 	}
 	return out
 }

@@ -56,7 +56,7 @@ func TestLab(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if err := s.Check(p.Group); err != nil || !strings.HasPrefix(s.Version, p.Version+".") {
+				if err := c.Check(s); err != nil || !strings.HasPrefix(s.Version, p.Version+".") {
 					t.Errorf("server %+v: %v", s, err)
 				}
 				zones, err := c.Zones(t.Context())

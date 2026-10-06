@@ -216,13 +216,9 @@ func newNetBoxZonesCmd(a *app) *cobra.Command {
 			if _, err := c.Connect(ctx); err != nil {
 				return err
 			}
-			var zones []netbox.Zone
-			for _, v := range views {
-				zs, err := c.Zones(ctx, netbox.ZoneFilter{View: v, Status: *status})
-				if err != nil {
-					return err
-				}
-				zones = append(zones, zs...)
+			zones, err := c.Zones(ctx, netbox.ZoneFilter{Views: views, Status: *status})
+			if err != nil {
+				return err
 			}
 			if *group != "" {
 				for _, p := range sharedNames(*group, zones) {

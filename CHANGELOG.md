@@ -61,7 +61,9 @@ All notable changes to this project are recorded here. The format follows
   apart.
 - Configuration from flags, `NBPDNS_` environment variables, and a YAML config
   file, in that order of precedence. Secrets can be read from files (`_FILE`),
-  and are redacted everywhere they could be printed or logged. Unknown keys and
+  and are redacted everywhere they could be printed or logged. A secret in
+  the config file must be a string: one that YAML reads as a number is an
+  error, rather than silently changed. Unknown keys and
   variables are errors, and every problem is reported at once.
 - Configuration and command-line reference pages, generated from the code.
 - A development lab with NetBox 4.7 and the NetBox DNS plugin, and a PowerDNS

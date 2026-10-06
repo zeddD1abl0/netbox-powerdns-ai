@@ -196,8 +196,8 @@ func (c *Client) Nameservers(ctx context.Context) ([]Nameserver, error) {
 type ZoneFilter struct {
 	// Name is the zone's name, as ZoneName returns it.
 	Name string
-	// View is the view's name.
-	View string
+	// Views are views' names; a zone in any of them matches.
+	Views []string
 	// Status is the zone's status, such as active.
 	Status string
 }
@@ -205,9 +205,14 @@ type ZoneFilter struct {
 // Zones lists the zones that f selects.
 func (c *Client) Zones(ctx context.Context, f ZoneFilter) ([]Zone, error) {
 	q := url.Values{}
-	for k, v := range map[string]string{"name": f.Name, "view": f.View, "status": f.Status} {
+	for k, v := range map[string]string{"name": f.Name, "status": f.Status} {
 		if v != "" {
 			q.Set(k, v)
+		}
+	}
+	for _, v := range f.Views {
+		if v != "" {
+			q.Add("view", v)
 		}
 	}
 	return list[Zone](ctx, c, "zones/", q)
@@ -252,7 +257,7 @@ func ZoneName(name string) (string, error) {
 // named view. If view is empty, the zone may be in any view, but only one:
 // otherwise FindZone returns an *AmbiguousZoneError.
 func (c *Client) FindZone(ctx context.Context, name, view string) (Zone, error) {
-	zones, err := c.Zones(ctx, ZoneFilter{Name: name, View: view})
+	zones, err := c.Zones(ctx, ZoneFilter{Name: name, Views: []string{view}})
 	if err != nil {
 		return Zone{}, err
 	}

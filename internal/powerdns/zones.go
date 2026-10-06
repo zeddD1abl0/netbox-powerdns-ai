@@ -72,7 +72,12 @@ func (c *Client) FindZone(ctx context.Context, name string) (Zone, error) {
 func (c *Client) ZoneData(ctx context.Context, z Zone) (*ZoneData, error) {
 	var data ZoneData
 	notFound := func() error { return &ZoneNotFoundError{Group: c.group, Zone: z.Name} }
-	if err := c.get(ctx, c.url.JoinPath("zones", z.ID), &data, notFound); err != nil {
+	// The ID is one path segment, escaped rather than cleaned, so the root
+	// zone's ID, ".", isn't lost.
+	u := *c.url
+	u.Path = c.url.Path + "/zones/" + z.ID
+	u.RawPath = c.url.EscapedPath() + "/zones/" + url.PathEscape(z.ID)
+	if err := c.get(ctx, &u, &data, notFound); err != nil {
 		return nil, err
 	}
 	return &data, nil

@@ -23,14 +23,18 @@ func (e *AuthError) Error() string {
 		e.Group, e.Detail, config.GroupsKey, e.Group)
 }
 
-// ServerNotFoundError means the API has no server with the configured ID.
+// ServerNotFoundError means nothing answered at the server's URL: the
+// server ID is wrong, or the primary's URL isn't the API's base address.
 type ServerNotFoundError struct {
 	Group, ServerID string
+	// URL is the server's URL that was asked for.
+	URL string
 }
 
 func (e *ServerNotFoundError) Error() string {
-	return fmt.Sprintf("the PowerDNS API of server group %s has no server %s; check %s.%s.primary.server_id, which is usually localhost",
-		e.Group, e.ServerID, config.GroupsKey, e.Group)
+	keys := config.GroupsKey + "." + e.Group + ".primary"
+	return fmt.Sprintf("the PowerDNS API of server group %s has no server %s at %s; check %s.server_id, which is usually localhost, "+
+		"and that %s.url is the address in front of /api/v1, without it", e.Group, e.ServerID, e.URL, keys, keys)
 }
 
 // NotAuthoritativeError means the server isn't a PowerDNS Authoritative
