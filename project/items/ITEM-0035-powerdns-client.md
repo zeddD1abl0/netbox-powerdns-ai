@@ -2,7 +2,7 @@
 id: ITEM-0035
 title: PowerDNS client
 type: feature # feature | bug | debt | task
-status: open # open | in-progress | blocked | done | wontfix
+status: in-progress # open | in-progress | blocked | done | wontfix
 milestone: M02
 requirements: [REQ-028, REQ-041]
 depends_on: [ITEM-0031, ITEM-0032, ITEM-0034]

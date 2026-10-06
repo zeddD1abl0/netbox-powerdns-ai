@@ -1,10 +1,11 @@
 # gitleaks configuration for `make secrets`: every default rule, plus one
-# allowlist for the development lab's published admin token
-# (deploy/dev/compose.yaml), which the docs quote in examples. Anything else
-# that looks like a secret still fails the scan.
+# allowlist for the development lab's published credentials
+# (deploy/dev/compose.yaml): the NetBox admin token and the PowerDNS API key,
+# which the docs quote in examples. Anything else that looks like a secret
+# still fails the scan.
 [extend]
 useDefault = true
 
 [[allowlists]]
-description = "The development lab's published admin token"
-regexes = ['''nbpdnsLabAdminTokenNotForProduction00000''']
+description = "The development lab's published credentials"
+regexes = ['''nbpdnsLabAdminTokenNotForProduction00000''', '''nbpdns-lab-powerdns-api-key-not-for-production''']

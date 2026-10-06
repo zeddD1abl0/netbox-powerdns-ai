@@ -1,19 +1,29 @@
-# The development lab (REQ-036): NetBox 4.7 with the NetBox DNS plugin, for
-# the integration tests and the tutorials. It runs one NetBox per supported
-# release (internal/lab), and each costs the CI job a NetBox and a PostgreSQL
-# server, so a release is only added when the runners have room (ADR-0023).
+# The development lab (REQ-036), for the integration tests and the tutorials:
+# - NetBox 4.7 with the NetBox DNS plugin. The lab runs one NetBox per
+#   supported release (internal/lab), and each costs the CI job a NetBox and
+#   a PostgreSQL server, so a release is only added when the runners have room
+#   (ADR-0023).
+# - Two PowerDNS server groups, each with a primary only (ADR-0024): lab-a on
+#   PowerDNS 5.1 and lab-b on 5.0. Their secondaries arrive with catalog
+#   zones, in M12.
 #
 #   make lab-up    start the lab, and wait until it's healthy
 #   make lab-down  remove the lab and its data
 #
 # NetBox 4.7 listens on port 8047 on the Docker host: localhost, or the host
 # in DOCKER_HOST. It has the superuser admin, with the v2 API token
-# nbt_nbpdnslabadm.nbpdnsLabAdminTokenNotForProduction00000.
+# nbt_nbpdnslabadm.nbpdnsLabAdminTokenNotForProduction00000. The PowerDNS APIs
+# listen on port 8151 (5.1, lab-a) and 8150 (5.0, lab-b), over plain HTTP, with
+# the API key nbpdns-lab-powerdns-api-key-not-for-production.
 # The ports are published on LAB_BIND_ADDRESS, which the Makefile sets:
 # 127.0.0.1 on a local Docker host, and every interface on a remote one.
 #
 # Every image is pinned by digest, and the plugin by version. The credentials
 # are for this lab only.
+#
+# Each PowerDNS container keeps its zones in SQLite inside the container, so
+# lab-down removes them. PDNS_AUTH_API_KEY makes the image turn on its web
+# server and API, listening on every interface of the container.
 #
 # Each NetBox container installs the DNS plugin and enables it as it starts,
 # then runs netbox-docker's own entrypoint. That needs no image build, which
@@ -71,6 +81,24 @@ x-netbox-env: &netbox-env
   # No calls out to GitHub for release checks.
   RELEASE_CHECK_URL: ""
 
+x-powerdns: &powerdns
+  environment:
+    PDNS_AUTH_API_KEY: nbpdns-lab-powerdns-api-key-not-for-production # gitleaks:allow
+  healthcheck:
+    # The image has no curl, so its Python asks the API.
+    test:
+      - CMD
+      - python3
+      - -c
+      - >-
+        import os, urllib.request;
+        urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:8081/api/v1/servers/localhost",
+        headers={"X-API-Key": os.environ["PDNS_AUTH_API_KEY"]}), timeout=2)
+    start_period: 30s
+    start_interval: 1s
+    interval: 30s
+    timeout: 5s
+
 services:
   postgres-47:
     <<: *postgres
@@ -101,6 +129,18 @@ services:
         condition: service_healthy
     ports:
       - "${LAB_BIND_ADDRESS:-127.0.0.1}:8047:8080"
+
+  powerdns-51:
+    <<: *powerdns
+    image: docker.io/powerdns/pdns-auth-51:5.1.4@sha256:bb5b1c133bcca1dd455075321de7d55db4945a8d7f2ba23339e3c7bbe416b205
+    ports:
+      - "${LAB_BIND_ADDRESS:-127.0.0.1}:8151:8081"
+
+  powerdns-50:
+    <<: *powerdns
+    image: docker.io/powerdns/pdns-auth-50:5.0.7@sha256:4d6cc4fc42a28f2df7fb55f6f36d8323f96e0da66135ccdad057ca7349b223b4
+    ports:
+      - "${LAB_BIND_ADDRESS:-127.0.0.1}:8150:8081"
 
 volumes:
   postgres-47:
