@@ -39,7 +39,9 @@ All notable changes to this project are recorded here. The format follows
   certificate. Fields are checked strictly, every problem is reported at
   once, and `nbpdns config show` lists each field with the key redacted.
   `powerdns.timeout` and `powerdns.concurrency` set how requests to PowerDNS
-  behave.
+  behave. Each group also sets the drift policy of its zones, `report` by
+  default, with `zone_policies` for single zones: `enforce`, `report` or
+  `ignore`.
 - Record values of every type are normalized into one canonical form, parsed
   with the miekg/dns library, so that the same data reads the same from
   NetBox and from PowerDNS: names inside values lowercase and absolute, hex

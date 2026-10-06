@@ -16,14 +16,67 @@ import (
 // them: there's no environment variable or flag (ADR-0026).
 const GroupsKey = "powerdns.groups"
 
+// The drift policies (ADR-0008, ADR-0027).
+const (
+	// PolicyEnforce corrects PowerDNS to match NetBox, from M12. Until then
+	// it's reported like PolicyReport.
+	PolicyEnforce = "enforce"
+	// PolicyReport reports drift and changes nothing.
+	PolicyReport = "report"
+	// PolicyIgnore doesn't compare the zone.
+	PolicyIgnore = "ignore"
+)
+
+// Policies are the drift policies, in the order the reference lists them.
+var Policies = []string{PolicyEnforce, PolicyReport, PolicyIgnore}
+
 // A Group is a PowerDNS server group (ADR-0007): the NetBox views whose zones
-// it serves, and its primary, the one server nbpdns talks to.
+// it serves, its drift policies, and its primary, the one server nbpdns talks
+// to.
 type Group struct {
 	// Name identifies the group, in --group and in config show.
 	Name string
 	// Views are the NetBox views whose zones the group serves.
-	Views   []string
-	Primary Primary
+	Views []string
+	// DriftPolicy is the policy of the group's zones that ZonePolicies
+	// doesn't name.
+	DriftPolicy string
+	// ZonePolicies maps absolute zone names, such as example.com., to their
+	// policies.
+	ZonePolicies map[string]string
+	Primary      Primary
+}
+
+// Policy returns the drift policy of zone, an absolute name, in g.
+func (g Group) Policy(zone string) string {
+	if p, ok := g.ZonePolicies[zone]; ok {
+		return p
+	}
+	return g.DriftPolicy
+}
+
+// checkPolicy accepts the name of a drift policy.
+func checkPolicy(s string) error {
+	if !slices.Contains(Policies, s) {
+		return fmt.Errorf("%q isn't a drift policy; use %s", s, strings.Join(Policies, ", "))
+	}
+	return nil
+}
+
+// zoneKey returns a zone name as an absolute, lowercase name, or an error if
+// it isn't one, as NetBox stores zone names: ASCII, which for an
+// internationalized name starts with xn--.
+func zoneKey(name string) (string, error) {
+	n := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(name)), ".")
+	if n == "" {
+		return "", errors.New("a zone name is empty")
+	}
+	for _, r := range n {
+		if r < 0x21 || r > 0x7e {
+			return "", fmt.Errorf("zone %q: give the name in its ASCII form, such as xn--bcher-kva.example for bücher.example", name)
+		}
+	}
+	return n + ".", nil
 }
 
 // Primary says how to reach a group's primary, through the PowerDNS API.
@@ -128,6 +181,50 @@ func GroupFields() []Field {
 			show: func(g *Group) string { return strings.Join(g.Views, ",") },
 		},
 		{
+			Name: "drift_policy", Type: "`enforce`, `report` or `ignore`", Default: PolicyReport,
+			Summary: "The drift policy of the group's zones that `zone_policies` doesn't name. `ignore` doesn't compare a zone; " +
+				"`report` and `enforce` report its drift, and from M12, `enforce` also corrects it.",
+			parse: str(func(g *Group) *string { return &g.DriftPolicy }, checkPolicy),
+			show:  func(g *Group) string { return g.DriftPolicy },
+		},
+		{
+			Name: "zone_policies", Type: "mapping of zone names to drift policies",
+			Summary: "Drift policies for single zones, which override `drift_policy`, such as `{legacy.example.com: ignore}`. " +
+				"A name the group doesn't serve is reported as a warning.",
+			parse: func(g *Group, raw any) error {
+				m, ok := raw.(map[string]any)
+				if !ok {
+					return fmt.Errorf("want a mapping of zone names to policies, not %s", describe(raw))
+				}
+				g.ZonePolicies = map[string]string{}
+				for _, name := range slices.Sorted(maps.Keys(m)) {
+					zone, err := zoneKey(name)
+					if err != nil {
+						return err
+					}
+					if _, dup := g.ZonePolicies[zone]; dup {
+						return fmt.Errorf("zone %s is listed twice", zone)
+					}
+					p, err := toString(m[name])
+					if err == nil {
+						err = checkPolicy(p)
+					}
+					if err != nil {
+						return fmt.Errorf("zone %s: %w", zone, err)
+					}
+					g.ZonePolicies[zone] = p
+				}
+				return nil
+			},
+			show: func(g *Group) string {
+				var parts []string
+				for _, zone := range slices.Sorted(maps.Keys(g.ZonePolicies)) {
+					parts = append(parts, strings.TrimSuffix(zone, ".")+"="+g.ZonePolicies[zone])
+				}
+				return strings.Join(parts, ",")
+			},
+		},
+		{
 			Name: "primary.url", Type: "an `http` or `https` URL", Required: true,
 			Summary: "The primary's PowerDNS API: its web server, or a TLS proxy in front of it, such as `https://pdns-a.example.com:8443`.",
 			parse:   str(func(g *Group) *string { return &g.Primary.URL }, checkURL),
@@ -224,7 +321,7 @@ func loadGroups(v *viper.Viper, path string) ([]Group, []Setting, []error) {
 // the fields the entry set, and every problem with it.
 func decodeGroup(raw any) (Group, map[string]bool, []error) {
 	var (
-		g      = Group{Primary: Primary{ServerID: "localhost"}}
+		g      = Group{DriftPolicy: PolicyReport, Primary: Primary{ServerID: "localhost"}}
 		errs   []error
 		values = map[string]any{}
 	)
