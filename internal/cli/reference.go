@@ -27,7 +27,8 @@ func WriteReference(w io.Writer, root *cobra.Command) error {
 	p("| Status | Meaning |\n|---|---|\n")
 	p("| %d | The command succeeded. |\n", exitOK)
 	p("| %d | The command failed. Standard error says why. |\n", exitError)
-	p("| %d | The command line was wrong: an unknown command or flag, or a bad argument. |\n\n", exitUsage)
+	p("| %d | The command line was wrong: an unknown command or flag, or a bad argument. |\n", exitUsage)
+	p("| %d | `nbpdns drift` compared everything, and found drift. |\n\n", exitDrift)
 
 	p("## Global flags\n\n")
 	p("Every command accepts these flags. Each sets a configuration key, as described\n")

@@ -8,6 +8,15 @@ All notable changes to this project are recorded here. The format follows
 
 ### Added
 
+- `nbpdns drift`: compare the zones NetBox assigns to each PowerDNS server
+  group, through its views, with what the group's primary serves, and report
+  every difference as a table or JSON, for every group or one (`--group`),
+  and every zone or one (`--zone`). Only what each side serves is compared,
+  and an SOA without its serial. Zones on a primary that NetBox doesn't
+  assign to its group are listed as unmanaged, not drift, and zones whose
+  policy is `ignore` aren't compared. It exits 0 with no drift, 3 with
+  drift, and 1 when NetBox or a primary can't be read, with the other groups
+  still reported.
 - `nbpdns netbox check`, `zones`, and `records`: read DNS data from the NetBox
   DNS plugin, through NetBox's REST API, with a read-only token. `check`
   reports NetBox's and the plugin's releases, and whether the token can view

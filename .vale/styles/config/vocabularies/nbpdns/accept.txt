@@ -99,3 +99,4 @@ afero
 dotenv
 gcc
 golang
+[Uu]nmanaged

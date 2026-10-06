@@ -259,6 +259,26 @@ func TestRun(t *testing.T) {
 			t.Errorf("report %+v, %v", r, err)
 		}
 	})
+	t.Run("a zone that's nowhere", func(t *testing.T) {
+		var nf *ZoneNotFoundError
+		if _, err := Run(t.Context(), memNetBox{nb}, groups[:2], "nothere.example."); !errors.As(err, &nf) || nf.Zone != "nothere.example." {
+			t.Errorf("Run: %v, want a ZoneNotFoundError", err)
+		}
+	})
+	t.Run("a zone only on a primary", func(t *testing.T) {
+		r, err := Run(t.Context(), memNetBox{nb}, groups[:2], "x.example.")
+		if err != nil || !slices.Equal(r.Groups[0].Unmanaged, []string{"x.example."}) {
+			t.Errorf("report %+v, %v", r, err)
+		}
+	})
+	t.Run("a zone that's nowhere, with a group that can't be read", func(t *testing.T) {
+		// The group that failed might have it, so the report is incomplete,
+		// not wrong.
+		r, err := Run(t.Context(), memNetBox{nb}, groups, "nothere.example.")
+		if err != nil || r.Complete {
+			t.Errorf("report %+v, %v", r, err)
+		}
+	})
 	t.Run("NetBox can't be read", func(t *testing.T) {
 		if _, err := Run(t.Context(), memNetBox{&memory{err: errors.New("down")}}, groups, ""); err == nil || err.Error() != "down" {
 			t.Errorf("Run: %v, want NetBox's error", err)

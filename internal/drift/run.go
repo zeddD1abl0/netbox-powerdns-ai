@@ -2,6 +2,7 @@ package drift
 
 import (
 	"context"
+	"fmt"
 	"maps"
 	"slices"
 
@@ -37,11 +38,22 @@ type Group struct {
 	Err     error
 }
 
+// ZoneNotFoundError is Run's error for a zone that's in none of the groups'
+// NetBox views, and on none of their primaries.
+type ZoneNotFoundError struct{ Zone string }
+
+func (e *ZoneNotFoundError) Error() string {
+	return fmt.Sprintf("zone %s isn't in any server group's NetBox views, or on any group's primary", e.Zone)
+}
+
 // Run compares every group, or only the zone named zone if it isn't empty.
 // It reads NetBox once, for every group's views, then each group's primary
 // in turn, and reads RRsets only for the zones it compares. If NetBox can't
 // be read, Run returns the error. A group whose primary can't be read is
-// marked failed, and the others are still compared (ADR-0027).
+// marked failed, and the others are still compared (ADR-0027). If zone
+// isn't empty and every group was read, but neither side has the zone, Run
+// returns a ZoneNotFoundError, so that a mistyped name isn't reported as in
+// sync.
 func Run(ctx context.Context, nb NetBox, groups []Group, zone string) (Report, error) {
 	var views []string
 	for _, g := range groups {
@@ -93,6 +105,16 @@ func Run(ctx context.Context, nb NetBox, groups []Group, zone string) (Report, e
 		}
 		r.Drift = r.Drift || gr.Counts.Drifted()
 		r.Groups = append(r.Groups, gr)
+	}
+	if zone != "" && r.Complete && len(listed) == 0 {
+		// A zone on a primary that NetBox doesn't have is unmanaged.
+		found := false
+		for _, g := range r.Groups {
+			found = found || len(g.Unmanaged) > 0
+		}
+		if !found {
+			return r, &ZoneNotFoundError{Zone: zone}
+		}
 	}
 	return r, nil
 }
