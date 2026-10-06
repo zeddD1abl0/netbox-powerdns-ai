@@ -87,7 +87,7 @@ func TestLab(t *testing.T) {
 				// 39 records at 10 a page.
 				pages := 0
 				for line := range strings.Lines(logs.String()) {
-					if strings.Contains(line, `msg="request to NetBox"`) && strings.Contains(line, "/netbox-dns/records/?") && strings.Contains(line, "zone_id=") {
+					if strings.Contains(line, `msg="http request" service=NetBox`) && strings.Contains(line, "/netbox-dns/records/?") && strings.Contains(line, "zone_id=") {
 						pages++
 					}
 				}

@@ -4,35 +4,20 @@ package netbox
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
-	"math/rand/v2"
-	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"slices"
-	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/config"
-	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/tracing"
-)
-
-const (
-	// maxBody bounds how much of a response nbpdns reads.
-	maxBody = 64 << 20
-	// maxRetryAfter caps how long a Retry-After header can make nbpdns wait.
-	maxRetryAfter = time.Minute
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/httpclient"
 )
 
 // Options configure a Client. URL and Token are required.
@@ -46,8 +31,8 @@ type Options struct {
 	Logger      *slog.Logger
 	Tracer      trace.Tracer
 
-	retry     retryPolicy // the default policy if zero
-	supported []Release   // Supported if nil
+	retry     httpclient.Retry // the default policy if zero
+	supported []Release        // Supported if nil
 }
 
 // OptionsFrom returns the Options for nbpdns's NetBox configuration.
@@ -63,11 +48,10 @@ type Client struct {
 	base         *url.URL
 	auth         config.Secret // the Authorization header
 	tokenVersion int
-	http         *http.Client
+	http         *httpclient.Client
 	pageSize     int
 	concurrency  int
 	log          *slog.Logger
-	retry        retryPolicy
 	supported    []Release
 }
 
@@ -87,41 +71,27 @@ func New(ctx context.Context, o Options) (*Client, error) {
 	if !strings.HasSuffix(base.Path, "/") {
 		base.Path += "/"
 	}
-	tlsConf, err := tlsConfig(o.CAFile)
-	if err != nil {
-		return nil, err
-	}
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.TLSClientConfig = tlsConf
-	transport.MaxIdleConnsPerHost = max(o.Concurrency, 2)
-
 	log := o.Logger
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
+	hc, err := httpclient.New(httpclient.Options{
+		Service: "NetBox", URL: base.String(), Keys: "netbox", CAFile: o.CAFile,
+		Timeout: o.Timeout, Conns: o.Concurrency, Logger: log, Tracer: o.Tracer, Retry: o.retry,
+	})
+	if err != nil {
+		return nil, err
+	}
 	c := &Client{
 		base:        base,
+		http:        hc,
 		pageSize:    o.PageSize,
 		concurrency: max(o.Concurrency, 1),
 		log:         log,
-		retry:       o.retry,
 		supported:   o.supported,
-		http: &http.Client{
-			Timeout:   o.Timeout,
-			Transport: &tracing.Transport{Base: transport, Tracer: o.Tracer},
-			// Never follow a redirect: it would carry the token somewhere
-			// the configuration didn't name. Report it instead.
-			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-		},
-	}
-	if c.retry.attempts == 0 {
-		c.retry = defaultRetry
 	}
 	if c.supported == nil {
 		c.supported = Supported
-	}
-	if o.Tracer == nil {
-		c.http.Transport = transport
 	}
 	token := o.Token.Reveal()
 	if strings.HasPrefix(token, "nbt_") {
@@ -139,7 +109,7 @@ func New(ctx context.Context, o Options) (*Client, error) {
 
 // Close closes the client's idle connections to NetBox. Call it when done
 // with the client.
-func (c *Client) Close() { c.http.CloseIdleConnections() }
+func (c *Client) Close() { c.http.Close() }
 
 // TokenVersion reports whether the token is a v1 or a v2 NetBox token.
 func (c *Client) TokenVersion() int { return c.tokenVersion }
@@ -150,24 +120,6 @@ func (c *Client) URL() string { return c.base.String() }
 // Encrypted reports whether the client reaches NetBox over https://, so the
 // token doesn't cross the network in the clear.
 func (c *Client) Encrypted() bool { return c.base.Scheme == "https" }
-
-// tlsConfig trusts the system's roots, plus the certificates in caFile.
-func tlsConfig(caFile string) (*tls.Config, error) {
-	pool, err := x509.SystemCertPool()
-	if err != nil {
-		pool = x509.NewCertPool()
-	}
-	if caFile != "" {
-		pem, err := os.ReadFile(caFile)
-		if err != nil {
-			return nil, fmt.Errorf("netbox.ca_file: %w", err)
-		}
-		if !pool.AppendCertsFromPEM(pem) {
-			return nil, fmt.Errorf("netbox.ca_file: no PEM certificates in %s", caFile)
-		}
-	}
-	return &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: pool}, nil
-}
 
 // endpoint returns the URL of path, under NetBox's base URL, with query.
 func (c *Client) endpoint(path string, query url.Values) *url.URL {
@@ -194,81 +146,30 @@ func (c *Client) rebase(current *url.URL, link string) (*url.URL, error) {
 	return &u, nil
 }
 
+// header returns the headers of every request to NetBox.
+func (c *Client) header() http.Header {
+	return http.Header{"Authorization": {c.auth.Reveal()}, "Accept": {"application/json"}}
+}
+
 // get fetches u and decodes its JSON into out, retrying as the policy says.
 func (c *Client) get(ctx context.Context, u *url.URL, out any) error {
-	for attempt := 1; ; attempt++ {
-		retryAfter, err := c.try(ctx, u, out, attempt)
-		if err == nil {
-			return nil
-		}
-		if attempt >= c.retry.attempts || !retryable(ctx, err) {
-			return err
-		}
-		d := c.retry.delay(attempt, retryAfter)
-		c.log.DebugContext(ctx, "retrying a NetBox request", "path", u.RequestURI(), "attempt", attempt,
-			"delay_seconds", d.Seconds(), "err", err)
-		if serr := c.retry.sleep(ctx, d); serr != nil {
-			return err
-		}
-	}
+	return c.check(ctx, u, c.http.Get(ctx, u, c.header(), out))
 }
 
-// statusError marks an error response that may succeed if retried.
-type statusError struct {
-	error
-	retry bool
-}
-
-func (e statusError) Unwrap() error { return e.error }
-
-// try makes one attempt at fetching u. It returns the wait a Retry-After
-// header asked for, if any.
-func (c *Client) try(ctx context.Context, u *url.URL, out any, attempt int) (time.Duration, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), http.NoBody)
-	if err != nil {
-		return 0, err
+// check turns an error answer from NetBox into this package's errors.
+func (c *Client) check(ctx context.Context, u *url.URL, err error) error {
+	var se *httpclient.StatusError
+	if !errors.As(err, &se) {
+		return err
 	}
-	req.Header.Set("Authorization", c.auth.Reveal())
-	req.Header.Set("Accept", "application/json")
-	start := time.Now()
-	resp, err := c.http.Do(req)
-	if err != nil {
-		c.log.DebugContext(ctx, "request to NetBox failed", "path", u.RequestURI(), "attempt", attempt, "err", err)
-		return 0, &UnreachableError{URL: c.base.String(), Err: err}
-	}
-	defer func() {
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxBody))
-		_ = resp.Body.Close()
-	}()
-	c.log.DebugContext(ctx, "request to NetBox", "path", u.RequestURI(), "status", resp.StatusCode,
-		"attempt", attempt, "duration_seconds", time.Since(start).Seconds())
-
-	if resp.StatusCode == http.StatusOK {
-		body, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
-		if err != nil {
-			// The connection failed, or timed out, partway through the
-			// answer, which a retry may get whole.
-			return 0, &UnreachableError{URL: c.base.String(), Err: err}
-		}
-		if len(body) > maxBody {
-			return 0, fmt.Errorf("NetBox's answer to GET %s is larger than %d MiB", u.RequestURI(), maxBody>>20)
-		}
-		if err := json.Unmarshal(body, out); err != nil {
-			return 0, fmt.Errorf("decoding NetBox's answer to GET %s: %w", u.RequestURI(), err)
-		}
-		return 0, nil
-	}
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
-	apiErr := &APIError{Status: resp.StatusCode, Path: u.RequestURI(), Detail: detail(body)}
-	switch resp.StatusCode {
-	case http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
-		return retryAfterHeader(resp.Header.Get("Retry-After"), time.Now()), statusError{apiErr, true}
+	apiErr := &APIError{Status: se.Status, Path: se.Path, Detail: detail(se.Body)}
+	switch se.Status {
 	case http.StatusMovedPermanently, http.StatusFound, http.StatusSeeOther, http.StatusTemporaryRedirect, http.StatusPermanentRedirect:
-		apiErr.Detail = fmt.Sprintf("NetBox redirected to %s; set netbox.url to NetBox's own address", resp.Header.Get("Location"))
+		apiErr.Detail = fmt.Sprintf("NetBox redirected to %s; set netbox.url to NetBox's own address", se.Header.Get("Location"))
 	case http.StatusUnauthorized, http.StatusForbidden:
-		return 0, c.denied(ctx, u, apiErr)
+		return c.denied(ctx, u, apiErr)
 	}
-	return 0, apiErr
+	return apiErr
 }
 
 // denied says why NetBox refused a request. NetBox answers 403 both for a
@@ -280,8 +181,8 @@ func (c *Client) denied(ctx context.Context, u *url.URL, apiErr *APIError) error
 		return &AuthError{Detail: apiErr.Detail}
 	}
 	var s Status
-	if _, err := c.try(ctx, status, &s, 1); err != nil {
-		return err
+	if err := c.http.GetOnce(ctx, status, c.header(), &s); err != nil {
+		return c.check(ctx, status, err)
 	}
 	return &PermissionError{ObjectType: objectType(u.Path), Detail: apiErr.Detail}
 }
@@ -317,86 +218,4 @@ func detail(body []byte) string {
 	}
 	slices.Sort(parts)
 	return strings.Join(parts, "; ")
-}
-
-// A retryPolicy says how often, and after how long, to retry a request.
-type retryPolicy struct {
-	attempts  int           // including the first
-	base, cap time.Duration // the first delay, and the most any delay may be
-	sleep     func(ctx context.Context, d time.Duration) error
-}
-
-var defaultRetry = retryPolicy{attempts: 4, base: 500 * time.Millisecond, cap: 10 * time.Second, sleep: sleep}
-
-// delay returns how long to wait before the next attempt: what Retry-After
-// asked for, up to a minute, or else exponential backoff with jitter.
-func (p retryPolicy) delay(attempt int, retryAfter time.Duration) time.Duration {
-	if retryAfter > 0 {
-		return min(retryAfter, maxRetryAfter)
-	}
-	d := min(p.base<<(attempt-1), p.cap)
-	return d/2 + rand.N(d/2+1) //nolint:gosec // Jitter only spreads retries out; it needn't be unpredictable.
-}
-
-func sleep(ctx context.Context, d time.Duration) error {
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-t.C:
-		return nil
-	}
-}
-
-// retryable reports whether a failed attempt may succeed if repeated: the
-// statuses that ask for a retry, and network failures that pass, such as a
-// timeout or a refused connection. A TLS failure, an unknown host name or a
-// canceled context won't change on a retry.
-func retryable(ctx context.Context, err error) bool {
-	if ctx.Err() != nil {
-		return false
-	}
-	var se statusError
-	if errors.As(err, &se) {
-		return se.retry
-	}
-	var ue *UnreachableError
-	if !errors.As(err, &ue) {
-		return false
-	}
-	return transient(err)
-}
-
-// transient reports whether a network error is one that passes. It lists
-// the ones that do, since TLS failures don't all have types of their own.
-func transient(err error) bool {
-	var dnsErr *net.DNSError
-	if errors.As(err, &dnsErr) {
-		return dnsErr.IsTemporary || dnsErr.IsTimeout
-	}
-	var ne net.Error
-	if errors.As(err, &ne) && ne.Timeout() {
-		return true
-	}
-	var oe *net.OpError
-	if errors.As(err, &oe) && (oe.Op == "dial" || oe.Op == "read" || oe.Op == "write") {
-		return true
-	}
-	return errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) ||
-		errors.Is(err, syscall.ECONNREFUSED) || errors.Is(err, syscall.ECONNRESET)
-}
-
-// retryAfterHeader parses a Retry-After header: seconds, or an HTTP date.
-func retryAfterHeader(v string, now time.Time) time.Duration {
-	if v == "" {
-		return 0
-	}
-	if s, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
-		return time.Duration(max(s, 0)) * time.Second
-	}
-	if t, err := http.ParseTime(v); err == nil {
-		return max(t.Sub(now), 0)
-	}
-	return 0
 }

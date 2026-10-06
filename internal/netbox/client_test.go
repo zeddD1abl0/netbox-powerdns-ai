@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/config"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/httpclient"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/tracing"
 )
 
@@ -90,8 +91,8 @@ func testClient(t *testing.T, url string, o Options) (*Client, *[]time.Duration)
 	if o.Timeout == 0 {
 		o.Timeout = 5 * time.Second
 	}
-	o.retry = retryPolicy{attempts: 4, base: 100 * time.Millisecond, cap: time.Second,
-		sleep: func(_ context.Context, d time.Duration) error { delays = append(delays, d); return nil }}
+	o.retry = httpclient.Retry{Attempts: 4, Base: 100 * time.Millisecond, Cap: time.Second,
+		Sleep: func(_ context.Context, d time.Duration) error { delays = append(delays, d); return nil }}
 	c, err := New(t.Context(), o)
 	if err != nil {
 		t.Fatal(err)
@@ -160,39 +161,6 @@ func TestRetries(t *testing.T) {
 			t.Errorf("delays %v, want about 20s", *delays)
 		}
 	})
-}
-
-func TestBackoff(t *testing.T) {
-	for attempt := 1; attempt <= 8; attempt++ {
-		want := min(defaultRetry.base<<(attempt-1), defaultRetry.cap)
-		for range 100 {
-			if d := defaultRetry.delay(attempt, 0); d < want/2 || d > want {
-				t.Fatalf("delay(%d) = %v, want %v to %v", attempt, d, want/2, want)
-			}
-		}
-	}
-}
-
-func TestRetryAfterHeader(t *testing.T) {
-	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
-	tests := []struct {
-		header string
-		want   time.Duration
-	}{
-		{"", 0},
-		{"0", 0},
-		{"5", 5 * time.Second},
-		{" 5 ", 5 * time.Second},
-		{"-3", 0},
-		{now.Add(90 * time.Second).Format(http.TimeFormat), 90 * time.Second},
-		{now.Add(-time.Minute).Format(http.TimeFormat), 0},
-		{"soon", 0},
-	}
-	for _, tt := range tests {
-		if got := retryAfterHeader(tt.header, now); got != tt.want {
-			t.Errorf("retryAfterHeader(%q) = %v, want %v", tt.header, got, tt.want)
-		}
-	}
 }
 
 // TestBodyFailureIsRetried stalls partway through the first answer's body,
