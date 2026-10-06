@@ -62,6 +62,26 @@ zones each group serves, by view. Read-only.
   so does GitHub's once ITEM-0030 restores the mirror. The user has merged
   through an MR with a merge commit.
 
+## Decided after approval
+
+> [!IMPORTANT]
+> Changed during implementation, on 2026-10-06, with the reasons recorded in
+> the items named. These override the approved design below.
+>
+> - **Hex is uppercase in normalized values**, not lowercase: miekg/dns
+>   prints SSHFP's and DS's hex in uppercase whatever case it's given, so
+>   uppercase is the one form every type can share (ITEM-0032).
+> - **A number too big for its field is a problem.** miekg/dns keeps it
+>   modulo the field's size (an SRV port of 70000 becomes 4464), so nbpdns
+>   compares the numbers it was given with the ones printed, and keeps a
+>   mismatched value as given (ITEM-0032).
+> - **Request log lines changed** to `http request`, with a `service`
+>   attribute, since sloglint requires constant messages (ITEM-0031).
+> - **`netbox zones` takes `--view` or `--group`, not both,** since a group
+>   chooses its views (ITEM-0036).
+> - **An HTML error page gives its title** in both clients' errors, so a
+>   proxy's refusal reads on one line (ITEM-0036).
+
 ## Verification log
 
 Append-only and dated. Record what was run and what was seen.
