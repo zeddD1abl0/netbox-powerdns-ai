@@ -198,3 +198,35 @@ PostgreSQL server. nbpdns now supports and tests NetBox 4.7 only, with the
 DNS plugin 1.7.x. More releases are added as the runners have room. This is
 recorded in ADR-0023, which supersedes ADR-0020, and REQ-040 is narrowed to
 match.
+
+## Answers, 2026-10-06 (M02 design)
+
+These were given in the M02 design session. Each was chosen from proposed
+options; the label of the chosen option is quoted.
+
+| Question | Answer |
+|---|---|
+| Q-053: Which PowerDNS Authoritative releases should M02 support and test? | "5.1 and 5.0". 5.1 is the current train; 4.9 reached end of life around September 2026. |
+| How should nbpdns decide which server group serves each NetBox zone? | "By NetBox view": each group lists the views it serves, and a view may go to several groups. |
+| How should nbpdns normalize every record type? | "miekg/dns v2" (`codeberg.org/miekg/dns`). |
+| What should M02 deliver, given that the PowerDNS API has no TLS and no read-only key? | "Please break this out into a larger discussion. Why is there concern about the PowerDNS API?" |
+
+The discussion that followed: a PowerDNS API key has no scopes and can't be
+read-only, so it can change every zone, record, TSIG key and DNSSEC key on
+its server; the API's webserver has no TLS of its own; so a key that leaks,
+or is read off the network, lets someone rewrite DNS for every zone in the
+group. The usual layers are a TLS proxy on the PowerDNS host, a client
+certificate at the proxy, allowing only GET until nbpdns writes, and network
+limits. Then:
+
+| Question | Answer |
+|---|---|
+| Should nbpdns accept an `http://` URL for a PowerDNS API? | "Allow, with a warning", as for NetBox. |
+| Q-022: Which access setup should the docs present as the reference? | "TLS proxy, all methods": TLS and an optional client certificate, with writes passing too, so it serves M12 unchanged. |
+| Should the lab put that proxy in front of one group's primary? | "No, local test servers": TLS is tested against Go test servers, and the how-to is checked by hand. |
+| Should each lab group have its secondary in M02? | "Primaries only for now": secondaries arrive with catalog zones, in M12. |
+
+The user then approved M02's plan, which also answers Q-021 (the API,
+directly), Q-039 (no backend interface until M03 needs one) and Q-043
+(server groups in the config file). They're recorded in ADR-0024 and
+ADR-0025, and as REQ-041 and REQ-042.

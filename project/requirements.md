@@ -56,6 +56,8 @@ When a question is answered:
 | REQ-038 | CI and container images are glibc-based (Debian or Ubuntu); Alpine/musl isn't required. | User, 2026-09-25; [ADR-0015](../docs/adr/0015-glibc-based-debian-or-ubuntu-images-for-ci-and-con.md) |
 | REQ-039 | CI pipelines are split into stages (lint, test, build, security, and more later); `make ci` remains the local "do everything" target. | User, 2026-09-25 |
 | REQ-040 | Reads NetBox 4.7, with the NetBox DNS plugin 1.7.x, through the REST API with a read-only token. More releases are added as the CI runners have room to test them. Narrowed from 4.7 and 4.6 on 2026-10-06. | Q-007, [ADR-0020](../docs/adr/0020-netbox-client-and-normalized-dns-model.md), superseded by [ADR-0023](../docs/adr/0023-netbox-client-and-normalized-dns-model-with-netbox.md) |
+| REQ-041 | Reads PowerDNS Authoritative 5.1 and 5.0 through its HTTP API, from each server group's primary. | Q-053, [ADR-0024](../docs/adr/0024-read-powerdns-through-its-api-from-server-groups-i.md) |
+| REQ-042 | Zones are assigned to server groups by NetBox view, and a view may be served by several groups. | User, 2026-10-06; [ADR-0024](../docs/adr/0024-read-powerdns-through-its-api-from-server-groups-i.md) |
 
 ## Open questions
 
@@ -74,15 +76,12 @@ names the milestone that needs the answer, from the milestone list in
 | Q-015 | Is multi-tenancy needed: are permissions scoped to zone, NetBox tenant or server group? | Global roles in v1, scoped by server group. Tenant scoping is a later ADR. | M10 |
 | Q-016 | What is the web UI's scope? | Settings, ops dashboard (sync status, drift, per-server health), approvals, audit viewer, users and roles. **No record editor**, since NetBox is the editor. | M11 |
 | Q-017 | What are the scale targets: servers, zones, records, change rate, propagation latency from NetBox to servers? | Needs an answer. A possible design target is 50 servers, 10k zones, 1M records, and under 60 s propagation. | M03 |
-| Q-053 | Which PowerDNS Authoritative versions must be supported? Catalog zones (Q-052) need 4.7 or later. | 4.9 and 5.x. | M02 |
 | Q-054 | The parts of Q-010 not yet answered: how is a sync triggered, and how are existing PowerDNS zones adopted into NetBox (brownfield import)? | A NetBox event-rule webhook plus a periodic full reconcile. An import tool for first adoption, with imported zones starting in report mode. | M06 (triggers), M14 (import) |
 
 ### Architecture and deployment
 
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
-| Q-021 | How does the app reach PowerDNS: direct push, or agents on the DNS hosts? | Direct HTTPS push. An agent mode is a later extension point. | M02 |
-| Q-022 | How is the PowerDNS API secured in transit? Its built-in webserver has no native TLS. | A TLS proxy in front of it, with mTLS optional. Document the reference setup. | M02 |
 | Q-023 | How are secrets stored at rest (PowerDNS API keys, TSIG, OIDC client secrets)? | Envelope encryption with a master key from env or file. Vault/OpenBao later. | M07 |
 | Q-024 | When the UI and IaC both manage a setting, which one owns it? | A `managed_by` field on each resource. Resources owned by IaC are read-only in the UI. | M07 |
 | Q-025 | What packaging is needed? | Static linux amd64/arm64 binary, distroless non-root image, Helm chart, systemd unit, compose example, air-gap bundle. Linux only. | M04 (binary, image), M16 (rest) |
@@ -114,7 +113,6 @@ names the milestone that needs the answer, from the milestone list in
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
 | Q-038 | Do "clearly defined metrics" cover this app only, or PowerDNS stats too? | App metrics: sync lag, plan size, failures, drift count, per-server serial lag, API RED metrics. PowerDNS stats stay on PowerDNS's own `/metrics`. | M04 |
-| Q-039 | How will the app be extended in future? | A backend interface (for other DNS vendors later), outbound webhooks and an event stream. A plugin runtime is deferred to an ADR. | M02 |
 | Q-040 | Are rate limits and quotas needed? | Limits per token and per IP. | M09 |
 
 ### IaC
@@ -123,7 +121,6 @@ names the milestone that needs the answer, from the milestone list in
 |---|---|---|---|
 | Q-041 | What does IaC manage? With NetBox as the source of truth, DNS records go through NetBox's own Terraform provider. | IaC for this app covers **its own config**: server groups, sync policies, sinks, roles, tokens and settings. | M05 |
 | Q-042 | Where do the Terraform/OpenTofu provider and the Ansible collection live, and which registries do they publish to? | Separate repos in later milestones, built with terraform-plugin-framework. The API is designed for them from M1: declarative, idempotent, stable IDs, import support. | M17 |
-| Q-043 | Is a declarative config file (GitOps) needed? | Resources can be declared in the config file and are then `managed_by=file`. | M02 |
 
 ### Documentation
 
@@ -163,3 +160,8 @@ names the milestone that needs the answer, from the milestone list in
 | Q-055 | Which GitHub owner goes in the module path? | `zeddD1abl0`, from the `github` remote: `github.com/zeddD1abl0/netbox-powerdns-ai`. | 2026-09-25 | [ADR-0005](../docs/adr/0005-project-identity.md) |
 | Q-056 | Which API style guide, and are versions put in URL paths? | The Zalando RESTful API Guidelines, followed in full, including rule 115: no version in URL paths. | 2026-09-25 | REQ-037, [ADR-0012](../docs/adr/0012-api-standard.md) |
 | Q-007 | Which NetBox and plugin versions are supported, and how does the app authenticate to NetBox? | NetBox 4.7 and 4.6, with the DNS plugin 1.7.x and 1.6.x, read through the REST API. A read-only v2 token; a v1 token still works, with a warning. On 2026-10-06, narrowed to NetBox 4.7 only, since the CI runners can't fit a NetBox per release; more are added later. | 2026-09-27 | REQ-040, [ADR-0020](../docs/adr/0020-netbox-client-and-normalized-dns-model.md), [ADR-0023](../docs/adr/0023-netbox-client-and-normalized-dns-model-with-netbox.md) |
+| Q-021 | How does the app reach PowerDNS: direct push, or agents on the DNS hosts? | Directly, through each primary's API, over HTTPS wherever it's behind TLS. No agents. | 2026-10-06 | REQ-041, [ADR-0024](../docs/adr/0024-read-powerdns-through-its-api-from-server-groups-i.md) |
+| Q-022 | How is the PowerDNS API secured in transit? Its built-in webserver has no native TLS. | `http://` is allowed, with a warning. The reference setup is a TLS reverse proxy on the PowerDNS host, passing all methods, with an optional client certificate (mTLS); the webserver binds to `127.0.0.1` and the key is stored hashed. | 2026-10-06 | [ADR-0024](../docs/adr/0024-read-powerdns-through-its-api-from-server-groups-i.md) |
+| Q-039 | How will the app be extended in future? | No backend interface or plugin runtime yet. The PowerDNS client returns the shared model, and M03, the first code using two sources, defines the interface it needs. A plugin runtime needs its own ADR. | 2026-10-06 | [ADR-0024](../docs/adr/0024-read-powerdns-through-its-api-from-server-groups-i.md) |
+| Q-043 | Is a declarative config file (GitOps) needed? | Server groups are declared in the config file. When M07 stores resources in the database, those from the file become `managed_by=file`. | 2026-10-06 | [ADR-0024](../docs/adr/0024-read-powerdns-through-its-api-from-server-groups-i.md) |
+| Q-053 | Which PowerDNS Authoritative versions must be supported? | 5.1 and 5.0. 4.9 reached end of life around September 2026. | 2026-10-06 | REQ-041, [ADR-0024](../docs/adr/0024-read-powerdns-through-its-api-from-server-groups-i.md) |

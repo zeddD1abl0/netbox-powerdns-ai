@@ -37,6 +37,7 @@ SAML
 SCIM
 RBAC
 TSIG
+anycast
 DNSSEC
 DNSsync
 AXFR
