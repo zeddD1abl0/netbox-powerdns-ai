@@ -215,7 +215,7 @@ func TestLoadErrors(t *testing.T) {
 		{"URL with credentials", "", map[string]string{"NBPDNS_NETBOX_URL": "https://user:pw@netbox.example.com"}, nil,
 			[]string{"mustn't contain credentials; set the token or API key in its own key"}},
 		{"a token that YAML reads as a number", "netbox:\n  token: 12345\n", nil, nil,
-			[]string{"netbox.token (from file", "want a string, not 12345; put it in quotes"}},
+			[]string{"netbox.token (from file", "want a string, not a number; put it in quotes"}},
 		{"URL with a query", "", map[string]string{"NBPDNS_NETBOX_URL": "https://netbox.example.com/?x=1"}, nil,
 			[]string{"mustn't have a query"}},
 		{"a mapping for a string", "netbox:\n  url:\n    host: x\n", nil, nil,

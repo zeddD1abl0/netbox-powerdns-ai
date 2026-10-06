@@ -212,13 +212,21 @@ func checkURL(s string) error {
 
 // secretString accepts only a string. A secret that YAML reads as a number
 // or a boolean would come back in Go's form, such as 1e+10 for 1e10, and
-// silently stop matching.
+// silently stop matching. The error names only the kind of value it got,
+// never the value, which is the secret.
 func secretString(raw any) (string, error) {
-	s, ok := raw.(string)
-	if !ok {
-		return "", fmt.Errorf("want a string, not %s; put it in quotes", describe(raw))
+	switch v := raw.(type) {
+	case string:
+		return v, nil
+	case int, int64, uint64, float64:
+		return "", errors.New("want a string, not a number; put it in quotes")
+	case bool:
+		return "", errors.New("want a string, not true or false; put it in quotes")
+	case map[string]any, []any, nil:
+		return "", fmt.Errorf("want a string, not %s", describe(raw))
+	default:
+		return "", errors.New("want a string; put it in quotes")
 	}
-	return s, nil
 }
 
 // toString accepts a string, or a YAML scalar that reads as one.

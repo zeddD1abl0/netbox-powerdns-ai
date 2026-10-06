@@ -143,7 +143,7 @@ func TestGroupErrors(t *testing.T) {
 		{"a certificate without its key", groupsYAML(group("a", append(ok, "  cert_file: /c.pem")...)), []string{"primary.cert_file and primary.key_file go together"}},
 		{"a bad server ID", groupsYAML(group("a", append(ok, "  server_id: a/b")...)), []string{`primary.server_id: "a/b" isn't a server ID`}},
 		{"a key that YAML reads as a number", groupsYAML(group("a", replace("  api_key: k", "  api_key: 1e10")...)),
-			[]string{"primary.api_key: want a string, not 1e+10; put it in quotes"}},
+			[]string{"primary.api_key: want a string, not a number; put it in quotes"}},
 		{"two groups with one name", groupsYAML(group("a", ok...), group("a", ok...)), []string{"powerdns.groups[1] (a)", "another group is named a"}},
 		{"every problem at once", groupsYAML(entry("views: v", "primary:", "  url: x"), group("Bad", ok...)),
 			[]string{"powerdns.groups[0]", "name isn't set", "views: want a list", "primary.url:", "neither primary.api_key", "powerdns.groups[1] (Bad)"}},
@@ -185,5 +185,27 @@ func TestGroupFieldsAreWellFormed(t *testing.T) {
 			t.Errorf("%s's summary isn't a sentence", f.Name)
 		}
 		seen[f.Name] = true
+	}
+}
+
+// TestSecretValueNotInErrors checks that a secret YAML reads as something
+// other than a string is refused without its value in the error.
+func TestSecretValueNotInErrors(t *testing.T) {
+	for _, value := range []string{"8675309421", "0x7f3a9c11d2", "1e10", "123.456", "true"} {
+		for _, yaml := range []string{
+			"netbox:\n  token: " + value + "\n",
+			groupsYAML(entry("name: a", "views: [v]", "primary:", "  url: https://pdns.example.com", "  api_key: "+value)),
+		} {
+			_, _, err := load(t, yaml, nil)
+			if err == nil || !strings.Contains(err.Error(), "want a string") {
+				t.Fatalf("%s: %v, want an error", value, err)
+			}
+			// "not true or false" doesn't say which one the value was.
+			for _, leak := range []string{value, "8675309421", "546444153298", "1e+10", "123.456"} {
+				if leak != "true" && strings.Contains(err.Error(), leak) {
+					t.Errorf("the error shows the value %s:\n%v", leak, err)
+				}
+			}
+		}
 	}
 }
