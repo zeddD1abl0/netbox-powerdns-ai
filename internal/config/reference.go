@@ -91,7 +91,8 @@ func writeGroupsReference(p func(string, ...any)) {
 	p("    - name: site-a\n      views: [_default_]\n      primary:\n")
 	p("        url: https://pdns-a.example.com:8443\n        api_key_file: /run/secrets/pdns-site-a\n")
 	p("        ca_file: /etc/nbpdns/pdns-ca.pem\n")
-	p("    - name: site-b\n      views: [_default_, internal]\n      primary:\n")
+	p("    - name: site-b\n      views: [_default_, internal]\n")
+	p("      drift_policy: report\n      zone_policies:\n        legacy.example.com: ignore\n      primary:\n")
 	p("        url: https://pdns-b.example.com:8443\n        api_key_file: /run/secrets/pdns-site-b\n")
 	p("```\n")
 }

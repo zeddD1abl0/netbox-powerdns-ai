@@ -14,3 +14,4 @@ its goal and prerequisites, then gives numbered steps.
 - [Configure nbpdns](configure-nbpdns.md)
 - [Connect nbpdns to PowerDNS](connect-nbpdns-to-powerdns.md)
 - [Put the PowerDNS API behind a TLS proxy](put-the-powerdns-api-behind-a-tls-proxy.md)
+- [Set a zone's drift policy](set-a-zones-drift-policy.md)

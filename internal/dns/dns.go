@@ -87,7 +87,9 @@ type RawRecord struct {
 // A Problem is something wrong with the source data that normalization
 // worked around. Fix it at the source.
 type Problem struct {
-	Zone   string `json:"zone"`
+	Zone string `json:"zone"`
+	// View is the zone's NetBox view, if the zone is NetBox's.
+	View   string `json:"view,omitempty"`
 	Name   string `json:"name,omitempty"`
 	Type   string `json:"type,omitempty"`
 	Detail string `json:"detail"`
@@ -108,7 +110,7 @@ func (z *Zone) SetRecords(raw []RawRecord) []Problem {
 		typ := strings.ToUpper(strings.TrimSpace(r.Type))
 		value, err := Value(typ, r.Value, z.Name)
 		if err != nil {
-			probs = append(probs, Problem{z.Name, name, typ, err.Error() + "; kept as given"})
+			probs = append(probs, Problem{Zone: z.Name, View: z.View, Name: name, Type: typ, Detail: err.Error() + "; kept as given"})
 		}
 		ttl := z.DefaultTTL
 		if r.TTL != nil {
@@ -125,22 +127,20 @@ func (z *Zone) SetRecords(raw []RawRecord) []Problem {
 
 	z.RRsets = make([]RRset, 0, len(sets))
 	for _, s := range sets {
-		s.TTL, probs = rrsetTTL(z.Name, s, probs)
+		s.TTL, probs = rrsetTTL(z, s, probs)
 		slices.SortFunc(s.Records, func(a, b Record) int {
 			return cmp.Or(strings.Compare(a.Value, b.Value), strings.Compare(a.Status, b.Status), cmp.Compare(a.TTL, b.TTL))
 		})
 		z.RRsets = append(z.RRsets, *s)
 	}
-	slices.SortFunc(z.RRsets, func(a, b RRset) int {
-		return cmp.Or(CompareNames(a.Name, b.Name), cmp.Compare(typeRank(a.Type), typeRank(b.Type)), strings.Compare(a.Type, b.Type))
-	})
+	slices.SortFunc(z.RRsets, func(a, b RRset) int { return CompareRRsets(a.Name, a.Type, b.Name, b.Type) })
 	slices.SortFunc(probs, func(a, b Problem) int { return strings.Compare(a.String(), b.String()) })
 	return probs
 }
 
 // rrsetTTL returns the lowest effective TTL of s's active records, or of all
 // of them if none is active. Active records that disagree are a problem.
-func rrsetTTL(zone string, s *RRset, probs []Problem) (uint32, []Problem) {
+func rrsetTTL(z *Zone, s *RRset, probs []Problem) (uint32, []Problem) {
 	var active, all []uint32
 	for _, r := range s.Records {
 		all = append(all, r.TTL)
@@ -153,10 +153,17 @@ func rrsetTTL(zone string, s *RRset, probs []Problem) (uint32, []Problem) {
 	}
 	lo, hi := slices.Min(active), slices.Max(active)
 	if lo != hi {
-		probs = append(probs, Problem{zone, s.Name, s.Type,
-			fmt.Sprintf("its active records have different TTLs, from %d to %d; the RRset uses %d", lo, hi, lo)})
+		probs = append(probs, Problem{Zone: z.Name, View: z.View, Name: s.Name, Type: s.Type,
+			Detail: fmt.Sprintf("its active records have different TTLs, from %d to %d; the RRset uses %d", lo, hi, lo)})
 	}
 	return lo, probs
+}
+
+// CompareRRsets orders RRsets, by their owner names and types, canonically:
+// by name, as CompareNames does, then the SOA, then NS, then the other types
+// in alphabetical order.
+func CompareRRsets(aName, aType, bName, bType string) int {
+	return cmp.Or(CompareNames(aName, bName), cmp.Compare(typeRank(aType), typeRank(bType)), strings.Compare(aType, bType))
 }
 
 // typeRank puts SOA, then NS, before other types at the same name.

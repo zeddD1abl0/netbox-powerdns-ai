@@ -11,8 +11,8 @@
 | [M00](milestones/M00-foundation.md) | Foundation | done | 16 of 16 |
 | [M01](milestones/M01-netbox-read-path.md) | NetBox read path | done | 12 of 12 |
 | [M02](milestones/M02-powerdns-read-path.md) | PowerDNS read path | done | 11 of 11 |
-| [M03](milestones/M03-drift-report.md) | Drift report | planned | — |
-| [M04](milestones/M04-service.md) | Service | planned | 0 of 1 |
+| [M03](milestones/M03-drift-report.md) | Drift report | done | 7 of 7 |
+| [M04](milestones/M04-service.md) | Service | planned | 0 of 2 |
 | [M05](milestones/M05-rest-api.md) | REST API | planned | — |
 | [M06](milestones/M06-netbox-webhooks.md) | NetBox webhooks | planned | — |
 | [M07](milestones/M07-sqlite-persistence.md) | SQLite persistence | planned | — |
@@ -34,14 +34,14 @@
 |---|---|---|---|---|
 | [ITEM-0027](items/ITEM-0027-avoid-rebuilding-the-log-handler-chain-per-record.md) | Avoid rebuilding the log handler chain per record for grouped loggers | debt | open | — |
 | [ITEM-0040](items/ITEM-0040-write-record-values-to-powerdns-in-its-own-text-fo.md) | Write record values to PowerDNS in its own text form | task | open | — |
+| [ITEM-0049](items/ITEM-0049-compare-server-groups-concurrently.md) | Compare server groups concurrently | feature | open | — |
 
 ## Open questions
 
-29 open (0 blocking), 27 answered. The questions and their proposed defaults are in [requirements.md](requirements.md#open-questions).
+27 open (0 blocking), 29 answered. The questions and their proposed defaults are in [requirements.md](requirements.md#open-questions).
 
 | Needed by | Open questions |
 |---|---|
-| M03 | Q-017, Q-027 |
 | M04 | Q-038 |
 | M04 (binary, image), M16 (rest) | Q-025 |
 | M05 | Q-041 |
@@ -59,8 +59,8 @@
 
 ## Requirements
 
-42 requirements, listed in [requirements.md](requirements.md#requirements). 17 aren't referenced by any item yet: REQ-003, REQ-004, REQ-007, REQ-008, REQ-009, REQ-010, REQ-011, REQ-014, REQ-015, REQ-016, REQ-017, REQ-023, REQ-031, REQ-032, REQ-033, REQ-034, REQ-035.
+43 requirements, listed in [requirements.md](requirements.md#requirements). 16 aren't referenced by any item yet: REQ-003, REQ-004, REQ-007, REQ-008, REQ-009, REQ-010, REQ-011, REQ-014, REQ-015, REQ-016, REQ-017, REQ-023, REQ-032, REQ-033, REQ-034, REQ-035.
 
 ## Decisions
 
-26 ADRs (20 accepted, 6 superseded), listed in [docs/adr](../docs/adr/_index.md).
+27 ADRs (21 accepted, 6 superseded), listed in [docs/adr](../docs/adr/_index.md).

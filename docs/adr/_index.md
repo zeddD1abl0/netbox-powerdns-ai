@@ -40,5 +40,6 @@ from [`template.md`](template.md).
 | [0024](0024-read-powerdns-through-its-api-from-server-groups-i.md) | Read PowerDNS through its API, from server groups in the config file | superseded by ADR-0026 |
 | [0025](0025-normalize-record-data-with-miekg-dns-v2.md) | Normalize record data with miekg/dns v2 | accepted |
 | [0026](0026-read-powerdns-through-its-api-with-powerdns-5-1-on.md) | Read PowerDNS through its API, with PowerDNS 5.1 only | accepted |
+| [0027](0027-report-drift-between-netbox-and-each-server-group.md) | Report drift between NetBox and each server group's primary | accepted |
 
 <!-- projctl:adr-index:end -->

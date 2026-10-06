@@ -299,7 +299,7 @@ func newNetBoxRecordsCmd(a *app) *cobra.Command {
 		if *zone == "" {
 			return usageError{errors.New("--zone is required")}
 		}
-		name, err := netbox.ZoneName(*zone)
+		name, err := dns.ZoneName(*zone)
 		if err != nil {
 			return usageError{err}
 		}

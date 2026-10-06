@@ -8,6 +8,20 @@ All notable changes to this project are recorded here. The format follows
 
 ### Added
 
+- `nbpdns drift`: compare the zones NetBox assigns to each PowerDNS server
+  group, through its views, with what the group's primary serves, and report
+  every difference as a table or JSON, for every group or one (`--group`),
+  and every zone or one (`--zone`). Only what each side serves is compared,
+  and an SOA without its serial. Zones on a primary that NetBox doesn't
+  assign to its group are listed as unmanaged, not drift, and zones whose
+  policy is `ignore` aren't compared. The table gives each drifted zone's
+  policy, with `enforce` marked as acting from M12. It exits 0 with no
+  drift, 3 with drift, and 1 when NetBox or a primary can't be read. A
+  group whose primary can't be read is marked failed, and the others are
+  still reported.
+- Documentation: a tutorial on finding drift between NetBox and PowerDNS, a
+  how-to guide on setting a zone's drift policy, and an explanation of how
+  nbpdns finds drift.
 - `nbpdns netbox check`, `zones`, and `records`: read DNS data from the NetBox
   DNS plugin, through NetBox's REST API, with a read-only token. `check`
   reports NetBox's and the plugin's releases, and whether the token can view
@@ -39,7 +53,9 @@ All notable changes to this project are recorded here. The format follows
   certificate. Fields are checked strictly, every problem is reported at
   once, and `nbpdns config show` lists each field with the key redacted.
   `powerdns.timeout` and `powerdns.concurrency` set how requests to PowerDNS
-  behave.
+  behave. Each group also sets the drift policy of its zones, `report` by
+  default, with `zone_policies` for single zones: `enforce`, `report` or
+  `ignore`.
 - Record values of every type are normalized into one canonical form, parsed
   with the miekg/dns library, so that the same data reads the same from
   NetBox and from PowerDNS: names inside values lowercase and absolute, hex

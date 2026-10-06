@@ -30,7 +30,8 @@ func entry(lines ...string) string {
 func TestGroups(t *testing.T) {
 	keyFile := secretFile(t, "pdns-key-from-file\n")
 	cfg, settings, err := load(t, groupsYAML(
-		entry("name: site-a", "views: [_default_, internal]", "primary:",
+		entry("name: site-a", "views: [_default_, internal]", "drift_policy: ignore",
+			"zone_policies: {Example.COM.: enforce, legacy.example.com: report}", "primary:",
 			"  url: https://pdns-a.example.com:8443", "  api_key: inline-key",
 			"  ca_file: /etc/nbpdns/ca.pem", "  cert_file: /etc/nbpdns/client.pem", "  key_file: /etc/nbpdns/client-key.pem"),
 		entry("name: site-b", "views: [_default_]", "primary:",
@@ -40,11 +41,12 @@ func TestGroups(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []Group{
-		{Name: "site-a", Views: []string{"_default_", "internal"}, Primary: Primary{
-			URL: "https://pdns-a.example.com:8443", APIKey: NewSecret("inline-key"), ServerID: "localhost",
-			CAFile: "/etc/nbpdns/ca.pem", CertFile: "/etc/nbpdns/client.pem", KeyFile: "/etc/nbpdns/client-key.pem",
-		}},
-		{Name: "site-b", Views: []string{"_default_"}, Primary: Primary{
+		{Name: "site-a", Views: []string{"_default_", "internal"}, DriftPolicy: PolicyIgnore,
+			ZonePolicies: map[string]string{"example.com.": PolicyEnforce, "legacy.example.com.": PolicyReport}, Primary: Primary{
+				URL: "https://pdns-a.example.com:8443", APIKey: NewSecret("inline-key"), ServerID: "localhost",
+				CAFile: "/etc/nbpdns/ca.pem", CertFile: "/etc/nbpdns/client.pem", KeyFile: "/etc/nbpdns/client-key.pem",
+			}},
+		{Name: "site-b", Views: []string{"_default_"}, DriftPolicy: PolicyReport, Primary: Primary{
 			URL: "http://pdns-b.example.com:8081", APIKey: NewSecret("pdns-key-from-file"), APIKeyFile: keyFile, ServerID: "other",
 		}},
 	}
@@ -54,12 +56,24 @@ func TestGroups(t *testing.T) {
 	if g, ok := cfg.PowerDNS.Group("site-b"); !ok || g.Primary.ServerID != "other" {
 		t.Errorf("Group(site-b) = %+v, %v", g, ok)
 	}
+	for zone, want := range map[string]string{"example.com.": PolicyEnforce, "legacy.example.com.": PolicyReport, "other.example.": PolicyIgnore} {
+		if got := cfg.PowerDNS.Groups[0].Policy(zone); got != want {
+			t.Errorf("site-a's policy for %s = %s, want %s", zone, got, want)
+		}
+	}
+	if got := cfg.PowerDNS.Groups[1].Policy("example.com."); got != PolicyReport {
+		t.Errorf("site-b's default policy = %s", got)
+	}
 	if _, ok := cfg.PowerDNS.Group("site-c"); ok {
 		t.Error("Group(site-c) found a group")
 	}
 
 	tests := []struct{ key, value, source string }{
 		{"powerdns.groups.site-a.views", "_default_,internal", "file"},
+		{"powerdns.groups.site-a.drift_policy", "ignore", "file"},
+		{"powerdns.groups.site-a.zone_policies", "example.com=enforce,legacy.example.com=report", "file"},
+		{"powerdns.groups.site-b.drift_policy", "report", "default"},
+		{"powerdns.groups.site-b.zone_policies", "", "default"},
 		{"powerdns.groups.site-a.primary.api_key", Redacted, "file"},
 		{"powerdns.groups.site-a.primary.api_key_file", "", "default"},
 		{"powerdns.groups.site-a.primary.server_id", "localhost", "default"},
@@ -142,6 +156,22 @@ func TestGroupErrors(t *testing.T) {
 		{"a missing key file", groupsYAML(group("a", replace("  api_key: k", "  api_key_file: /does/not/exist")...)), []string{"primary.api_key_file: reading the secret file"}},
 		{"a certificate without its key", groupsYAML(group("a", append(ok, "  cert_file: /c.pem")...)), []string{"primary.cert_file and primary.key_file go together"}},
 		{"a bad server ID", groupsYAML(group("a", append(ok, "  server_id: a/b")...)), []string{`primary.server_id: "a/b" isn't a server ID`}},
+		{"a bad drift policy", groupsYAML(group("a", append(ok, "drift_policy: fix")...)),
+			[]string{`drift_policy: "fix" isn't a drift policy; use enforce, report, ignore`}},
+		{"zone policies as a list", groupsYAML(group("a", append(ok, "zone_policies: [example.com]")...)),
+			[]string{"zone_policies: want a mapping of zone names to policies"}},
+		{"a zone policy that isn't one", groupsYAML(group("a", append(ok, "zone_policies: {example.com: skip}")...)),
+			[]string{`zone_policies: zone example.com.: "skip" isn't a drift policy`}},
+		{"a zone named in Unicode", groupsYAML(group("a", append(ok, "zone_policies: {bücher.example: ignore}")...)),
+			[]string{"zone_policies:", "ASCII form"}},
+		{"a zone listed twice", groupsYAML(group("a", append(ok, "zone_policies: {example.com: ignore, example.com.: report}")...)),
+			[]string{"zone_policies: zone example.com. is listed twice"}},
+		// Viper lowercases map keys, so only the file shows these two.
+		{"a zone listed twice in two cases", groupsYAML(group("a", append(ok, "zone_policies: {example.com: ignore, Example.com: report}")...)),
+			[]string{"zone_policies: Example.com and example.com are one zone, listed twice"}},
+		{"a zone listed twice in two cases, under keys in capitals",
+			strings.Replace(groupsYAML(group("a", append(ok, "Zone_Policies: {EXAMPLE.com: ignore, example.COM: report}")...)), "powerdns:", "PowerDNS:", 1),
+			[]string{"powerdns.groups[0] (a)", "zone_policies: EXAMPLE.com and example.COM are one zone, listed twice"}},
 		{"a key that YAML reads as a number", groupsYAML(group("a", replace("  api_key: k", "  api_key: 1e10")...)),
 			[]string{"primary.api_key: want a string, not a number; put it in quotes"}},
 		{"two groups with one name", groupsYAML(group("a", ok...), group("a", ok...)), []string{"powerdns.groups[1] (a)", "another group is named a"}},

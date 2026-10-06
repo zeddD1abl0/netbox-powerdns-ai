@@ -17,6 +17,7 @@ these statuses:
 | 0 | The command succeeded. |
 | 1 | The command failed. Standard error says why. |
 | 2 | The command line was wrong: an unknown command or flag, or a bad argument. |
+| 3 | `nbpdns drift` compared everything, and found drift. |
 
 ## Global flags
 
@@ -123,6 +124,32 @@ nbpdns config show [flags]
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `-o`, `--output` | `format` | `table` | The output format: `table` or `json`. |
+
+### `nbpdns drift`
+
+Compare the zones NetBox assigns to each PowerDNS server group, through its
+views, with what the group's primary serves, and report every difference.
+Only what each side serves is compared: NetBox's active records, and the
+primary's records apart from those turned off. An SOA is compared without its
+serial. Zones on a primary that NetBox doesn't assign to its group are listed
+as unmanaged, and aren't drift. A zone whose drift policy is ignore isn't
+compared. nbpdns only reads, and changes nothing.
+
+nbpdns exits with status 0 if there's no drift, 3 if there is, and 1 if it
+couldn't compare everything. Nothing is reported if NetBox can't be read, or
+if the zone that --zone names is neither in a group's NetBox views nor on its
+primary. If a primary can't be read, its group is marked failed, and the
+other groups are still reported.
+
+```text
+nbpdns drift [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--group` | `string` | none | Only compare this server group. |
+| `-o`, `--output` | `format` | `table` | The output format: `table` or `json`. |
+| `--zone` | `string` | none | Only compare this zone, such as `example.com`. |
 
 ### `nbpdns netbox`
 

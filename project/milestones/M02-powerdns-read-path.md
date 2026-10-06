@@ -65,12 +65,12 @@ zones each group serves, by view. Read-only.
   the CHANGELOG is updated (ITEM-0036; `make generate-check`).
 - [x] `/code-review high` and `/security-review` have run, since M02 handles
   API keys (ITEM-0038, ITEM-0039).
-- [ ] The manual verification is recorded. The GitLab pipeline passes, and
+- [x] The manual verification is recorded. The GitLab pipeline passes, and
   so does GitHub's once ITEM-0030 restores the mirror. The user has merged
   through an MR with a merge commit. The verification is recorded below.
   GitLab passed on `c5b4bea`, and the user reported the push of `44623bc`
   in place; GitHub Actions run 37426268234 on `44623bc` passed every job.
-  The merge is to come.
+  Merged through merge request !3, merge commit `d96f5ca`, on 2026-10-06.
 
 ## Decided after approval
 
@@ -181,6 +181,12 @@ Append-only and dated. Record what was run and what was seen.
   drift report) is designed in plan mode; its open questions are Q-017 and
   Q-027, and the miekg/dns overflow and PowerDNS's own content form
   (ITEM-0040, M12) are the findings most relevant to it.
+- 2026-10-06: **Merged.** The user merged `m02-powerdns-read-path` through
+  GitLab merge request !3. `main` is at the merge commit `d96f5ca`, whose
+  parents are the old `main`, `7934f8b`, and the branch tip, `6bb538f`, so
+  every per-item commit is kept (ADR-0018). The mirror carried it to GitHub,
+  where Actions run 37438635140 on `main` passed every job, the integration
+  tests included: the first time they've passed on GitHub's `main`.
 
 ## Approved design
 

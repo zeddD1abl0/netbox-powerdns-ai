@@ -14,6 +14,23 @@ import (
 // maxStringLen is the longest character string a TXT record can hold.
 const maxStringLen = 255
 
+// ZoneName returns a zone name, as a user gives it on the command line or in
+// the config file, the way NetBox stores it: lowercase, without a final dot,
+// and in its ASCII form, which for an internationalized name starts with
+// xn--.
+func ZoneName(name string) (string, error) {
+	n := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(name)), ".")
+	for _, r := range n {
+		if r > 0x7e || r < 0x21 {
+			return "", fmt.Errorf("zone %q: give the name in its ASCII form, such as xn--bcher-kva.example for bücher.example", name)
+		}
+	}
+	if n == "" {
+		return "", errors.New("the zone name is empty")
+	}
+	return n, nil
+}
+
 // Name returns name as an absolute, lowercase domain name ending with a dot.
 // An empty name or @ is origin itself, and a name without a final dot is
 // relative to origin.

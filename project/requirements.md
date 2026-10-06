@@ -58,6 +58,7 @@ When a question is answered:
 | REQ-040 | Reads NetBox 4.7, with the NetBox DNS plugin 1.7.x, through the REST API with a read-only token. More releases are added as the CI runners have room to test them. Narrowed from 4.7 and 4.6 on 2026-10-06. | Q-007, [ADR-0020](../docs/adr/0020-netbox-client-and-normalized-dns-model.md), superseded by [ADR-0023](../docs/adr/0023-netbox-client-and-normalized-dns-model-with-netbox.md) |
 | REQ-041 | Reads PowerDNS Authoritative 5.1 through its HTTP API, from each server group's primary. More releases are added as the CI runners have room to test them. Narrowed from 5.1 and 5.0 on 2026-10-06. | Q-053, [ADR-0024](../docs/adr/0024-read-powerdns-through-its-api-from-server-groups-i.md), superseded by [ADR-0026](../docs/adr/0026-read-powerdns-through-its-api-with-powerdns-5-1-on.md) |
 | REQ-042 | Zones are assigned to server groups by NetBox view, and a view may be served by several groups. | User, 2026-10-06; [ADR-0024](../docs/adr/0024-read-powerdns-through-its-api-from-server-groups-i.md), superseded by [ADR-0026](../docs/adr/0026-read-powerdns-through-its-api-with-powerdns-5-1-on.md) |
+| REQ-043 | nbpdns is designed and tested for 1,000 zones and 100,000 records per run; larger targets are set when a deployment needs them. | Q-017, [ADR-0027](../docs/adr/0027-report-drift-between-netbox-and-each-server-group.md) |
 
 ## Open questions
 
@@ -75,7 +76,6 @@ names the milestone that needs the answer, from the milestone list in
 | Q-014 | What validation runs before and after changes? | Pre-flight checks (CNAME at apex, dangling NS, TTL bounds, syntax). After apply, query every server for the SOA serial and sample records. | M13 |
 | Q-015 | Is multi-tenancy needed: are permissions scoped to zone, NetBox tenant or server group? | Global roles in v1, scoped by server group. Tenant scoping is a later ADR. | M10 |
 | Q-016 | What is the web UI's scope? | Settings, ops dashboard (sync status, drift, per-server health), approvals, audit viewer, users and roles. **No record editor**, since NetBox is the editor. | M11 |
-| Q-017 | What are the scale targets: servers, zones, records, change rate, propagation latency from NetBox to servers? | Needs an answer. A possible design target is 50 servers, 10k zones, 1M records, and under 60 s propagation. | M03 |
 | Q-054 | The parts of Q-010 not yet answered: how is a sync triggered, and how are existing PowerDNS zones adopted into NetBox (brownfield import)? | A NetBox event-rule webhook plus a periodic full reconcile. An import tool for first adoption, with imported zones starting in report mode. | M06 (triggers), M14 (import) |
 
 ### Architecture and deployment
@@ -86,7 +86,6 @@ names the milestone that needs the answer, from the milestone list in
 | Q-024 | When the UI and IaC both manage a setting, which one owns it? | A `managed_by` field on each resource. Resources owned by IaC are read-only in the UI. | M07 |
 | Q-025 | What packaging is needed? | Static linux amd64/arm64 binary, distroless non-root image, Helm chart, systemd unit, compose example, air-gap bundle. Linux only. | M04 (binary, image), M16 (rest) |
 | Q-026 | How are upgrades, backup and restore, and config export handled? | Forward-only migrations. `export` and `import` commands for app config. | M07 (migrations), M16 (rest) |
-| Q-027 | What happens when things fail? | The app is **never in the DNS data path**. NetBox down: keep the last-known state and alert. PowerDNS server down: retry, mark the group degraded, report partial applies. | M03 |
 
 ### Identity and access
 
@@ -165,3 +164,5 @@ names the milestone that needs the answer, from the milestone list in
 | Q-039 | How will the app be extended in future? | No backend interface or plugin runtime yet. The PowerDNS client returns the shared model, and M03, the first code using two sources, defines the interface it needs. A plugin runtime needs its own ADR. | 2026-10-06 | [ADR-0024](../docs/adr/0024-read-powerdns-through-its-api-from-server-groups-i.md) |
 | Q-043 | Is a declarative config file (GitOps) needed? | Server groups are declared in the config file. When M07 stores resources in the database, those from the file become `managed_by=file`. | 2026-10-06 | [ADR-0024](../docs/adr/0024-read-powerdns-through-its-api-from-server-groups-i.md) |
 | Q-053 | Which PowerDNS Authoritative versions must be supported? | 5.1 and 5.0. 4.9 reached end of life around September 2026. Later the same day, narrowed to 5.1 only, since the CI runners couldn't fit both. | 2026-10-06 | REQ-041, [ADR-0024](../docs/adr/0024-read-powerdns-through-its-api-from-server-groups-i.md), [ADR-0026](../docs/adr/0026-read-powerdns-through-its-api-with-powerdns-5-1-on.md) |
+| Q-017 | What are the scale targets: servers, zones, records, change rate, propagation latency from NetBox to servers? | 1,000 zones and 100,000 records per run for now, tested and measured; raised when a deployment needs more. Propagation latency applies once nbpdns writes (M12). | 2026-10-06 | REQ-043, [ADR-0027](../docs/adr/0027-report-drift-between-netbox-and-each-server-group.md) |
+| Q-027 | What happens when things fail? | For the command line (M03): if NetBox can't be read, the run fails; if a group's primary can't be read, that group is marked failed and the others are still compared, and the run fails as incomplete. Keeping the last-known state and alerting come with the service (M04) and the database (M07). | 2026-10-06 | [ADR-0027](../docs/adr/0027-report-drift-between-netbox-and-each-server-group.md) |

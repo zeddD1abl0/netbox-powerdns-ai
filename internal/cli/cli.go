@@ -18,6 +18,7 @@ const (
 	exitOK    = 0 // the command succeeded
 	exitError = 1 // the command failed; stderr says why
 	exitUsage = 2 // the command line was wrong: an unknown command or flag, or a bad argument
+	exitDrift = 3 // nbpdns drift compared everything, and found drift
 )
 
 // Main runs nbpdns with args, not including the program name, and returns its
@@ -30,9 +31,26 @@ func Main(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return exitOK
 	}
 	fmt.Fprintf(stderr, "nbpdns: %v\n", err)
-	if ue := (usageError{}); errors.As(err, &ue) {
+	code := exitCode(err)
+	if code == exitUsage {
 		fmt.Fprintln(stderr, "Run 'nbpdns --help' for usage.")
+	}
+	return code
+}
+
+// exitCode returns the exit code for a command's error.
+func exitCode(err error) int {
+	var (
+		ue usageError
+		de driftError
+	)
+	switch {
+	case err == nil:
+		return exitOK
+	case errors.As(err, &ue):
 		return exitUsage
+	case errors.As(err, &de):
+		return exitDrift
 	}
 	return exitError
 }
@@ -63,7 +81,7 @@ func New(stdout, stderr io.Writer) *cobra.Command {
 	root.SetErr(stderr)
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return usageError{err} })
 	a.loader.AddFlags(root.PersistentFlags())
-	root.AddCommand(newVersionCmd(a), newConfigCmd(a), newNetBoxCmd(a), newPowerDNSCmd(a))
+	root.AddCommand(newVersionCmd(a), newConfigCmd(a), newNetBoxCmd(a), newPowerDNSCmd(a), newDriftCmd(a))
 	// Cobra adds these when the command runs. Add them now, so the generated
 	// reference sees the whole tree.
 	root.InitDefaultHelpCmd()

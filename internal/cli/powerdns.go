@@ -14,7 +14,6 @@ import (
 
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/config"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/dns"
-	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/netbox"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/powerdns"
 )
 
@@ -287,7 +286,7 @@ func newPowerDNSRecordsCmd(a *app) *cobra.Command {
 		if *zone == "" {
 			return usageError{errors.New("--zone is required")}
 		}
-		name, err := netbox.ZoneName(*zone)
+		name, err := dns.ZoneName(*zone)
 		if err != nil {
 			return usageError{err}
 		}
