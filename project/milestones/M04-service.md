@@ -73,11 +73,12 @@ OTLP/gRPC when configured. It's read-only, as before.
 - [x] `/code-review high` has run. `/security-review` runs, since M04 adds
   a network listener and a secret (the OTLP headers). Fixed in ITEM-0056
   and ITEM-0057 (see below).
-- [ ] The manual verification is recorded. The GitLab and GitHub pipelines
+- [x] The manual verification is recorded. The GitLab and GitHub pipelines
   pass, and the user has merged through an MR with a merge commit. The
   verification is recorded below. On `ad07b39`, the user reported M04
   tested and ready, and GitHub Actions run 37582909599 passed every job.
-  The merge is to come.
+  Merged through a GitLab merge request, merge commit `5ca546b`, on
+  2026-10-07; GitHub Actions run 37598569478 on it passed.
 
 ## Decided after approval
 
@@ -193,6 +194,12 @@ Append-only and dated. Record what was run and what was seen.
   through a GitLab merge request with a merge commit. After that, M05
   (packaging) is designed in plan mode; its open question is Q-025, and
   ADR-0015 constrains its image.
+- 2026-10-07: **Merged.** The user merged `m04-service` through a GitLab
+  merge request, and reported its pipeline passing. `main` is at the merge
+  commit `5ca546b`, whose parents are the old `main`, `ad24852`, and the
+  branch tip, `cf2bb2c`, so every per-item commit is kept (ADR-0018). The
+  mirror carried it to GitHub, where Actions run 37598569478 on `5ca546b`
+  passed.
 
 ## Approved design
 
