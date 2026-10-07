@@ -28,6 +28,8 @@ in the [configuration reference](configuration.md).
 |---|---|---|---|
 | `--config` | `string` | none | The YAML config file to read, instead of `$NBPDNS_CONFIG`. |
 | `--drift-group-concurrency` | `integer` | `4` | How many server groups are read and compared at once. |
+| `--drift-interval` | `duration` | `5m` | How often `nbpdns serve` refreshes the drift report, from the start of one refresh to the start of the next. |
+| `--drift-timeout` | `duration` | `10m` | How long one refresh of `nbpdns serve` may take before it's stopped. |
 | `--log-format` | `string` | `json` | How log lines are written to standard error. |
 | `--log-level` | `string` | `info` | The lowest level of log message to write. |
 | `--netbox-ca-file` | `path` | none | A PEM file of CA certificates to trust for NetBox, as well as the system's. |
@@ -45,6 +47,7 @@ in the [configuration reference](configuration.md).
 | `--otlp-timeout` | `duration` | `10s` | How long one export may take, and how long a command waits to send its last spans as it ends. |
 | `--powerdns-concurrency` | `integer` | `4` | How many requests to each PowerDNS API may be in flight at once. |
 | `--powerdns-timeout` | `duration` | `30s` | How long one request to a PowerDNS API may take. |
+| `--server-listen` | `address` | `:8080` | The address `nbpdns serve` listens on, for `/livez`, `/readyz`, `/status` and `/metrics`. |
 
 ## Commands
 
@@ -302,6 +305,23 @@ nbpdns powerdns zones [flags]
 |---|---|---|---|
 | `--group` | `string` | none | Only list this server group's zones. |
 | `-o`, `--output` | `format` | `table` | The output format: `table` or `json`. |
+
+### `nbpdns serve`
+
+Refresh the drift report on a schedule, every drift.interval, as nbpdns drift
+would make it, and keep each server group's last-known state when its primary,
+or NetBox, can't be read. Serve, at server.listen:
+
+  /livez    200 unless no refresh has started for longer than one can take
+  /readyz   200 once the first refresh has finished
+  /metrics  the drift, refresh and request metrics, for Prometheus
+
+Each refresh is its own trace, exported if otlp.endpoint is set. nbpdns only
+reads, and changes nothing. It stops on SIGINT or SIGTERM, and exits 0.
+
+```text
+nbpdns serve
+```
 
 ### `nbpdns version`
 

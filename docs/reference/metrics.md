@@ -25,7 +25,7 @@ PowerDNS's own `/metrics`.
 | `nbpdns_drift_problems` | gauge | `group` | Problems in the data that normalization worked around, in the server group's zones. |
 | `nbpdns_drift_warnings` | gauge | `group` | Warnings about the configuration or NetBox's zones, for the server group. |
 | `nbpdns_netbox_up` | gauge | none | 1 if the last drift refresh could read NetBox, else 0. |
-| `nbpdns_server_group_up` | gauge | `group` | 1 if the last drift refresh could read the server group's primary, else 0. |
+| `nbpdns_server_group_up` | gauge | `group` | 1 if the server group's primary could be read the last time a refresh tried, else 0. A refresh that can't read NetBox doesn't try the primaries. |
 | `nbpdns_server_group_last_success_timestamp_seconds` | gauge | `group` | When the server group's primary was last read and compared, as a Unix time. |
 | `nbpdns_http_client_requests_total` | counter | `service`: `NetBox`, `PowerDNS`; `target`; `method`: `GET`; `code` | Requests to NetBox and to each primary, one per attempt. The target is `netbox`, or the server group's name, and the code is the answer's status, or `error` if none came. |
 | `nbpdns_http_client_request_duration_seconds` | histogram | `service`: `NetBox`, `PowerDNS`; `target`; `method`: `GET` | How long each request took to answer, or to fail. Buckets, in seconds: 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30. |

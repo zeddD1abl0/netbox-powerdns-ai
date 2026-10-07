@@ -60,7 +60,11 @@ func (s *session) groups(name string) ([]config.Group, error) {
 
 // powerdns returns a client for group g's primary. Close it when done.
 func (s *session) powerdns(ctx context.Context, g config.Group) (*powerdns.Client, error) {
-	return powerdns.New(ctx, powerdns.OptionsFrom(g, s.cfg.PowerDNS, s.log, s.tracer))
+	o := powerdns.OptionsFrom(g, s.cfg.PowerDNS, s.log, s.tracer)
+	if s.metrics != nil {
+		o.Observer = s.metrics.Observer("PowerDNS", g.Name)
+	}
+	return powerdns.New(ctx, o)
 }
 
 // groupCheck is one group's part of `nbpdns powerdns check`.

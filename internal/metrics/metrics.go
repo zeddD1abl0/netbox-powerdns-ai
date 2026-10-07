@@ -87,7 +87,7 @@ var (
 	defNetBoxUp = def{name: "nbpdns_netbox_up", kind: gauge,
 		help: "1 if the last drift refresh could read NetBox, else 0."}
 	defGroupUp = def{name: "nbpdns_server_group_up", kind: gauge, labels: []string{"group"},
-		help: "1 if the last drift refresh could read the server group's primary, else 0."}
+		help: "1 if the server group's primary could be read the last time a refresh tried, else 0. A refresh that can't read NetBox doesn't try the primaries."}
 	defGroupLastSuccess = def{name: "nbpdns_server_group_last_success_timestamp_seconds", kind: gauge, labels: []string{"group"},
 		help: "When the server group's primary was last read and compared, as a Unix time."}
 	defRequests = def{name: "nbpdns_http_client_requests_total", kind: counter, labels: []string{"service", "target", "method", "code"},

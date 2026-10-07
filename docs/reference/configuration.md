@@ -30,6 +30,8 @@ a secret's value.
 | Key | Type | Default |
 |---|---|---|
 | [`drift.group_concurrency`](#driftgroup_concurrency) | integer, 1 to 32 | `4` |
+| [`drift.interval`](#driftinterval) | duration, at least `10s` | `5m` |
+| [`drift.timeout`](#drifttimeout) | duration | `10m` |
 | [`log.format`](#logformat) | `json` or `text` | `json` |
 | [`log.level`](#loglevel) | `debug`, `info`, `warn` or `error` | `info` |
 | [`netbox.ca_file`](#netboxca_file) | path | none |
@@ -45,6 +47,7 @@ a secret's value.
 | [`otlp.timeout`](#otlptimeout) | duration | `10s` |
 | [`powerdns.concurrency`](#powerdnsconcurrency) | integer, 1 to 32 | `4` |
 | [`powerdns.timeout`](#powerdnstimeout) | duration | `30s` |
+| [`server.listen`](#serverlisten) | a TCP address | `:8080` |
 | [`powerdns.groups`](#powerdnsgroups) | list of server groups, config file only | none |
 
 ## `drift.group_concurrency`
@@ -57,6 +60,28 @@ for every group.
 - **Default:** `4`
 - **Environment variable:** `NBPDNS_DRIFT_GROUP_CONCURRENCY`
 - **Flag:** `--drift-group-concurrency`
+
+## `drift.interval`
+
+How often `nbpdns serve` refreshes the drift report, from the start of one
+refresh to the start of the next. A refresh that takes longer delays the next
+one, so refreshes never overlap. Each refresh reads every zone's records from
+NetBox and from each primary, so make it much longer than a refresh takes.
+
+- **Type:** duration, at least `10s`
+- **Default:** `5m`
+- **Environment variable:** `NBPDNS_DRIFT_INTERVAL`
+- **Flag:** `--drift-interval`
+
+## `drift.timeout`
+
+How long one refresh of `nbpdns serve` may take before it's stopped. A refresh
+that's stopped counts as failed, and the next one starts on schedule.
+
+- **Type:** duration
+- **Default:** `10m`
+- **Environment variable:** `NBPDNS_DRIFT_TIMEOUT`
+- **Flag:** `--drift-timeout`
 
 ## `log.format`
 
@@ -224,6 +249,21 @@ How long one request to a PowerDNS API may take. Write it with a unit, such as
 - **Environment variable:** `NBPDNS_POWERDNS_TIMEOUT`
 - **Flag:** `--powerdns-timeout`
 
+## `server.listen`
+
+The address `nbpdns serve` listens on, for `/livez`, `/readyz`, `/status` and
+`/metrics`. Such as `:8080` for every interface, or `127.0.0.1:8080` for this
+host only.
+
+- **Type:** a TCP address
+- **Default:** `:8080`
+- **Environment variable:** `NBPDNS_SERVER_LISTEN`
+- **Flag:** `--server-listen`
+
+> [!WARNING]
+> The listener has no authentication until M10, and its pages name your server
+> groups, zones, and URLs. Keep the port on a trusted network.
+
 ## `powerdns.groups`
 
 The PowerDNS server groups. Each entry is one group: the NetBox views whose
@@ -285,6 +325,8 @@ Every key except the secrets, with its default:
 ```yaml
 drift:
   group_concurrency: 4
+  interval: 5m
+  timeout: 10m
 log:
   format: json
   level: info
@@ -302,4 +344,6 @@ otlp:
 powerdns:
   concurrency: 4
   timeout: 30s
+server:
+  listen: :8080
 ```

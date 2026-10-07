@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"slices"
 	"strconv"
@@ -189,6 +190,38 @@ func durationKey(dst *time.Duration, k Key) Key {
 	}
 	k.show = func() string { return dst.String() }
 	return k
+}
+
+// durationKeyAtLeast is durationKey, for a duration of at least least.
+func durationKeyAtLeast(dst *time.Duration, k Key, least time.Duration) Key {
+	k = durationKey(dst, k)
+	k.typ = "duration, at least `" + least.String() + "`"
+	parse := k.parse
+	k.parse = func(raw any) error {
+		old := *dst
+		if err := parse(raw); err != nil {
+			return err
+		}
+		if d := *dst; d < least {
+			*dst = old
+			return fmt.Errorf("%s is shorter than %s", d, least)
+		}
+		return nil
+	}
+	return k
+}
+
+// checkListen accepts a TCP address to listen on, such as :8080 or
+// 127.0.0.1:8080.
+func checkListen(s string) error {
+	_, port, err := net.SplitHostPort(s)
+	if err != nil {
+		return fmt.Errorf("%q isn't an address such as :8080 or 127.0.0.1:8080", s)
+	}
+	if n, err := strconv.Atoi(port); err != nil || n < 0 || n > 65535 {
+		return fmt.Errorf("%q has no port number from 0 to 65535", s)
+	}
+	return nil
 }
 
 // checkURL accepts an absolute http or https URL with a host, and no

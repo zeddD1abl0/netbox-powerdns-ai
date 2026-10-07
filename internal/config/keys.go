@@ -14,12 +14,24 @@ type Config struct {
 	PowerDNS PowerDNSConfig
 	Drift    DriftConfig
 	OTLP     OTLPConfig
+	Server   ServerConfig
 }
 
-// DriftConfig says how drift is compared.
+// DriftConfig says how drift is compared, and how often `nbpdns serve`
+// compares it.
 type DriftConfig struct {
 	// GroupConcurrency is how many server groups are compared at once.
 	GroupConcurrency int
+	// Interval is the time from one refresh's start to the next's.
+	Interval time.Duration
+	// Timeout bounds a refresh.
+	Timeout time.Duration
+}
+
+// ServerConfig configures the listener of `nbpdns serve`.
+type ServerConfig struct {
+	// Listen is the TCP address to listen on.
+	Listen string
 }
 
 // LogConfig configures the operational log, written to standard error.
@@ -148,6 +160,27 @@ func keys(c *Config) []Key {
 				"and NetBox is read once for every group.",
 			Default: "4",
 		}, 32),
+		durationKeyAtLeast(&c.Drift.Interval, Key{
+			Name:    "drift.interval",
+			Summary: "How often `nbpdns serve` refreshes the drift report, from the start of one refresh to the start of the next.",
+			Details: "A refresh that takes longer delays the next one, so refreshes never overlap. " +
+				"Each refresh reads every zone's records from NetBox and from each primary, so make it much longer than a refresh takes.",
+			Default: "5m",
+		}, 10*time.Second),
+		durationKey(&c.Drift.Timeout, Key{
+			Name:    "drift.timeout",
+			Summary: "How long one refresh of `nbpdns serve` may take before it's stopped.",
+			Details: "A refresh that's stopped counts as failed, and the next one starts on schedule.",
+			Default: "10m",
+		}),
+		stringKey(&c.Server.Listen, "a TCP address", "address", Key{
+			Name:    "server.listen",
+			Summary: "The address `nbpdns serve` listens on, for `/livez`, `/readyz`, `/status` and `/metrics`.",
+			Details: "Such as `:8080` for every interface, or `127.0.0.1:8080` for this host only.",
+			Warning: "The listener has no authentication until M10, and its pages name your server groups, " +
+				"zones, and URLs. Keep the port on a trusted network.",
+			Default: ":8080",
+		}, checkListen),
 		stringKey(&c.OTLP.Endpoint, "an `http` or `https` URL", "url", Key{
 			Name:    "otlp.endpoint",
 			Summary: "The URL of the OpenTelemetry collector that nbpdns exports its spans to, over OTLP.",

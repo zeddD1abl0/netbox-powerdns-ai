@@ -69,24 +69,9 @@ func newDriftCmd(a *app) *cobra.Command {
 				return err
 			}
 			defer nb.Close()
-			if _, err := nb.Connect(ctx); err != nil {
-				return err
-			}
-			sources := make([]drift.Group, len(groups))
-			for i, g := range groups {
-				sources[i] = drift.Group{Config: g}
-				c, err := s.powerdns(ctx, g)
-				if err == nil {
-					defer c.Close()
-					_, err = c.Connect(ctx)
-				}
-				if err != nil {
-					sources[i].Err = err
-					continue
-				}
-				sources[i].Primary = &primarySource{c: c}
-			}
-			r, err := drift.Run(ctx, &netboxSource{c: nb}, sources, drift.Options{Zone: name, Concurrency: s.cfg.Drift.GroupConcurrency})
+			clients := s.groupClients(ctx, groups)
+			defer closeClients(clients)
+			r, err := s.compare(ctx, nb, clients, name)
 			if err != nil {
 				return err
 			}
@@ -107,6 +92,51 @@ func newDriftCmd(a *app) *cobra.Command {
 		})
 	}
 	return cmd
+}
+
+// A groupClient is a server group, with the client for its primary, or the
+// error that kept nbpdns from making one.
+type groupClient struct {
+	cfg config.Group
+	c   *powerdns.Client
+	err error
+}
+
+// groupClients returns a client for each group's primary. Close them with
+// closeClients.
+func (s *session) groupClients(ctx context.Context, groups []config.Group) []groupClient {
+	out := make([]groupClient, len(groups))
+	for i, g := range groups {
+		c, err := s.powerdns(ctx, g)
+		out[i] = groupClient{cfg: g, c: c, err: err}
+	}
+	return out
+}
+
+func closeClients(cs []groupClient) {
+	for _, c := range cs {
+		if c.c != nil {
+			c.c.Close()
+		}
+	}
+}
+
+// compare reads NetBox through nb, and each group's primary through its
+// client, and compares them (ADR-0027). `nbpdns drift` runs it once, and
+// `nbpdns serve` once each refresh. A group without a client, or whose
+// primary can't be read, is failed in the report.
+func (s *session) compare(ctx context.Context, nb *netbox.Client, groups []groupClient, zone string) (drift.Report, error) {
+	if _, err := nb.Connect(ctx); err != nil {
+		return drift.Report{}, err
+	}
+	sources := make([]drift.Group, len(groups))
+	for i, g := range groups {
+		sources[i] = drift.Group{Config: g.cfg, Err: g.err}
+		if g.err == nil {
+			sources[i].Primary = &primarySource{c: g.c}
+		}
+	}
+	return drift.Run(ctx, &netboxSource{c: nb}, sources, drift.Options{Zone: zone, Concurrency: s.cfg.Drift.GroupConcurrency})
 }
 
 // driftResult returns the error that gives the report's exit status: one
@@ -244,13 +274,18 @@ func (n *netboxSource) Read(ctx context.Context, zones []dns.Zone) ([]dns.Zone, 
 	return n.c.ReadZones(ctx, nb)
 }
 
-// primarySource reads a server group's primary for the drift report.
+// primarySource reads a server group's primary for the drift report. It
+// connects first, checking the server, so that groups connect concurrently
+// too.
 type primarySource struct {
 	c     *powerdns.Client
 	zones map[string]powerdns.Zone // by absolute name
 }
 
 func (p *primarySource) Zones(ctx context.Context, zone string) ([]dns.Zone, error) {
+	if _, err := p.c.Connect(ctx); err != nil {
+		return nil, err
+	}
 	var zones []powerdns.Zone
 	if zone == "" {
 		var err error

@@ -81,7 +81,7 @@ func New(stdout, stderr io.Writer) *cobra.Command {
 	root.SetErr(stderr)
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return usageError{err} })
 	a.loader.AddFlags(root.PersistentFlags())
-	root.AddCommand(newVersionCmd(a), newConfigCmd(a), newNetBoxCmd(a), newPowerDNSCmd(a), newDriftCmd(a))
+	root.AddCommand(newVersionCmd(a), newConfigCmd(a), newNetBoxCmd(a), newPowerDNSCmd(a), newDriftCmd(a), newServeCmd(a))
 	// Cobra adds these when the command runs. Add them now, so the generated
 	// reference sees the whole tree.
 	root.InitDefaultHelpCmd()

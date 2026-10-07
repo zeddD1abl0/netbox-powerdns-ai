@@ -14,6 +14,7 @@ import (
 
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/config"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/logging"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/metrics"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/otlp"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/tracing"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/version"
@@ -25,6 +26,9 @@ type session struct {
 	settings []config.Setting
 	log      *slog.Logger
 	tracer   trace.Tracer
+	// metrics, if set, count the clients' requests. Only `nbpdns serve`
+	// has them.
+	metrics *metrics.Metrics
 }
 
 // run loads the configuration, sets up logging and tracing, and runs fn in
