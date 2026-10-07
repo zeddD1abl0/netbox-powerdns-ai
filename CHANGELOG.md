@@ -8,6 +8,12 @@ All notable changes to this project are recorded here. The format follows
 
 ### Added
 
+- Releases. A version tag's pipeline publishes nbpdns as static Linux
+  amd64 and arm64 binaries, in archives with `checksums.txt`, to a GitLab
+  release, and as a multi-arch, non-root, distroless static image with an
+  SPDX SBOM, to the GitLab registry. Every other pipeline builds and tests
+  the same release without publishing it (`make release-check`). One commit
+  builds the same archives anywhere.
 - `nbpdns serve` runs continuously. It refreshes the drift report every
   `drift.interval`, bounded by `drift.timeout`, and keeps each server
   group's last-known state when its primary, or NetBox, can't be read. At
