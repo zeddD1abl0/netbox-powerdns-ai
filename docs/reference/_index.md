@@ -19,3 +19,8 @@ by hand:
 | API reference | `api/openapi.yaml` | M06 |
 | Audit events | the audit event registry | M08 |
 | Permissions | the permission registry | M11 |
+
+The others are written by hand:
+
+- [Service endpoints](service-endpoints.md): what `nbpdns serve` answers, and
+  the fields of its status page. A test checks the page against the code.

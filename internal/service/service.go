@@ -18,6 +18,7 @@ import (
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/drift"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/logging"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/metrics"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/version"
 )
 
 // A RefreshFunc reads NetBox and every group's primary, and compares them,
@@ -35,7 +36,27 @@ type Options struct {
 	Tracer  trace.Tracer
 	Metrics *metrics.Metrics
 
+	// What /status shows besides the refreshes: the build, NetBox's URL,
+	// each group's primary, in the configuration's order, and where spans
+	// are exported, if they are.
+	Version   version.Info
+	NetBoxURL string
+	Groups    []Primary
+	OTLP      OTLP
+
 	now func() time.Time // time.Now if nil
+}
+
+// A Primary is a server group and its primary's URL.
+type Primary struct {
+	Group string
+	URL   string
+}
+
+// OTLP says where spans are exported. An empty Endpoint means nowhere.
+type OTLP struct {
+	Endpoint string
+	Protocol string
 }
 
 // A Service refreshes the drift report, and keeps what it found.
@@ -268,12 +289,13 @@ func isDrifted(state string) bool {
 
 func unix(t time.Time) float64 { return float64(t.UnixNano()) / 1e9 }
 
-// Handler serves /livez, /readyz and /metrics. GET and HEAD work; another
-// method gets 405, and another path 404.
+// Handler serves /livez, /readyz, /status and /metrics. GET and HEAD work;
+// another method gets 405, and another path 404.
 func (s *Service) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /livez", s.livez)
 	mux.HandleFunc("GET /readyz", s.readyz)
+	mux.HandleFunc("GET /status", s.status)
 	mux.Handle("GET /metrics", s.o.Metrics.Handler())
 	return mux
 }
@@ -284,14 +306,20 @@ func (s *Service) livez(w http.ResponseWriter, _ *http.Request) {
 	s.mu.Lock()
 	last := s.st.lastStart
 	s.mu.Unlock()
-	if last.IsZero() {
-		last = s.started
-	}
-	if limit := s.o.Interval + s.o.Timeout + time.Minute; s.o.now().Sub(last) > limit {
-		text(w, http.StatusServiceUnavailable, fmt.Sprintf("stuck: no drift refresh has started since %s", last.UTC().Format(time.RFC3339)))
+	if alive, since := s.alive(last); !alive {
+		text(w, http.StatusServiceUnavailable, fmt.Sprintf("stuck: no drift refresh has started since %s", since.UTC().Format(time.RFC3339)))
 		return
 	}
 	text(w, http.StatusOK, "ok")
+}
+
+// alive reports whether a refresh has started, since last, or since the
+// service started if none has, within the time a refresh can take.
+func (s *Service) alive(last time.Time) (bool, time.Time) {
+	if last.IsZero() {
+		last = s.started
+	}
+	return s.o.now().Sub(last) <= s.o.Interval+s.o.Timeout+time.Minute, last
 }
 
 // readyz answers 200 once the first refresh has finished, whatever its

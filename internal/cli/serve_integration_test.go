@@ -3,13 +3,16 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/lab"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/service"
 )
 
 // TestServe runs `nbpdns serve` on the drift fixture, in the lab's NetBox
@@ -63,6 +66,26 @@ func TestServe(t *testing.T) {
 	// The zone in sync has no drifted series.
 	if strings.Contains(body, fmt.Sprintf("zone=%q", f.InSync)) {
 		t.Errorf("the zone in sync has a drifted series")
+	}
+	// The status page lists the same drifted zones, in both forms.
+	code, page := s.get("/status?json=1")
+	var st service.Status
+	if err := json.Unmarshal([]byte(page), &st); err != nil || code != http.StatusOK || len(st.Groups) != 2 {
+		t.Fatalf("status: %d, %v:\n%s", code, err, page)
+	}
+	a, down := st.Groups[0], st.Groups[1]
+	got := map[string]string{}
+	for _, z := range a.DriftedZones {
+		got[z.Zone] = z.State
+	}
+	if a.Name != "lab-a" || a.Status != "ok" || !reflect.DeepEqual(got, map[string]string{f.Drift: "drift", f.Missing: "missing", f.Parked: "inactive_in_netbox"}) {
+		t.Errorf("lab-a's status: %+v", a)
+	}
+	if down.Name != "down" || down.Status != "failed" || !strings.Contains(down.Error, "isn't reachable") {
+		t.Errorf("down's status: %+v", down)
+	}
+	if _, text := s.get("/status"); !strings.Contains(text, f.Drift) || !strings.Contains(text, f.Parked) {
+		t.Errorf("the status page lacks the drifted zones:\n%s", text)
 	}
 	if code := s.stop(); code != exitOK {
 		t.Errorf("exit %d, want 0:\n%s", code, s.stderr)

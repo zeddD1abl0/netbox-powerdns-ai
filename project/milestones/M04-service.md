@@ -81,6 +81,9 @@ OTLP/gRPC when configured. It's read-only, as before.
 >   `otlp.ca_file` and `otlp.timeout`**, not `tracing.otlp.*`. Every key
 >   has two levels, which the registry checks, and the reference's example
 >   config file relies on (ITEM-0052).
+> - **The reference page is "Service endpoints"**, `service-endpoints.md`,
+>   not "HTTP endpoints": Google's heading rule wants a heading's first word
+>   in sentence case, which an acronym can't be (ITEM-0055).
 
 ## Verification log
 

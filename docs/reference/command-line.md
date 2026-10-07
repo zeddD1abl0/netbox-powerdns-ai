@@ -314,6 +314,7 @@ or NetBox, can't be read. Serve, at server.listen:
 
   /livez    200 unless no refresh has started for longer than one can take
   /readyz   200 once the first refresh has finished
+  /status   the service's state, as text, or as JSON with ?json=1
   /metrics  the drift, refresh and request metrics, for Prometheus
 
 Each refresh is its own trace, exported if otlp.endpoint is set. nbpdns only

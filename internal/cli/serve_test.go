@@ -150,7 +150,9 @@ func TestServeFailures(t *testing.T) {
 // refresh fails, which still makes it ready, and it stops cleanly.
 func TestServeWithoutNetBox(t *testing.T) {
 	env := configFile(t, twoGroups)
-	env["NBPDNS_NETBOX_URL"], env["NBPDNS_NETBOX_TOKEN"] = "http://127.0.0.1:1", "nbt_abc.def"
+	env["NBPDNS_NETBOX_URL"], env["NBPDNS_NETBOX_TOKEN"] = "http://127.0.0.1:1", "nbt_abc.s3cret-token"
+	// Spans go nowhere, but the headers must still not show.
+	env["NBPDNS_OTLP_ENDPOINT"], env["NBPDNS_OTLP_HEADERS"], env["NBPDNS_OTLP_TIMEOUT"] = "http://127.0.0.1:1", "Authorization=s3cret-header", "1s"
 	s := startServe(t, env)
 	if code, body := s.get("/livez"); code != http.StatusOK || body != "ok\n" {
 		t.Errorf("livez: %d %q", code, body)
@@ -165,6 +167,12 @@ func TestServeWithoutNetBox(t *testing.T) {
 	} {
 		if code != http.StatusOK || !strings.Contains(body, want) {
 			t.Errorf("metrics have no %q:\n%s", want, body)
+		}
+	}
+	for _, path := range []string{"/status", "/status?json=1"} {
+		code, page := s.get(path)
+		if code != http.StatusOK || !strings.Contains(page, "127.0.0.1:1") || strings.Contains(page, "s3cret") {
+			t.Errorf("%s: %d, without the URLs or with a secret:\n%s", path, code, page)
 		}
 	}
 	if code := s.stop(); code != exitOK {

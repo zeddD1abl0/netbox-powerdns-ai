@@ -12,10 +12,13 @@ All notable changes to this project are recorded here. The format follows
   `drift.interval`, bounded by `drift.timeout`, and keeps each server
   group's last-known state when its primary, or NetBox, can't be read. At
   `server.listen` it serves `/livez`, `/readyz` (ready once the first
-  refresh has finished), and Prometheus metrics at `/metrics`: drift per
-  group and per drifted zone, refreshes, and requests to NetBox and to each
-  primary. The metrics reference is generated from the code. Each refresh
-  is its own trace. It stops cleanly on SIGINT or SIGTERM.
+  refresh has finished), `/status`, and Prometheus metrics at `/metrics`.
+  The status page shows the schedule, the outcome of each refresh,
+  NetBox's and each group's state, the names of drifted zones, and the
+  trace export, as text, or as JSON with `?json=1`. The metrics cover drift per group and
+  per drifted zone, refreshes, and requests to NetBox and to each primary,
+  and their reference is generated from the code. Each refresh is its own
+  trace. It stops cleanly on SIGINT or SIGTERM.
 - Spans are exported to an OpenTelemetry collector over OTLP, by
   HTTP/protobuf or gRPC (`otlp.protocol`), from every command, when
   `otlp.endpoint` is set. Headers, such as the collector's token, are a

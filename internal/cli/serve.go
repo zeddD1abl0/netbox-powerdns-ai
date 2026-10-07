@@ -24,12 +24,13 @@ const shutdownTimeout = 10 * time.Second
 func newServeCmd(a *app) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "serve",
-		Short: "Run continuously: refresh the drift report on a schedule, and serve health checks and metrics",
+		Short: "Run continuously: refresh the drift report on a schedule, and serve its status and metrics",
 		Long: "Refresh the drift report on a schedule, every drift.interval, as nbpdns drift\n" +
 			"would make it, and keep each server group's last-known state when its primary,\n" +
 			"or NetBox, can't be read. Serve, at server.listen:\n\n" +
 			"  /livez    200 unless no refresh has started for longer than one can take\n" +
 			"  /readyz   200 once the first refresh has finished\n" +
+			"  /status   the service's state, as text, or as JSON with ?json=1\n" +
 			"  /metrics  the drift, refresh and request metrics, for Prometheus\n\n" +
 			"Each refresh is its own trace, exported if otlp.endpoint is set. nbpdns only\n" +
 			"reads, and changes nothing. It stops on SIGINT or SIGTERM, and exits 0.",
@@ -54,13 +55,21 @@ func newServeCmd(a *app) *cobra.Command {
 					s.log.WarnContext(ctx, "a server group has no client, so every refresh reports it failed", "group", c.cfg.Name, "err", c.err)
 				}
 			}
+			primaries := make([]service.Primary, len(groups))
+			for i, g := range groups {
+				primaries[i] = service.Primary{Group: g.Name, URL: g.Primary.URL}
+			}
 			svc := service.New(service.Options{
-				Refresh:  func(ctx context.Context) (drift.Report, error) { return s.compare(ctx, nb, clients, "") },
-				Interval: s.cfg.Drift.Interval,
-				Timeout:  s.cfg.Drift.Timeout,
-				Log:      s.log,
-				Tracer:   s.tracer,
-				Metrics:  s.metrics,
+				Refresh:   func(ctx context.Context) (drift.Report, error) { return s.compare(ctx, nb, clients, "") },
+				Interval:  s.cfg.Drift.Interval,
+				Timeout:   s.cfg.Drift.Timeout,
+				Log:       s.log,
+				Tracer:    s.tracer,
+				Metrics:   s.metrics,
+				Version:   version.Get(),
+				NetBoxURL: s.cfg.NetBox.URL,
+				Groups:    primaries,
+				OTLP:      service.OTLP{Endpoint: s.cfg.OTLP.Endpoint, Protocol: s.cfg.OTLP.Protocol},
 			})
 			return serve(ctx, s, svc)
 		})
