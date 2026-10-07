@@ -29,6 +29,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -539,4 +540,59 @@ func TestTextDetail(t *testing.T) {
 			t.Errorf("TextDetail(%.20q) = %.20q, want %.20q", tt.body, got, tt.want)
 		}
 	}
+}
+
+// recorder is an Observer that records what it's told.
+type recorder struct {
+	mu      sync.Mutex
+	codes   []int
+	retries int
+}
+
+func (r *recorder) Request(method string, code int, d time.Duration) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if method == http.MethodGet && d >= 0 {
+		r.codes = append(r.codes, code)
+	}
+}
+
+func (r *recorder) Retry() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.retries++
+}
+
+func TestObserver(t *testing.T) {
+	t.Run("retried statuses", func(t *testing.T) {
+		srv, _ := scripted(t, step{status: http.StatusServiceUnavailable}, step{status: http.StatusBadGateway}, step{status: http.StatusOK})
+		rec := &recorder{}
+		c, _ := testClient(t, Options{URL: srv.URL, Observer: rec})
+		if err := get(t, c, srv.URL); err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(rec.codes, []int{503, 502, 200}) || rec.retries != 2 {
+			t.Errorf("codes %v, %d retries", rec.codes, rec.retries)
+		}
+	})
+	t.Run("no answer", func(t *testing.T) {
+		srv := httptest.NewServer(http.NotFoundHandler())
+		srv.Close()
+		rec := &recorder{}
+		c, _ := testClient(t, Options{URL: srv.URL, Observer: rec})
+		if err := get(t, c, srv.URL); err == nil {
+			t.Fatal("GET of a closed server succeeded")
+		}
+		// Every attempt is told, as code 0, and each retry before it.
+		if !slices.Equal(rec.codes, []int{0, 0, 0, 0}) || rec.retries != 3 {
+			t.Errorf("codes %v, %d retries", rec.codes, rec.retries)
+		}
+	})
+	t.Run("none", func(t *testing.T) {
+		srv, _ := scripted(t, step{status: http.StatusOK})
+		c, _ := testClient(t, Options{URL: srv.URL})
+		if err := get(t, c, srv.URL); err != nil {
+			t.Fatal(err)
+		}
+	})
 }

@@ -30,6 +30,8 @@ type Options struct {
 	Concurrency int
 	Logger      *slog.Logger
 	Tracer      trace.Tracer
+	// Observer, if set, counts the client's requests, for metrics.
+	Observer httpclient.Observer
 
 	retry     httpclient.Retry // the default policy if zero
 	supported []Release        // Supported if nil
@@ -77,7 +79,7 @@ func New(ctx context.Context, o Options) (*Client, error) {
 	}
 	hc, err := httpclient.New(httpclient.Options{
 		Service: "NetBox", URL: base.String(), Keys: "netbox", CAFile: o.CAFile,
-		Timeout: o.Timeout, Conns: o.Concurrency, Logger: log, Tracer: o.Tracer, Retry: o.retry,
+		Timeout: o.Timeout, Conns: o.Concurrency, Logger: log, Tracer: o.Tracer, Retry: o.retry, Observer: o.Observer,
 	})
 	if err != nil {
 		return nil, err
