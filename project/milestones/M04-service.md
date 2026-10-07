@@ -45,29 +45,34 @@ OTLP/gRPC when configured. It's read-only, as before.
 
 ## Acceptance criteria
 
-- [ ] ADR-0028 and ADR-0029 are accepted. Q-038 is answered, and REQ-044
-  exists.
-- [ ] The stubs are renumbered, with M05 Packaging. Live references and
-  code text use the new numbers. `make project-lint` passes.
-- [ ] `nbpdns serve` refreshes on schedule, never overlapping, and keeps
+- [x] ADR-0028 and ADR-0029 are accepted. Q-038 is answered, and REQ-044
+  exists (`project/requirements.md`).
+- [x] The stubs are renumbered, with M05 Packaging. Live references and
+  code text use the new numbers. `make project-lint` passes (ITEM-0050).
+- [x] `nbpdns serve` refreshes on schedule, never overlapping, and keeps
   each group's last-known state. It answers `/livez` and `/readyz` as
-  ADR-0029 says, and shuts down cleanly on SIGTERM.
-- [ ] `/metrics` has every metric in the table. The reference is
-  generated, and promlint passes.
-- [ ] `/status` shows the service's state, as text by default and as JSON
+  ADR-0029 says, and shuts down cleanly on SIGTERM (ITEM-0053, ITEM-0056,
+  and the manual verification below).
+- [x] `/metrics` has every metric in the table. The reference is
+  generated, and promlint passes (ITEM-0051, `make generate-check`).
+- [x] `/status` shows the service's state, as text by default and as JSON
   with `?json=1`. Every JSON field is in the reference, and no secret is in
-  either form.
-- [ ] With `tracing.otlp.endpoint` set, every command exports its spans
+  either form (ITEM-0055, `TestStatusIsDocumented`).
+- [x] With `tracing.otlp.endpoint` set, every command exports its spans
   over the chosen protocol, HTTP or gRPC, with one trace per refresh under
-  `serve`. Headers and the CA file work for both.
-- [ ] Groups are compared concurrently, and the log handler no longer
-  rebuilds per record, with a benchmark.
-- [ ] Unit and integration tests cover the above against the lab's NetBox
-  4.7 and PowerDNS 5.1. The lab gains no containers.
-- [ ] The docs pages above exist, the references are current, and the
-  CHANGELOG is updated.
-- [ ] `/code-review high` has run. `/security-review` runs, since M04 adds
-  a network listener and a secret (the OTLP headers).
+  `serve`. Headers and the CA file work for both. The key is
+  `otlp.endpoint` (see above); `config show` exports nothing (ITEM-0052,
+  ITEM-0056, and Jaeger below).
+- [x] Groups are compared concurrently, and the log handler no longer
+  rebuilds per record, with a benchmark (ITEM-0049, ITEM-0027).
+- [x] Unit and integration tests cover the above against the lab's NetBox
+  4.7 and PowerDNS 5.1. The lab gains no containers (`TestServe`,
+  `TestDrift`; `deploy/` changes only a comment's milestone number).
+- [x] The docs pages above exist, the references are current, and the
+  CHANGELOG is updated (ITEM-0054, ITEM-0055, ITEM-0051).
+- [x] `/code-review high` has run. `/security-review` runs, since M04 adds
+  a network listener and a secret (the OTLP headers). Fixed in ITEM-0056
+  and ITEM-0057 (see below).
 - [ ] The manual verification is recorded. The GitLab and GitHub pipelines
   pass, and the user has merged through an MR with a merge commit.
 
@@ -84,10 +89,99 @@ OTLP/gRPC when configured. It's read-only, as before.
 > - **The reference page is "Service endpoints"**, `service-endpoints.md`,
 >   not "HTTP endpoints": Google's heading rule wants a heading's first word
 >   in sentence case, which an acronym can't be (ITEM-0055).
+>
+> Changed after the reviews, on 2026-10-07:
+>
+> - **A refresh stopped by `drift.timeout` fails for that reason**, keeping
+>   NetBox's and every group's state; `/status` gives the reason in
+>   `schedule.last_refresh.error` (ITEM-0056).
+> - **`otlp.headers` are checked when the config loads**, and `config show`
+>   makes no exporter (ITEM-0056).
+> - **`serve` checks each server's release once, until a check succeeds**,
+>   and tries again each refresh to make a client for a group that has none
+>   (ITEM-0056).
+> - **`nbpdns_netbox_up` and the refresh times have no value before the
+>   first refresh** (ITEM-0056).
+> - **The OTLP/HTTP exporter follows no redirect**, through nbpdns's own HTTP
+>   client (ITEM-0057).
 
 ## Verification log
 
 Append-only and dated. Record what was run and what was seen.
+
+- 2026-10-07: `/code-review high` on `origin/main...m04-service` at
+  `98e8bf7` (a first attempt stopped at the session limit before it ran)
+  found eight things, all fixed in ITEM-0056:
+  - a refresh stopped by `drift.timeout` blamed NetBox, or the groups it
+    was reading;
+  - bad OTLP settings stopped `config show`, and headers were only checked
+    when exporting;
+  - a group whose client failed at startup stayed failed;
+  - `nbpdns_netbox_up` and the refresh times read 0 before the first
+    refresh;
+  - every refresh checked NetBox and each primary again, repeating any
+    release warning;
+  - three log lines lacked the IDs: the exporter's error handler, the last
+    flush, and the HTTP server's;
+  - the zone states were listed in four places;
+  - `drift.group_concurrency`'s description misread NetBox's load.
+- 2026-10-07: **`/security-review`** on `origin/main...m04-service` at
+  `a2a8434`: nothing at the report's bar. It confirmed that no token, key
+  or OTLP header reaches `/status`, `/metrics`, logs, spans or errors;
+  that both OTLP protocols verify the collector's certificate, insecure
+  only for an explicit `http://`; that the `OTEL_` variables can't change
+  where spans or headers go; that the status page reflects no request
+  input, as `text/plain` or `application/json`; and that the HTTP server
+  serves only its own mux. Two LOW candidates were fixed anyway in
+  ITEM-0057: the OTLP/HTTP exporter followed redirects, and `checkURL`
+  quoted a URL with credentials in its scheme error. Left as they are, by
+  design: the unauthenticated listener (until M10), which a DNS-rebinding
+  page on the trusted network could read, and control characters from an
+  upstream's error text on the text status page.
+- 2026-10-07: **Scale (REQ-043)**, with M03's data set in the lab (1,000
+  zones of 100 A records, with planted drift): `serve` at a 70-second
+  interval, for five refreshes. Every refresh was complete, at 54.7 s on
+  average, the same as one `nbpdns drift`, and found exactly the planted
+  drift: 980 zones in sync, 15 drifted (10 changed values, 5 extra
+  RRsets), 5 missing. 998 requests to NetBox and 997 to lab-a per refresh.
+  Resident memory, sampled every 10 s, rose from 38 to 95 MB within each
+  refresh and fell back, peaking at 93.3, 93.9, 94.7, 95.1 and 94.4 MB:
+  flat across refreshes. SIGTERM during the sixth refresh: exit 0 in 15 ms.
+- 2026-10-07: **Manual verification**, on a fresh lab (`make lab-down`,
+  then `make lab-up`), with `bin/nbpdns` from `make build`:
+  1. The tutorial, "Run nbpdns as a service", step by step: `/readyz`
+     answered `ready` 3 s after start; `/status` showed lab-a with one zone
+     in sync, in both forms; after a change on lab-a, the next refresh
+     logged `drift=1`, `nbpdns_drift_zone_drifted` named
+     `service.example.`, the status page listed it, and `nbpdns drift`
+     showed the change; SIGINT stopped it with exit 0.
+  2. Prometheus 3.7.2, in a temporary container on the host network,
+     scraping `serve` with the how-to's config and rules (the drift rule's
+     `for` set to `0s` to see it fire within the run): `NbpdnsZoneDrifted`
+     fired, labelled with the zone and group.
+  3. `docker stop` on lab-a's PowerDNS: `nbpdns_server_group_up` went to 0,
+     the zone counts and the drifted-zone series stayed, `/readyz` stayed
+     200, `/status` showed lab-a failed with its last success, and
+     `NbpdnsServerGroupDown` went pending. After `docker start`, the group
+     was up again at the next refresh.
+  4. SIGTERM: exit 0 in 6 ms, after `shutting down`.
+  5. Jaeger (`jaegertracing/jaeger:latest`, digest
+     `sha256:836b967b…`, in a temporary container): `serve` exported over
+     `http/protobuf`, then over `grpc`, each for about 23 seconds, with no
+     export warning. Each run gave three `drift refresh` traces, each a
+     root, and the `nbpdns serve` command's trace; a refresh trace held
+     the refresh and six request spans, each with its method, server and
+     URL.
+  The temporary containers are gone; the lab gained none.
+- 2026-10-07: Close checks, on `a218867`: `make check` passes (vet and
+  golangci-lint with 0 issues, the tests with `-race`, govulncheck, gitleaks,
+  Vale, the API ruleset self-test, project lint and `generate-check`).
+  `make test-integration` passes against the local lab, with
+  `internal/cli`'s `TestServe` and `TestDrift` on NetBox 4.7.1 and
+  PowerDNS 5.1.4. `make docs-links` passes. The binary is 28.2 MB, from
+  15.3 MB before M04: the OTLP exporters, with the protobuf and gRPC code
+  they need, add 11.0 MB, and `client_golang` with the service 1.9 MB
+  (ITEM-0052, ITEM-0053).
 
 ## Approved design
 
