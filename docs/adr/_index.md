@@ -41,5 +41,7 @@ from [`template.md`](template.md).
 | [0025](0025-normalize-record-data-with-miekg-dns-v2.md) | Normalize record data with miekg/dns v2 | accepted |
 | [0026](0026-read-powerdns-through-its-api-with-powerdns-5-1-on.md) | Read PowerDNS through its API, with PowerDNS 5.1 only | accepted |
 | [0027](0027-report-drift-between-netbox-and-each-server-group.md) | Report drift between NetBox and each server group's primary | accepted |
+| [0028](0028-split-packaging-into-its-own-milestone.md) | Split packaging into its own milestone | accepted |
+| [0029](0029-run-nbpdns-as-a-service-with-prometheus-metrics-an.md) | Run nbpdns as a service with Prometheus metrics and OTLP traces | accepted |
 
 <!-- projctl:adr-index:end -->

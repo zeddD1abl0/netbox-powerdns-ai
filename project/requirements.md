@@ -59,6 +59,7 @@ When a question is answered:
 | REQ-041 | Reads PowerDNS Authoritative 5.1 through its HTTP API, from each server group's primary. More releases are added as the CI runners have room to test them. Narrowed from 5.1 and 5.0 on 2026-10-06. | Q-053, [ADR-0024](../docs/adr/0024-read-powerdns-through-its-api-from-server-groups-i.md), superseded by [ADR-0026](../docs/adr/0026-read-powerdns-through-its-api-with-powerdns-5-1-on.md) |
 | REQ-042 | Zones are assigned to server groups by NetBox view, and a view may be served by several groups. | User, 2026-10-06; [ADR-0024](../docs/adr/0024-read-powerdns-through-its-api-from-server-groups-i.md), superseded by [ADR-0026](../docs/adr/0026-read-powerdns-through-its-api-with-powerdns-5-1-on.md) |
 | REQ-043 | nbpdns is designed and tested for 1,000 zones and 100,000 records per run; larger targets are set when a deployment needs them. | Q-017, [ADR-0027](../docs/adr/0027-report-drift-between-netbox-and-each-server-group.md) |
+| REQ-044 | nbpdns exposes Prometheus metrics for its drift reports, its refreshes, and its requests to NetBox and PowerDNS. PowerDNS's own statistics stay on PowerDNS's `/metrics`. | Q-038, [ADR-0029](../docs/adr/0029-run-nbpdns-as-a-service-with-prometheus-metrics-an.md) |
 
 ## Open questions
 
@@ -111,7 +112,6 @@ names the milestone that needs the answer, from the milestone list in
 
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
-| Q-038 | Do "clearly defined metrics" cover this app only, or PowerDNS stats too? | App metrics: sync lag, plan size, failures, drift count, per-server serial lag, API RED metrics. PowerDNS stats stay on PowerDNS's own `/metrics`. | M04 |
 | Q-040 | Are rate limits and quotas needed? | Limits per token and per IP. | M09 |
 
 ### IaC
@@ -166,3 +166,4 @@ names the milestone that needs the answer, from the milestone list in
 | Q-053 | Which PowerDNS Authoritative versions must be supported? | 5.1 and 5.0. 4.9 reached end of life around September 2026. Later the same day, narrowed to 5.1 only, since the CI runners couldn't fit both. | 2026-10-06 | REQ-041, [ADR-0024](../docs/adr/0024-read-powerdns-through-its-api-from-server-groups-i.md), [ADR-0026](../docs/adr/0026-read-powerdns-through-its-api-with-powerdns-5-1-on.md) |
 | Q-017 | What are the scale targets: servers, zones, records, change rate, propagation latency from NetBox to servers? | 1,000 zones and 100,000 records per run for now, tested and measured; raised when a deployment needs more. Propagation latency applies once nbpdns writes (M12). | 2026-10-06 | REQ-043, [ADR-0027](../docs/adr/0027-report-drift-between-netbox-and-each-server-group.md) |
 | Q-027 | What happens when things fail? | For the command line (M03): if NetBox can't be read, the run fails; if a group's primary can't be read, that group is marked failed and the others are still compared, and the run fails as incomplete. Keeping the last-known state and alerting come with the service (M04) and the database (M07). | 2026-10-06 | [ADR-0027](../docs/adr/0027-report-drift-between-netbox-and-each-server-group.md) |
+| Q-038 | Do "clearly defined metrics" cover this app only, or PowerDNS stats too? | This app's only: drift per server group and per drifted zone, refreshes, and requests to NetBox and PowerDNS, through `prometheus/client_golang`. PowerDNS's statistics stay on PowerDNS's own `/metrics`. Sync lag and plan size come with writes (M13), and serial lag on secondaries with M14. | 2026-10-07 | REQ-044, [ADR-0029](../docs/adr/0029-run-nbpdns-as-a-service-with-prometheus-metrics-an.md) |

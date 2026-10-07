@@ -29,3 +29,4 @@ drift on a schedule and many groups make the wait matter. Found by M03's
 ## Notes
 
 <!-- Append-only. Start each note with the date: "- YYYY-MM-DD: …" -->
+- 2026-10-07: Part of M04's approved design, in phase M4c.

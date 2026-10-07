@@ -100,3 +100,5 @@ dotenv
 gcc
 golang
 [Uu]nmanaged
+[Ll]iveness
+promlint

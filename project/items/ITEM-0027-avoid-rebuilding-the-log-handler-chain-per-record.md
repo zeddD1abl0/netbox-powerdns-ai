@@ -36,3 +36,4 @@ and attributes.
   service logs each HTTP request, which is when it starts to matter, so it's
   planned there. One approach: cache the rebuilt chain for the last set of
   IDs, since one request's records share them.
+- 2026-10-07: Part of M04's approved design, in phase M4b.
