@@ -11,6 +11,9 @@
 *.out
 coverage.*
 /.cache/
+# Binaries that `go build` leaves in the tools' modules
+/tools/projctl/projctl
+/tools/hooktest/hooktest
 
 # Local configuration and secrets
 .env

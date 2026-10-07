@@ -5,6 +5,7 @@ package release
 import (
 	"archive/tar"
 	"bufio"
+	"bytes"
 	"compress/gzip"
 	"crypto/sha256"
 	"debug/elf"
@@ -125,7 +126,7 @@ func TestArchives(t *testing.T) {
 			}
 			checkStatic(t, bin.data, a.Goarch)
 			if a.Goarch == runtime.GOARCH {
-				checkVersion(t, bin.data, m)
+				checkVersion(t, bin.data, m, ct)
 			}
 		})
 	}
@@ -170,7 +171,7 @@ func readArchive(t *testing.T, path string) map[string]file {
 // with no interpreter and no dynamic section, so that it needs no libc.
 func checkStatic(t *testing.T, bin []byte, goarch string) {
 	t.Helper()
-	ef, err := elf.NewFile(strings.NewReader(string(bin)))
+	ef, err := elf.NewFile(bytes.NewReader(bin))
 	if err != nil {
 		t.Fatalf("not an ELF file: %v", err)
 	}
@@ -185,9 +186,12 @@ func checkStatic(t *testing.T, bin []byte, goarch string) {
 	}
 }
 
-// checkVersion runs bin, and checks the version it reports: the tag's, for
-// a tag's build, and a pseudo-version of the commit, for a snapshot.
-func checkVersion(t *testing.T, bin []byte, m metadata) {
+// checkVersion runs bin, and checks the version it reports. A tag's build
+// reports the tag. A snapshot reports the tag too, if it's built at one,
+// and otherwise a pseudo-version, which ends with the commit's time and
+// hash: v0.0.0-20261007124512-db441f117928 before the first tag, or after
+// v0.1.0, v0.1.1-0.20261012093000-abcdef123456.
+func checkVersion(t *testing.T, bin []byte, m metadata, ct time.Time) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "nbpdns")
 	if err := os.WriteFile(path, bin, 0o755); err != nil { //nolint:gosec // An executable, to run.
@@ -208,9 +212,12 @@ func checkVersion(t *testing.T, bin []byte, m metadata) {
 	if v.Commit != m.Commit {
 		t.Errorf("commit %s, want %s", v.Commit, m.Commit)
 	}
+	// A snapshot may be built from a working tree with changes.
+	version, _ := strings.CutSuffix(v.Version, "+dirty")
+	pseudo := ct.UTC().Format("20060102150405") + "-" + m.Commit[:12]
 	switch {
-	case m.snapshot() && !strings.HasPrefix(v.Version, "v0.0.0-") && !strings.HasPrefix(v.Version, m.Tag+"-"):
-		t.Errorf("a snapshot reports %s, want a pseudo-version", v.Version)
+	case m.snapshot() && version != m.Tag && !strings.HasSuffix(version, pseudo):
+		t.Errorf("a snapshot reports %s, want %s or a pseudo-version ending in %s", v.Version, m.Tag, pseudo)
 	case !m.snapshot() && (v.Version != m.Tag || v.Modified):
 		t.Errorf("a build of %s reports %s, modified %v", m.Tag, v.Version, v.Modified)
 	}

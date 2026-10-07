@@ -83,6 +83,9 @@ and linux/arm64/v8, so each tag pulls the image for its host.
 | `<major>.<minor>`, such as `0.1` | The latest patch release of that minor version | With each patch release |
 | `latest` | The latest release | With each release |
 
+Every release moves `<major>.<minor>` and `latest` to itself. Releases are
+made in version order, so that's the newest release.
+
 ### Configuration
 
 | Setting | Value |

@@ -23,8 +23,8 @@ the container image. Two make targets run it:
   version; the checksums match; and the image runs as user 65532, with a
   read-only root file system, its labels, and no shell.
 - `make release` runs only in GitLab's `release` job, only for a tag of the
-  form `vMAJOR.MINOR.PATCH`. It refuses to run unless the commit is at such
-  a tag and the CHANGELOG has a section for its version. It publishes the
+  form `vMAJOR.MINOR.PATCH`. It refuses to run unless that's the only `v`
+  tag on the commit, and the CHANGELOG has a section for its version. It publishes the
   image to the registry, and the archives and checksums to a GitLab
   release, with the version's section of the CHANGELOG as its notes.
 
@@ -43,9 +43,18 @@ the last release. `projctl`, which checks the CI files, allows only that
 one job to publish: it must run only `make release`, and only for a version
 tag.
 
-Publishing needs credentials that only the tag's `release` job has: the
-registry's, and GitLab's job token. With GitLab's `v*` tags protected, only
-a maintainer can make a tag that publishes.
+Only the `release` job runs `make release`, but GitLab gives every job in
+every pipeline the registry's credentials and a job token, with the rights
+of whoever started the pipeline. So who can publish depends on GitLab's
+settings, as well as on the CI file:
+
+- with `v*` tags protected, only a maintainer can make a tag whose
+  pipeline publishes a release;
+- with the image's release tags protected, and duplicate packages refused,
+  a pipeline that someone else starts can't push over a release's image,
+  or upload files under its names.
+
+[Make a release](../contributing/make-a-release.md) lists the settings.
 
 ## Static binaries
 

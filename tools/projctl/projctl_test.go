@@ -174,7 +174,7 @@ closed:
 		"docs: $(HUGO) ## Docs\n\t$(HUGO)\n" +
 		"test-integration: ## Not part of ci\n\tgo test -tags integration ./...\n" +
 		"release: ## Publishes, so not part of ci\n\tgoreleaser release\n",
-	".gitlab-ci.yml": `stages: [lint, build]
+	".gitlab-ci.yml": `stages: [lint, build, release]
 .go:
   image: golang:1@sha256:abc
 go-lint:
@@ -371,6 +371,18 @@ func TestLintCatches(t *testing.T) {
 		{"GitLab release job made manual", map[string]string{".gitlab-ci.yml": baseRepo[".gitlab-ci.yml"] +
 			strings.Replace(releaseJob(releaseIf, "make release"), "  script:", "  when: manual\n  script:", 1)},
 			"job release uses when:"},
+		{"GitLab release job with needs", map[string]string{".gitlab-ci.yml": baseRepo[".gitlab-ci.yml"] +
+			strings.Replace(releaseJob(releaseIf, "make release"), "  script:", "  needs: []\n  script:", 1)},
+			"job release uses needs:"},
+		{"GitLab release job in an early stage", map[string]string{".gitlab-ci.yml": baseRepo[".gitlab-ci.yml"] +
+			strings.Replace(releaseJob(releaseIf, "make release"), "stage: release", "stage: lint", 1)},
+			"job docs runs in stage build, which isn't before job release's"},
+		{"GitLab release job in no stage", map[string]string{".gitlab-ci.yml": baseRepo[".gitlab-ci.yml"] +
+			strings.Replace(releaseJob(releaseIf, "make release"), "  stage: release\n", "", 1)},
+			"job release's stage test isn't in stages:"},
+		{"GitLab check after the release stage", map[string]string{".gitlab-ci.yml": strings.Replace(baseRepo[".gitlab-ci.yml"], "  stage: build", "  stage: .post", 1) +
+			releaseJob(releaseIf, "make release")},
+			"job docs runs in stage .post, which isn't before job release's"},
 		{"GitLab publishing from another job", map[string]string{".gitlab-ci.yml": baseRepo[".gitlab-ci.yml"] + "publish:\n  extends: .go\n  script:\n    - make release\n"},
 			".gitlab-ci.yml: runs release, which `make ci` doesn't"},
 		{"GitHub release job", map[string]string{".github/workflows/ci.yml": baseRepo[".github/workflows/ci.yml"] +
@@ -572,11 +584,13 @@ func TestRunUsage(t *testing.T) {
 	}
 }
 
-// releaseIf is the one rule GitLab's release job may have.
+// releaseIf is the one rule GitLab's release job may have. It's a copy of
+// releaseRule, not releaseRule itself, so that loosening the rule fails the
+// tests until they're changed too.
 const releaseIf = `$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/`
 
-// releaseJob returns a GitLab job named release, with the rule if and the
-// commands cmds.
+// releaseJob returns a GitLab job named release, in stage release, with the
+// rule if and the commands cmds.
 func releaseJob(rule string, cmds ...string) string {
-	return "release:\n  extends: .go\n  rules:\n    - if: '" + rule + "'\n  script:\n    - " + strings.Join(cmds, "\n    - ") + "\n"
+	return "release:\n  extends: .go\n  stage: release\n  rules:\n    - if: '" + rule + "'\n  script:\n    - " + strings.Join(cmds, "\n    - ") + "\n"
 }

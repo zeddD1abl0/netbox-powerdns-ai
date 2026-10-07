@@ -503,14 +503,34 @@ func scriptLines(n *yaml.Node, keys []string) []string {
 
 // gitlabRelease checks GitLab's job named release, the one job that may
 // publish (ADR-0032): it may run only `make release`, and must have exactly
-// one rule, releaseRule, so that it runs for version tags alone. It returns
-// the problems, and whether the job is there and is that exception.
+// one rule, releaseRule, so that it runs for version tags alone. It must
+// also run only once every other job has passed: its stage comes after
+// every other job's, and it has no needs:, which would start it sooner. It
+// returns the problems, and whether the job is there and is that exception.
 func gitlabRelease(rel string, doc *yaml.Node, scripts []string) ([]Problem, bool) {
-	job := mapGet(root(doc), "release")
+	top := root(doc)
+	job := mapGet(top, "release")
 	if job == nil {
 		return nil, false
 	}
 	var probs []Problem
+	chain := gitlabChain(top, job, map[*yaml.Node]bool{})
+	if slices.ContainsFunc(chain, func(n *yaml.Node) bool { return mapGet(n, "needs") != nil }) {
+		probs = append(probs, Problem{rel, "job release uses needs:, which can start it before every other job has passed"})
+	}
+	order := gitlabStages(top)
+	at := slices.Index(order, gitlabStage(top, job))
+	if at < 0 {
+		probs = append(probs, Problem{rel, "job release's stage " + gitlabStage(top, job) + " isn't in stages:"})
+	}
+	for _, j := range gitlabJobs(doc) {
+		if j.name == "release" || at < 0 {
+			continue
+		}
+		if stage := gitlabStage(top, mapGet(top, j.name)); slices.Index(order, stage) >= at {
+			probs = append(probs, Problem{rel, "job " + j.name + " runs in stage " + stage + ", which isn't before job release's, so release can publish before it passes"})
+		}
+	}
 	if cmds := scriptLines(job, scripts); !slices.Equal(cmds, []string{"make release"}) {
 		probs = append(probs, Problem{rel, fmt.Sprintf("job release runs %q; it may only run `make release`", cmds)})
 	}

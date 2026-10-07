@@ -144,22 +144,26 @@ release-check: $(GORELEASER) ## Build the release as a snapshot, into dist/, pub
 # RELEASE_REGISTRY_USER with RELEASE_REGISTRY_PASSWORD, and, if GITLAB_TOKEN
 # is set, the archives to a GitLab release at GITLAB_URL (API GITLAB_API_URL),
 # with the CHANGELOG's section as its notes. GitLab's tag-only release job
-# runs it (ADR-0032). The credentials stay in shell variables, never make's,
-# so no recipe line can print them.
+# runs it (ADR-0032). HEAD must have exactly one v tag, vMAJOR.MINOR.PATCH,
+# so that Go, which stamps the version, the notes, and GoReleaser, which
+# names the release, all use it. The credentials stay in shell variables,
+# never make's, so no recipe line can print them.
 .PHONY: release
 release: $(GORELEASER) ## Publish the version tag at HEAD: the image, and the GitLab release (CI runs it for tags)
-	@tag=$$(git describe --exact-match --tags HEAD 2>/dev/null) || { echo "release: HEAD isn't at a tag" >&2; exit 1; }; \
+	@tag=$$(git tag --points-at HEAD --list 'v*'); \
+	[[ $$tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+$$ ]] || { echo "release: HEAD needs exactly one v tag, of the form vMAJOR.MINOR.PATCH; it has: $$(echo $${tag:-none})" >&2; exit 1; }; \
 	: "$${RELEASE_IMAGE:?release: set RELEASE_IMAGE, such as registry.example.com/group/nbpdns}"; \
 	: "$${RELEASE_REGISTRY:?release: set RELEASE_REGISTRY, such as registry.example.com}"; \
 	: "$${RELEASE_REGISTRY_USER:?release: set RELEASE_REGISTRY_USER}"; \
 	: "$${RELEASE_REGISTRY_PASSWORD:?release: set RELEASE_REGISTRY_PASSWORD}"; \
+	[[ $$RELEASE_REGISTRY =~ ^[A-Za-z0-9.-]+(:[0-9]+)?$$ ]] || { echo "release: RELEASE_REGISTRY must be a host, or host:port, such as registry.example.com" >&2; exit 1; }; \
 	tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' EXIT; \
 	go run ./internal/cmd/releasenotes -tag "$$tag" CHANGELOG.md > "$$tmp/notes.md"; \
 	mkdir -m 700 "$$tmp/docker"; \
 	auth=$$(printf '%s:%s' "$$RELEASE_REGISTRY_USER" "$$RELEASE_REGISTRY_PASSWORD" | base64 -w0); \
 	printf '{"auths":{"%s":{"auth":"%s"}}}\n' "$$RELEASE_REGISTRY" "$$auth" > "$$tmp/docker/config.json"; \
 	echo "release: publishing $$tag to $$RELEASE_IMAGE"; \
-	DOCKER_CONFIG="$$tmp/docker" $(GORELEASER) release --clean --release-notes "$$tmp/notes.md"
+	DOCKER_CONFIG="$$tmp/docker" GORELEASER_CURRENT_TAG="$$tag" $(GORELEASER) release --clean --release-notes "$$tmp/notes.md"
 
 # The reference pages generated from the code (internal/cmd/gendocs). Never
 # edit them by hand.

@@ -14,7 +14,7 @@
 | [M02](milestones/M02-powerdns-read-path.md) | PowerDNS read path | done | 11 of 11 |
 | [M03](milestones/M03-drift-report.md) | Drift report | done | 7 of 7 |
 | [M04](milestones/M04-service.md) | Service | done | 10 of 10 |
-| [M05](milestones/M05-packaging.md) | Packaging | in-progress | 4 of 4 |
+| [M05](milestones/M05-packaging.md) | Packaging | in-progress | 5 of 5 |
 | [M06](milestones/M06-rest-api.md) | REST API | planned | — |
 | [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | planned | — |
 | [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | planned | — |
@@ -26,7 +26,7 @@
 | [M14](milestones/M14-change-safety.md) | Change safety | planned | — |
 | [M15](milestones/M15-brownfield-import.md) | Brownfield import | planned | — |
 | [M16](milestones/M16-siem-export.md) | SIEM export | planned | — |
-| [M17](milestones/M17-production-hardening.md) | Production hardening | planned | — |
+| [M17](milestones/M17-production-hardening.md) | Production hardening | planned | 0 of 1 |
 | [M18](milestones/M18-terraform-provider.md) | Terraform/OpenTofu provider | planned | — |
 | [M19](milestones/M19-ansible-collection-v1.md) | Ansible collection and v1.0 | planned | — |
 
@@ -38,12 +38,14 @@
 | [ITEM-0059](items/ITEM-0059-the-container-image-with-ko-and-the-release-tests.md) | The container image with ko and the release tests | feature | done 2026-10-07 | — |
 | [ITEM-0060](items/ITEM-0060-publish-releases-to-gitlab-on-version-tags.md) | Publish releases to GitLab on version tags | feature | done 2026-10-07 | — |
 | [ITEM-0061](items/ITEM-0061-release-docs-and-the-changelog-as-0-1-0.md) | Release docs and the CHANGELOG as 0.1.0 | task | done 2026-10-07 | — |
+| [ITEM-0063](items/ITEM-0063-fix-the-m05-code-review-findings.md) | Fix the M05 code review findings | bug | done 2026-10-07 | — |
 
 ## Open items in other milestones
 
 | Item | Title | Type | Status | Waiting on |
 |---|---|---|---|---|
 | [ITEM-0040](items/ITEM-0040-write-record-values-to-powerdns-in-its-own-text-fo.md) | Write record values to PowerDNS in its own text form | task | open | — |
+| [ITEM-0062](items/ITEM-0062-keep-the-image-s-latest-tag-on-the-newest-release.md) | Keep the image's latest tag on the newest release | debt | open | — |
 
 ## Open questions
 

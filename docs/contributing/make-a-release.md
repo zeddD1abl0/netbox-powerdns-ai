@@ -22,6 +22,11 @@ You need:
   **Settings > General > Visibility, project features, permissions**;
 - `v*` tags protected, under **Settings > Repository > Protected tags**,
   so that only maintainers can make a tag that publishes;
+- in **Settings > Packages and registries**, the image's tags `latest` and
+  versions, such as `0.1` and `0.1.0`, protected, so that only maintainers
+  can push them, and duplicate generic packages refused. Every pipeline's
+  jobs have the registry's credentials and a job token, so without these
+  any developer's branch could push over a release's image or files;
 - the changes to release merged into `main`, and `main`'s pipeline passing.
 
 ## Choose the version
@@ -33,6 +38,11 @@ Versions are [semantic](https://semver.org/), and stay 0.x until 1.0:
 
 The tag is the version with a `v`: `v0.2.0`. A tag with anything more, such
 as `v0.2.0-rc.1`, publishes nothing.
+
+Release from `main`, in version order. Each release moves the image's
+`latest` tag to itself, so a release of an older version, such as 0.1.2
+after 0.2.0, would move `latest` back. Releases of older versions aren't
+supported yet.
 
 ## Prepare the changelog
 
@@ -75,8 +85,8 @@ it's reviewed with the rest.
 2. Watch the tag's pipeline. It runs every check, `release-check`
    included, then the `release` stage, whose one job runs `make release`:
 
-   - it refuses to run unless the commit is at the tag, and the CHANGELOG
-     has its section;
+   - it refuses to run unless the commit has exactly one `v` tag, the
+     version's, and the CHANGELOG has its section;
    - it pushes the image, tagged `0.2.0`, `0.2`, and `latest`, with its
      SBOMs, to the project's container registry;
    - it makes the GitLab release, named after the tag, with the
