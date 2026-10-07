@@ -12,5 +12,7 @@ human or AI, follows.
   of Done.
 - [Documentation style](documentation-style.md): how to write and structure
   these docs.
+- [Make a release](make-a-release.md): prepare the CHANGELOG, tag a
+  version, and check what its pipeline published.
 - [Project board](../../project/README.md): the current milestone and open
   work.

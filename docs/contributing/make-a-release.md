@@ -1,0 +1,129 @@
+---
+title: Make a release
+weight: 20
+---
+
+# Make a release
+
+A release is a version tag on `main`, and the tag's GitLab pipeline
+publishes it
+([ADR-0030](../adr/0030-release-with-goreleaser-and-ko-to-gitlab-on-versio.md)).
+This page prepares the CHANGELOG, tags the release, and checks what the
+pipeline published. [How nbpdns is built and
+released](../explanation/how-nbpdns-is-built-and-released.md) explains the
+build.
+
+## Before you start
+
+You need:
+
+- to be a maintainer of the GitLab project;
+- the project's container registry and package registry turned on, under
+  **Settings > General > Visibility, project features, permissions**;
+- `v*` tags protected, under **Settings > Repository > Protected tags**,
+  so that only maintainers can make a tag that publishes;
+- the changes to release merged into `main`, and `main`'s pipeline passing.
+
+## Choose the version
+
+Versions are [semantic](https://semver.org/), and stay 0.x until 1.0:
+
+- a new minor version, such as `0.2.0`, for a release with new features;
+- a new patch version, such as `0.1.1`, for one with fixes only.
+
+The tag is the version with a `v`: `v0.2.0`. A tag with anything more, such
+as `v0.2.0-rc.1`, publishes nothing.
+
+## Prepare the changelog
+
+Do this on the branch whose merge request makes the release, so that
+it's reviewed with the rest.
+
+1. In `CHANGELOG.md`, rename `## [Unreleased]` to the version and today's
+   date, and add an empty `## [Unreleased]` before it:
+
+   ```markdown
+   ## [Unreleased]
+
+   ## [0.2.0] - 2026-11-02
+
+   ### Added
+   ```
+
+2. Check the release notes that `make release` publishes:
+
+   ```shell
+   go run ./internal/cmd/releasenotes -tag v0.2.0 CHANGELOG.md
+   ```
+
+   It prints the version's section, without its heading. It fails if the
+   section is missing or empty.
+
+3. Commit, and merge the branch as usual.
+
+## Tag the release
+
+1. Tag `main`'s merge commit, and push the tag to GitLab:
+
+   ```shell
+   git switch main
+   git pull
+   git tag -a v0.2.0 -m "nbpdns 0.2.0"
+   git push origin v0.2.0
+   ```
+
+2. Watch the tag's pipeline. It runs every check, `release-check`
+   included, then the `release` stage, whose one job runs `make release`:
+
+   - it refuses to run unless the commit is at the tag, and the CHANGELOG
+     has its section;
+   - it pushes the image, tagged `0.2.0`, `0.2`, and `latest`, with its
+     SBOMs, to the project's container registry;
+   - it makes the GitLab release, named after the tag, with the
+     version's section of the CHANGELOG as its notes, and the archives
+     and `checksums.txt` in the package registry.
+
+If the project is mirrored to GitHub, the mirror's workflow runs the same
+checks on the tag, and publishes nothing.
+
+## Check the release
+
+1. Open the release, under **Deploy > Releases**. It has both archives and
+   `checksums.txt`. Download them, and check them:
+
+   ```shell
+   sha256sum --check checksums.txt
+   ```
+
+   ```text
+   nbpdns_0.2.0_linux_amd64.tar.gz: OK
+   nbpdns_0.2.0_linux_arm64.tar.gz: OK
+   ```
+
+2. Check that the image covers both platforms:
+
+   ```shell
+   docker buildx imagetools inspect registry.example.com/group/netbox-powerdns-ai:0.2.0
+   ```
+
+   It lists `linux/amd64` and `linux/arm64/v8` under **Manifests**.
+
+3. Check the version it reports:
+
+   ```shell
+   docker run --rm registry.example.com/group/netbox-powerdns-ai:0.2.0 version
+   ```
+
+   It reports `v0.2.0`, and `modified false`.
+
+## If the release job fails
+
+- **It refused to run:** nothing was published. Fix the cause on a branch,
+  and merge it. Then delete the tag, from GitLab and from your clone, and
+  tag the new merge commit.
+- **It failed while publishing:** read the job's log to see what it
+  published, then retry the job. The build is reproducible, so a retry
+  builds the same image and archives, and pushing the same image again
+  changes nothing.
+- **Something was published and is wrong:** never move or delete a
+  published tag. Fix it on a branch, and release the next patch version.

@@ -10,9 +10,19 @@ runs as a single binary or a container, and has a web UI, an API, SSO, and
 IaC-driven configuration.
 
 > [!NOTE]
-> This project is in early development and has no release yet. The
-> [project board](project/README.md) shows the current milestone and what
-> comes next.
+> This project is in early development, and its releases are 0.x until 1.0.
+> So far, nbpdns reads: it reports drift between NetBox and PowerDNS, but
+> doesn't change PowerDNS yet. The [project board](project/README.md) shows
+> the current milestone and what comes next.
+
+## Install
+
+Each release is a static Linux binary, for amd64 and arm64, and a
+multi-platform container image, on the project's GitLab, under **Deploy >
+Releases** and **Deploy > Container registry**.
+[Install nbpdns](docs/how-to/install-nbpdns.md) downloads and checks a
+release, and [Run nbpdns in a container](docs/how-to/run-nbpdns-in-a-container.md)
+runs the image.
 
 ## Where to look
 

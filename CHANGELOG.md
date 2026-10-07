@@ -6,6 +6,8 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-07
+
 ### Added
 
 - Releases. A version tag's pipeline publishes nbpdns as static Linux
@@ -14,6 +16,10 @@ All notable changes to this project are recorded here. The format follows
   SPDX SBOM, to the GitLab registry. Every other pipeline builds and tests
   the same release without publishing it (`make release-check`). One commit
   builds the same archives anywhere.
+- Documentation: how-to guides on installing nbpdns, and on running it in
+  a container, with Docker or Kubernetes, a reference for the release
+  artifacts, an explanation of how nbpdns is built and released, and a
+  contributor's guide to making a release.
 - `nbpdns serve` runs continuously. It refreshes the drift report every
   `drift.interval`, bounded by `drift.timeout`, and keeps each server
   group's last-known state when its primary, or NetBox, can't be read. At

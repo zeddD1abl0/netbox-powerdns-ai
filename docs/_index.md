@@ -6,8 +6,8 @@ weight: 1
 # Documentation
 
 > [!NOTE]
-> nbpdns is in early development and has no release yet. Pages are added to
-> each section as the features they describe arrive.
+> nbpdns is in early development, and its releases are 0.x until 1.0. Pages
+> are added to each section as the features they describe arrive.
 
 The documentation follows the [Diátaxis](https://diataxis.fr/) framework. Each
 page belongs to exactly one section.
