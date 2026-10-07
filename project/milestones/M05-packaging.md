@@ -215,6 +215,13 @@ Append-only and dated. Record what was run and what was seen.
     run of GitLab's release step: check the release's archives and
     checksums, and that the registry's image covers both platforms and
     reports `v0.1.0`.
+- 2026-10-08: **Merged.** The user merged `m05-packaging` through a GitLab
+  merge request, and reported its pipeline passing. `main` is at the merge
+  commit `ec048d8`, whose parents are the old `main`, `5ca546b`, and the
+  branch tip, `9632eed`, so every per-item commit is kept (ADR-0018). The
+  mirror carried it to GitHub, where Actions run 37700007944 on `ec048d8`
+  passed. `v0.1.0` isn't tagged yet; its release is recorded here when it
+  is.
 
 ## Approved design
 
