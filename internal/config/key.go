@@ -233,19 +233,25 @@ func checkListen(s string) error {
 // checkURL accepts an absolute http or https URL with a host, and no
 // credentials, query or fragment.
 func checkURL(s string) error {
+	// A value that may hold credentials, such as user:token@host, is never
+	// quoted, so that they aren't printed.
+	shown := strconv.Quote(s)
+	if strings.Contains(s, "@") {
+		shown = "the URL"
+	}
 	u, err := url.Parse(s)
 	if err != nil {
-		return fmt.Errorf("%q isn't a URL", s)
+		return fmt.Errorf("%s isn't a URL", shown)
 	}
 	switch {
-	case u.Scheme != "http" && u.Scheme != "https":
-		return fmt.Errorf("%q needs an http:// or https:// scheme", s)
-	case u.Host == "":
-		return fmt.Errorf("%q has no host", s)
 	case u.User != nil:
 		return errors.New("the URL mustn't contain credentials; set the token or API key in its own key")
+	case u.Scheme != "http" && u.Scheme != "https":
+		return fmt.Errorf("%s needs an http:// or https:// scheme", shown)
+	case u.Host == "":
+		return fmt.Errorf("%s has no host", shown)
 	case u.RawQuery != "" || u.Fragment != "":
-		return fmt.Errorf("%q mustn't have a query or fragment", s)
+		return fmt.Errorf("%s mustn't have a query or fragment", shown)
 	}
 	return nil
 }

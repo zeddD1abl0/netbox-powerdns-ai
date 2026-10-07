@@ -228,6 +228,18 @@ func TestExport(t *testing.T) {
 			t.Errorf("export to an untrusted collector: %v, received %+v", err, rec2)
 		}
 	})
+	t.Run("a collector that redirects", func(t *testing.T) {
+		// The headers mustn't follow the redirect.
+		target, rec := httpCollector(t, false)
+		redirect := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, target.URL+r.URL.Path, http.StatusTemporaryRedirect) //nolint:gosec // A collector that redirects is the test.
+		}))
+		defer redirect.Close()
+		if _, err := export(t, config.OTLPConfig{Endpoint: redirect.URL, Protocol: config.OTLPHTTP, Headers: headers}); err == nil ||
+			len(rec.paths) != 0 {
+			t.Errorf("export through a redirect: %v; the target got %+v", err, rec)
+		}
+	})
 	t.Run("no endpoint", func(t *testing.T) {
 		if exp, err := NewExporter(t.Context(), config.OTLPConfig{}, slog.New(slog.DiscardHandler)); exp != nil || err != nil {
 			t.Errorf("NewExporter() = %v, %v; want nothing", exp, err)

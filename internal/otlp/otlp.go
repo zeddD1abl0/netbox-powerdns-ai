@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"net/url"
 	"strings"
 
@@ -70,6 +71,11 @@ func NewExporter(ctx context.Context, c config.OTLPConfig, log *slog.Logger) (sd
 		otlptracehttp.WithTimeout(c.Timeout),
 		otlptracehttp.WithCompression(otlptracehttp.GzipCompression),
 	}
+	// nbpdns's own client, which, like its others, never follows a
+	// redirect: one would carry the headers wherever it points. Supplying
+	// it overrides the exporter's TLS and timeout options, so it carries
+	// both.
+	transport := http.DefaultTransport.(*http.Transport).Clone()
 	if plain {
 		opts = append(opts, otlptracehttp.WithInsecure())
 	} else {
@@ -77,7 +83,12 @@ func NewExporter(ctx context.Context, c config.OTLPConfig, log *slog.Logger) (sd
 		if err != nil {
 			return nil, err
 		}
-		opts = append(opts, otlptracehttp.WithTLSClientConfig(tlsConf))
+		transport.TLSClientConfig = tlsConf
 	}
+	opts = append(opts, otlptracehttp.WithHTTPClient(&http.Client{
+		Transport:     transport,
+		Timeout:       c.Timeout,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}))
 	return otlptracehttp.New(ctx, opts...)
 }

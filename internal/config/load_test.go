@@ -217,6 +217,8 @@ func TestLoadErrors(t *testing.T) {
 			[]string{"server.listen", `"localhost" isn't an address`}},
 		{"a listen port out of range", "", nil, []string{"--server-listen", ":70000"},
 			[]string{"has no port number from 0 to 65535"}},
+		{"URL with credentials and another scheme", "", map[string]string{"NBPDNS_OTLP_ENDPOINT": "grpc://user:s3cret@otel.example.com"}, nil,
+			[]string{"otlp.endpoint", "mustn't contain credentials"}},
 		{"URL without a scheme", "", map[string]string{"NBPDNS_NETBOX_URL": "netbox.example.com"}, nil,
 			[]string{"needs an http:// or https:// scheme"}},
 		{"URL with another scheme", "", map[string]string{"NBPDNS_NETBOX_URL": "ftp://netbox.example.com"}, nil,
@@ -245,6 +247,9 @@ func TestLoadErrors(t *testing.T) {
 				if !strings.Contains(err.Error(), w) {
 					t.Errorf("error doesn't contain %q:\n%v", w, err)
 				}
+			}
+			if strings.Contains(err.Error(), "s3cret") {
+				t.Errorf("the error shows a secret:\n%v", err)
 			}
 		})
 	}
