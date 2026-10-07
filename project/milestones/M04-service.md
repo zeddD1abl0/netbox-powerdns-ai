@@ -1,9 +1,9 @@
 ---
 id: M04
 title: Service
-status: in-progress # planned | in-progress | done
+status: done # planned | in-progress | done
 started: 2026-10-07
-closed:
+closed: 2026-10-07
 ---
 
 # M04: Service
@@ -74,7 +74,10 @@ OTLP/gRPC when configured. It's read-only, as before.
   a network listener and a secret (the OTLP headers). Fixed in ITEM-0056
   and ITEM-0057 (see below).
 - [ ] The manual verification is recorded. The GitLab and GitHub pipelines
-  pass, and the user has merged through an MR with a merge commit.
+  pass, and the user has merged through an MR with a merge commit. The
+  verification is recorded below. On `ad07b39`, the user reported M04
+  tested and ready, and GitHub Actions run 37582909599 passed every job.
+  The merge is to come.
 
 ## Decided after approval
 
@@ -182,6 +185,14 @@ Append-only and dated. Record what was run and what was seen.
   15.3 MB before M04: the OTLP exporters, with the protobuf and gRPC code
   they need, add 11.0 MB, and `client_golang` with the service 1.9 MB
   (ITEM-0052, ITEM-0053).
+- 2026-10-07: **Pipelines.** The user pushed `m04-service` at `ad07b39`, and
+  reported M04 tested and ready. GitHub Actions run 37582909599 on
+  `ad07b39` passed every job: the lint jobs, `unit-test`, `integration-test`
+  (7m38s), `build`, `docs-site`, `secrets` and `vuln`.
+- 2026-10-07: **Closed**, with every item done. Left for the user: merging
+  through a GitLab merge request with a merge commit. After that, M05
+  (packaging) is designed in plan mode; its open question is Q-025, and
+  ADR-0015 constrains its image.
 
 ## Approved design
 
