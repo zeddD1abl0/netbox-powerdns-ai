@@ -31,7 +31,7 @@ func New(w io.Writer, format, level string) (*slog.Logger, error) {
 	default:
 		return nil, fmt.Errorf("log format %q isn't json or text", format)
 	}
-	return slog.New(contextHandler{base: h, h: h}), nil
+	return slog.New(contextHandler{base: h}), nil
 }
 
 type requestIDKey struct{}
@@ -50,18 +50,28 @@ func RequestID(ctx context.Context) string {
 }
 
 // contextHandler adds the IDs in a record's context to the record, at the
-// top level even inside a group, where log collectors look for them.
+// top level even inside a group, where log collectors look for them. slog's
+// handlers put a record's attributes inside every group opened with
+// WithGroup, so contextHandler opens no group on its base handler. It keeps
+// the groups itself, and writes each record's attributes into them as group
+// values, after the IDs. The cost per record doesn't grow with the groups or
+// their bound attributes (ITEM-0027).
 type contextHandler struct {
 	// base is the handler with the attributes added before any group.
 	base slog.Handler
-	// h is base with every later WithGroup and WithAttrs applied, and ops
-	// are those calls, replayed onto base plus the IDs.
-	h   slog.Handler
-	ops []func(slog.Handler) slog.Handler
+	// groups are the groups opened since, outermost first, each with the
+	// attributes added inside it.
+	groups []group
+}
+
+// A group is one WithGroup call, and the attributes added inside it.
+type group struct {
+	name  string
+	attrs []slog.Attr
 }
 
 func (c contextHandler) Enabled(ctx context.Context, level slog.Level) bool {
-	return c.h.Enabled(ctx, level)
+	return c.base.Enabled(ctx, level)
 }
 
 func (c contextHandler) Handle(ctx context.Context, r slog.Record) error {
@@ -76,35 +86,45 @@ func (c contextHandler) Handle(ctx context.Context, r slog.Record) error {
 	if id := RequestID(ctx); id != "" {
 		ids = append(ids, slog.String("request_id", id)) //nolint:sloglint // The handler sets the IDs.
 	}
-	switch {
-	case len(ids) == 0:
-		return c.h.Handle(ctx, r)
-	case len(c.ops) == 0:
+	if len(c.groups) == 0 {
 		r.AddAttrs(ids...)
-		return c.h.Handle(ctx, r)
+		return c.base.Handle(ctx, r)
 	}
-	h := c.base.WithAttrs(ids)
-	for _, op := range c.ops {
-		h = op(h)
+	out := slog.NewRecord(r.Time, r.Level, r.Message, r.PC)
+	out.AddAttrs(ids...)
+	inner := make([]slog.Attr, 0, r.NumAttrs())
+	r.Attrs(func(a slog.Attr) bool {
+		inner = append(inner, a)
+		return true
+	})
+	// From the innermost group out. A group left with nothing in it is a
+	// group value with no attributes, which slog's handlers don't write.
+	for i := len(c.groups) - 1; i >= 0; i-- {
+		g := c.groups[i]
+		attrs := make([]slog.Attr, 0, len(g.attrs)+len(inner))
+		attrs = append(append(attrs, g.attrs...), inner...)
+		inner = []slog.Attr{{Key: g.name, Value: slog.GroupValue(attrs...)}}
 	}
-	return h.Handle(ctx, r)
+	out.AddAttrs(inner...)
+	return c.base.Handle(ctx, out)
 }
 
 func (c contextHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	if len(c.ops) == 0 {
-		b := c.base.WithAttrs(attrs)
-		return contextHandler{base: b, h: b}
+	if len(attrs) == 0 {
+		return c
 	}
-	return c.with(func(h slog.Handler) slog.Handler { return h.WithAttrs(attrs) })
+	if len(c.groups) == 0 {
+		return contextHandler{base: c.base.WithAttrs(attrs)}
+	}
+	groups := slices.Clone(c.groups)
+	last := &groups[len(groups)-1]
+	last.attrs = append(slices.Clip(last.attrs), attrs...)
+	return contextHandler{base: c.base, groups: groups}
 }
 
 func (c contextHandler) WithGroup(name string) slog.Handler {
 	if name == "" {
 		return c
 	}
-	return c.with(func(h slog.Handler) slog.Handler { return h.WithGroup(name) })
-}
-
-func (c contextHandler) with(op func(slog.Handler) slog.Handler) contextHandler {
-	return contextHandler{base: c.base, h: op(c.h), ops: append(slices.Clip(c.ops), op)}
+	return contextHandler{base: c.base, groups: append(slices.Clip(c.groups), group{name: name})}
 }
