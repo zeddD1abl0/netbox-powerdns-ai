@@ -19,6 +19,11 @@ All notable changes to this project are recorded here. The format follows
   per drifted zone, refreshes, and requests to NetBox and to each primary,
   and their reference is generated from the code. Each refresh is its own
   trace. It stops cleanly on SIGINT or SIGTERM.
+- Documentation: a tutorial on running nbpdns as a service, how-to guides
+  on monitoring drift with Prometheus, with example alert rules, and on
+  exporting traces to an OpenTelemetry collector, an explanation of how
+  nbpdns runs as a service, and references for the metrics and the service
+  endpoints.
 - Spans are exported to an OpenTelemetry collector over OTLP, by
   HTTP/protobuf or gRPC (`otlp.protocol`), from every command, when
   `otlp.endpoint` is set. Headers, such as the collector's token, are a

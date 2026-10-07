@@ -15,3 +15,5 @@ its goal and prerequisites, then gives numbered steps.
 - [Connect nbpdns to PowerDNS](connect-nbpdns-to-powerdns.md)
 - [Put the PowerDNS API behind a TLS proxy](put-the-powerdns-api-behind-a-tls-proxy.md)
 - [Set a zone's drift policy](set-a-zones-drift-policy.md)
+- [Monitor drift with Prometheus](monitor-drift-with-prometheus.md)
+- [Export traces to an OpenTelemetry collector](export-traces-to-an-opentelemetry-collector.md)
