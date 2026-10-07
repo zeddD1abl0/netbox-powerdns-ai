@@ -81,6 +81,9 @@ func TestLoadDefaults(t *testing.T) {
 		Log:      LogConfig{Level: "info", Format: "json"},
 		NetBox:   NetBoxConfig{Timeout: 30 * time.Second, PageSize: 500, Concurrency: 4},
 		PowerDNS: PowerDNSConfig{Timeout: 30 * time.Second, Concurrency: 4},
+		Drift:    DriftConfig{GroupConcurrency: 4, Interval: 5 * time.Minute, Timeout: 10 * time.Minute},
+		Server:   ServerConfig{Listen: ":8080"},
+		OTLP:     OTLPConfig{Protocol: OTLPHTTP, Timeout: 10 * time.Second},
 	}
 	if !reflect.DeepEqual(*cfg, want) {
 		t.Errorf("Load() = %+v, want %+v", *cfg, want)
@@ -208,6 +211,14 @@ func TestLoadErrors(t *testing.T) {
 			[]string{"want a duration with a unit"}},
 		{"negative timeout", "", nil, []string{"--netbox-timeout", "-1s"},
 			[]string{"isn't positive"}},
+		{"a drift interval too short", "", map[string]string{"NBPDNS_DRIFT_INTERVAL": "5s"}, nil,
+			[]string{"drift.interval", "5s is shorter than 10s"}},
+		{"a listen address without a port", "", map[string]string{"NBPDNS_SERVER_LISTEN": "localhost"}, nil,
+			[]string{"server.listen", `"localhost" isn't an address`}},
+		{"a listen port out of range", "", nil, []string{"--server-listen", ":70000"},
+			[]string{"has no port number from 0 to 65535"}},
+		{"URL with credentials and another scheme", "", map[string]string{"NBPDNS_OTLP_ENDPOINT": "grpc://user:s3cret@otel.example.com"}, nil,
+			[]string{"otlp.endpoint", "mustn't contain credentials"}},
 		{"URL without a scheme", "", map[string]string{"NBPDNS_NETBOX_URL": "netbox.example.com"}, nil,
 			[]string{"needs an http:// or https:// scheme"}},
 		{"URL with another scheme", "", map[string]string{"NBPDNS_NETBOX_URL": "ftp://netbox.example.com"}, nil,
@@ -236,6 +247,9 @@ func TestLoadErrors(t *testing.T) {
 				if !strings.Contains(err.Error(), w) {
 					t.Errorf("error doesn't contain %q:\n%v", w, err)
 				}
+			}
+			if strings.Contains(err.Error(), "s3cret") {
+				t.Errorf("the error shows a secret:\n%v", err)
 			}
 		})
 	}

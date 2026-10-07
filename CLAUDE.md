@@ -22,7 +22,7 @@ lives in `project/`, and decisions live in `docs/adr/`.
 | Decisions and their rationale | `docs/adr/nnnn-*.md` |
 | Product documentation (Diátaxis) | `docs/tutorials/`, `docs/how-to/`, `docs/reference/`, `docs/explanation/` |
 | How to write the docs | [`docs/contributing/documentation-style.md`](docs/contributing/documentation-style.md) |
-| API contract (from M05) | `api/openapi.yaml` |
+| API contract (from M06) | `api/openapi.yaml` |
 
 ## Workflow
 

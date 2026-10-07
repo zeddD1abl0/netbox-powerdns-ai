@@ -114,10 +114,10 @@ func TestDrift(t *testing.T) {
 		d := f.Drift
 		norm := oneSpace(out)
 		for _, row := range []string{
-			fmt.Sprintf("lab-a %s enforce (from M12) missing gone.%s A 3600 192.0.2.20 -", d, d),
-			fmt.Sprintf(`lab-a %s enforce (from M12) extra stray.%s TXT - 3600 "stray"`, d, d),
-			fmt.Sprintf("lab-a %s enforce (from M12) changed www.%s A 3600 192.0.2.10 3600 192.0.2.99", d, d),
-			fmt.Sprintf("lab-a %s enforce (from M12) changed mail.%s A 300 192.0.2.25 600 192.0.2.25", d, d),
+			fmt.Sprintf("lab-a %s enforce (from M13) missing gone.%s A 3600 192.0.2.20 -", d, d),
+			fmt.Sprintf(`lab-a %s enforce (from M13) extra stray.%s TXT - 3600 "stray"`, d, d),
+			fmt.Sprintf("lab-a %s enforce (from M13) changed www.%s A 3600 192.0.2.10 3600 192.0.2.99", d, d),
+			fmt.Sprintf("lab-a %s enforce (from M13) changed mail.%s A 300 192.0.2.25 600 192.0.2.25", d, d),
 			"lab-a " + f.Missing + " report zone missing on the primary",
 			"lab-a " + f.Parked + " report zone served, but not active in NetBox",
 			"Ignored zones, not compared:\nGROUP ZONE\nlab-a " + f.Ignored,

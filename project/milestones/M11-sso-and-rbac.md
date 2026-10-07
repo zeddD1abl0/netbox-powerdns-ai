@@ -1,12 +1,12 @@
 ---
-id: M10
+id: M11
 title: SSO and RBAC
 status: planned # planned | in-progress | done
 started:
 closed:
 ---
 
-# M10: SSO and RBAC
+# M11: SSO and RBAC
 
 ## Goal
 
@@ -22,4 +22,4 @@ Sign in through the organization's identity provider, and control who can do wha
 ## Design, non-goals and acceptance criteria
 
 To be written in this milestone's plan-mode session, before implementation
-starts. The milestone's branch is `m10-sso-and-rbac` (ADR-0010).
+starts. The milestone's branch is `m11-sso-and-rbac` (ADR-0010).

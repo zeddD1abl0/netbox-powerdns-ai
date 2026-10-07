@@ -33,7 +33,11 @@ func newNetBoxCmd(a *app) *cobra.Command {
 
 // netbox returns a client for the configured NetBox. Close it when done.
 func (s *session) netbox(ctx context.Context) (*netbox.Client, error) {
-	return netbox.New(ctx, netbox.OptionsFrom(s.cfg.NetBox, s.log, s.tracer))
+	o := netbox.OptionsFrom(s.cfg.NetBox, s.log, s.tracer)
+	if s.metrics != nil {
+		o.Observer = s.metrics.Observer("NetBox", "netbox")
+	}
+	return netbox.New(ctx, o)
 }
 
 // The results of a check.

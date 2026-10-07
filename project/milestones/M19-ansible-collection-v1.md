@@ -1,12 +1,12 @@
 ---
-id: M18
+id: M19
 title: Ansible collection and v1.0
 status: planned # planned | in-progress | done
 started:
 closed:
 ---
 
-# M18: Ansible collection and v1.0
+# M19: Ansible collection and v1.0
 
 ## Goal
 
@@ -20,4 +20,4 @@ Ansible support, then the v1.0 release.
 ## Design, non-goals and acceptance criteria
 
 To be written in this milestone's plan-mode session, before implementation
-starts. The milestone's branch is `m18-ansible-collection-v1` (ADR-0010).
+starts. The milestone's branch is `m19-ansible-collection-v1` (ADR-0010).

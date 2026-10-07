@@ -16,16 +16,16 @@ see [Connect nbpdns to PowerDNS](connect-nbpdns-to-powerdns.md).
 
 ## Choose a policy
 
-| Policy | `nbpdns drift` | From M12 |
+| Policy | `nbpdns drift` | From M13 |
 |---|---|---|
 | `report` | Compares the zone and reports its drift. | The same. |
-| `enforce` | Compares the zone and reports its drift, marked `enforce (from M12)`. | nbpdns also corrects the drift on the group's primary. |
+| `enforce` | Compares the zone and reports its drift, marked `enforce (from M13)`. | nbpdns also corrects the drift on the group's primary. |
 | `ignore` | Doesn't compare the zone, and lists it as ignored. | nbpdns leaves the zone alone. |
 
 A zone with no policy set is `report`.
 
 > [!IMPORTANT]
-> nbpdns writes nothing to PowerDNS until M12, so `enforce` reports drift
+> nbpdns writes nothing to PowerDNS until M13, so `enforce` reports drift
 > exactly as `report` does. Set it now to mark the zones nbpdns should
 > correct once it can.
 

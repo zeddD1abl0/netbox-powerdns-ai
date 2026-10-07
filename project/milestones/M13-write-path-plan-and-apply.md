@@ -1,12 +1,12 @@
 ---
-id: M12
+id: M13
 title: "Write path: plan and apply"
 status: planned # planned | in-progress | done
 started:
 closed:
 ---
 
-# M12: Write path: plan and apply
+# M13: Write path: plan and apply
 
 ## Goal
 
@@ -23,4 +23,4 @@ Apply NetBox's DNS data to PowerDNS.
 ## Design, non-goals and acceptance criteria
 
 To be written in this milestone's plan-mode session, before implementation
-starts. The milestone's branch is `m12-write-path-plan-and-apply` (ADR-0010).
+starts. The milestone's branch is `m13-write-path-plan-and-apply` (ADR-0010).

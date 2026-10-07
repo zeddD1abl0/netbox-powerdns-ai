@@ -69,24 +69,9 @@ func newDriftCmd(a *app) *cobra.Command {
 				return err
 			}
 			defer nb.Close()
-			if _, err := nb.Connect(ctx); err != nil {
-				return err
-			}
-			sources := make([]drift.Group, len(groups))
-			for i, g := range groups {
-				sources[i] = drift.Group{Config: g}
-				c, err := s.powerdns(ctx, g)
-				if err == nil {
-					defer c.Close()
-					_, err = c.Connect(ctx)
-				}
-				if err != nil {
-					sources[i].Err = err
-					continue
-				}
-				sources[i].Primary = &primarySource{c: c}
-			}
-			r, err := drift.Run(ctx, &netboxSource{c: nb}, sources, name)
+			clients := s.groupClients(ctx, groups)
+			defer closeClients(clients)
+			r, err := s.compare(ctx, &netboxConn{c: nb}, clients, name)
 			if err != nil {
 				return err
 			}
@@ -107,6 +92,67 @@ func newDriftCmd(a *app) *cobra.Command {
 		})
 	}
 	return cmd
+}
+
+// A netboxConn is the NetBox client, and whether NetBox's release has been
+// checked.
+type netboxConn struct {
+	c       *netbox.Client
+	checked bool
+}
+
+// A groupClient is a server group, with the client for its primary, or the
+// error that kept nbpdns from making one, and whether the primary's server
+// has been checked.
+type groupClient struct {
+	cfg     config.Group
+	c       *powerdns.Client
+	err     error
+	checked bool
+}
+
+// groupClients returns a client for each group's primary. Close them with
+// closeClients.
+func (s *session) groupClients(ctx context.Context, groups []config.Group) []groupClient {
+	out := make([]groupClient, len(groups))
+	for i, g := range groups {
+		c, err := s.powerdns(ctx, g)
+		out[i] = groupClient{cfg: g, c: c, err: err}
+	}
+	return out
+}
+
+func closeClients(cs []groupClient) {
+	for _, c := range cs {
+		if c.c != nil {
+			c.c.Close()
+		}
+	}
+}
+
+// compare reads NetBox through nb, and each group's primary through its
+// client, and compares them (ADR-0027). `nbpdns drift` runs it once, and
+// `nbpdns serve` once each refresh. A group without a client, or whose
+// primary can't be read, is failed in the report. NetBox and each primary
+// are checked, their server and release, only until a check succeeds, so
+// that a long-running serve neither asks again each refresh nor repeats a
+// warning about an unsupported release.
+func (s *session) compare(ctx context.Context, nb *netboxConn, groups []groupClient, zone string) (drift.Report, error) {
+	if !nb.checked {
+		if _, err := nb.c.Connect(ctx); err != nil {
+			return drift.Report{}, err
+		}
+		nb.checked = true
+	}
+	sources := make([]drift.Group, len(groups))
+	for i := range groups {
+		g := &groups[i]
+		sources[i] = drift.Group{Config: g.cfg, Err: g.err}
+		if g.err == nil {
+			sources[i].Primary = &primarySource{g: g}
+		}
+	}
+	return drift.Run(ctx, &netboxSource{c: nb.c}, sources, drift.Options{Zone: zone, Concurrency: s.cfg.Drift.GroupConcurrency})
 }
 
 // driftResult returns the error that gives the report's exit status: one
@@ -197,11 +243,11 @@ func writeDrift(w io.Writer, r drift.Report) error {
 	return nil
 }
 
-// policy writes a zone's drift policy. Nothing is written until M12, so
+// policy writes a zone's drift policy. Nothing is written until M13, so
 // enforce is marked as acting from then (ADR-0027).
 func policy(p string) string {
 	if p == config.PolicyEnforce {
-		return p + " (from M12)"
+		return p + " (from M13)"
 	}
 	return p
 }
@@ -244,21 +290,30 @@ func (n *netboxSource) Read(ctx context.Context, zones []dns.Zone) ([]dns.Zone, 
 	return n.c.ReadZones(ctx, nb)
 }
 
-// primarySource reads a server group's primary for the drift report.
+// primarySource reads a server group's primary for the drift report. It
+// checks the server first, if that hasn't been done, so that groups are
+// checked concurrently too. Only the group's goroutine in drift.Run uses
+// it, so it can set the group's flag.
 type primarySource struct {
-	c     *powerdns.Client
+	g     *groupClient
 	zones map[string]powerdns.Zone // by absolute name
 }
 
 func (p *primarySource) Zones(ctx context.Context, zone string) ([]dns.Zone, error) {
+	if !p.g.checked {
+		if _, err := p.g.c.Connect(ctx); err != nil {
+			return nil, err
+		}
+		p.g.checked = true
+	}
 	var zones []powerdns.Zone
 	if zone == "" {
 		var err error
-		if zones, err = p.c.Zones(ctx); err != nil {
+		if zones, err = p.g.c.Zones(ctx); err != nil {
 			return nil, err
 		}
 	} else {
-		z, err := p.c.FindZone(ctx, zone)
+		z, err := p.g.c.FindZone(ctx, zone)
 		var nf *powerdns.ZoneNotFoundError
 		switch {
 		case errors.As(err, &nf):
@@ -284,5 +339,5 @@ func (p *primarySource) Read(ctx context.Context, zones []dns.Zone) ([]dns.Zone,
 			pd = append(pd, found)
 		}
 	}
-	return p.c.ReadZones(ctx, pd)
+	return p.g.c.ReadZones(ctx, pd)
 }

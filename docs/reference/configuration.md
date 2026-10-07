@@ -29,6 +29,9 @@ a secret's value.
 
 | Key | Type | Default |
 |---|---|---|
+| [`drift.group_concurrency`](#driftgroup_concurrency) | integer, 1 to 32 | `4` |
+| [`drift.interval`](#driftinterval) | duration, at least `10s` | `5m` |
+| [`drift.timeout`](#drifttimeout) | duration | `10m` |
 | [`log.format`](#logformat) | `json` or `text` | `json` |
 | [`log.level`](#loglevel) | `debug`, `info`, `warn` or `error` | `info` |
 | [`netbox.ca_file`](#netboxca_file) | path | none |
@@ -37,9 +40,50 @@ a secret's value.
 | [`netbox.timeout`](#netboxtimeout) | duration | `30s` |
 | [`netbox.token`](#netboxtoken) | string, secret | none |
 | [`netbox.url`](#netboxurl) | an `http` or `https` URL | none |
+| [`otlp.ca_file`](#otlpca_file) | path | none |
+| [`otlp.endpoint`](#otlpendpoint) | an `http` or `https` URL | none |
+| [`otlp.headers`](#otlpheaders) | string, secret | none |
+| [`otlp.protocol`](#otlpprotocol) | `http/protobuf` or `grpc` | `http/protobuf` |
+| [`otlp.timeout`](#otlptimeout) | duration | `10s` |
 | [`powerdns.concurrency`](#powerdnsconcurrency) | integer, 1 to 32 | `4` |
 | [`powerdns.timeout`](#powerdnstimeout) | duration | `30s` |
+| [`server.listen`](#serverlisten) | a TCP address | `:8080` |
 | [`powerdns.groups`](#powerdnsgroups) | list of server groups, config file only | none |
+
+## `drift.group_concurrency`
+
+How many server groups are read and compared at once. Each group's primary also
+takes up to `powerdns.concurrency` requests at once. NetBox is read once, for
+all the groups together, whatever this is.
+
+- **Type:** integer, 1 to 32
+- **Default:** `4`
+- **Environment variable:** `NBPDNS_DRIFT_GROUP_CONCURRENCY`
+- **Flag:** `--drift-group-concurrency`
+
+## `drift.interval`
+
+How often `nbpdns serve` refreshes the drift report, from the start of one
+refresh to the start of the next. A refresh that takes longer delays the next
+one, so refreshes never overlap. Each refresh reads every zone's records from
+NetBox and from each primary, so make it much longer than a refresh takes.
+
+- **Type:** duration, at least `10s`
+- **Default:** `5m`
+- **Environment variable:** `NBPDNS_DRIFT_INTERVAL`
+- **Flag:** `--drift-interval`
+
+## `drift.timeout`
+
+How long one refresh of `nbpdns serve` may take before it's stopped. A refresh
+that's stopped counts as failed, and every server group keeps its last report:
+a slow refresh says nothing about what PowerDNS serves. The next one starts on
+schedule.
+
+- **Type:** duration
+- **Default:** `10m`
+- **Environment variable:** `NBPDNS_DRIFT_TIMEOUT`
+- **Flag:** `--drift-timeout`
 
 ## `log.format`
 
@@ -129,6 +173,65 @@ reads from NetBox needs it.
 > anyone on the path can read it. Use `https://` wherever NetBox offers it.
 > nbpdns logs a warning each time it connects to NetBox over `http://`.
 
+## `otlp.ca_file`
+
+A PEM file of CA certificates to trust for the collector, as well as the
+system's.
+
+- **Type:** path
+- **Default:** none
+- **Environment variable:** `NBPDNS_OTLP_CA_FILE`
+- **Flag:** `--otlp-ca-file`
+
+## `otlp.endpoint`
+
+The URL of the OpenTelemetry collector that nbpdns exports its spans to, over
+OTLP. Such as `https://otel.example.com:4318`, or port 4317 for `grpc`. For
+`http/protobuf`, nbpdns adds `/v1/traces` to the path of the URL, as the OTLP
+specification says. If it's unset, nothing is exported. Every command exports
+its spans, and sends the last of them as it ends.
+
+- **Type:** an `http` or `https` URL
+- **Default:** none
+- **Environment variable:** `NBPDNS_OTLP_ENDPOINT`
+- **Flag:** `--otlp-endpoint`
+
+> [!WARNING]
+> With an `http://` URL, the spans, and any `otlp.headers`, such as a token,
+> cross the network unencrypted. nbpdns logs a warning each time it exports
+> that way.
+
+## `otlp.headers`
+
+Headers to send with every export, such as the collector's token, as
+`name=value,name=value`. Over `grpc`, they're sent as metadata. Percent-encode
+a comma in a value as `%2C`.
+
+- **Type:** string, secret
+- **Default:** none
+- **Environment variable:** `NBPDNS_OTLP_HEADERS`
+- **Flag:** `--otlp-headers`
+- **From a file:** `NBPDNS_OTLP_HEADERS_FILE`, `--otlp-headers-file`, or `otlp.headers_file` in the config file
+
+## `otlp.protocol`
+
+The OTLP protocol to export spans with.
+
+- **Type:** `http/protobuf` or `grpc`
+- **Default:** `http/protobuf`
+- **Environment variable:** `NBPDNS_OTLP_PROTOCOL`
+- **Flag:** `--otlp-protocol`
+
+## `otlp.timeout`
+
+How long one export may take, and how long a command waits to send its last
+spans as it ends. Write it with a unit, such as `10s`.
+
+- **Type:** duration
+- **Default:** `10s`
+- **Environment variable:** `NBPDNS_OTLP_TIMEOUT`
+- **Flag:** `--otlp-timeout`
+
 ## `powerdns.concurrency`
 
 How many requests to each PowerDNS API may be in flight at once.
@@ -148,6 +251,21 @@ How long one request to a PowerDNS API may take. Write it with a unit, such as
 - **Environment variable:** `NBPDNS_POWERDNS_TIMEOUT`
 - **Flag:** `--powerdns-timeout`
 
+## `server.listen`
+
+The address `nbpdns serve` listens on, for `/livez`, `/readyz`, `/status` and
+`/metrics`. Such as `:8080` for every interface, or `127.0.0.1:8080` for this
+host only.
+
+- **Type:** a TCP address
+- **Default:** `:8080`
+- **Environment variable:** `NBPDNS_SERVER_LISTEN`
+- **Flag:** `--server-listen`
+
+> [!WARNING]
+> The listener has no authentication until M10, and its pages name your server
+> groups, zones, and URLs. Keep the port on a trusted network.
+
 ## `powerdns.groups`
 
 The PowerDNS server groups. Each entry is one group: the NetBox views whose
@@ -164,7 +282,7 @@ is an error.
 |---|---|---|---|
 | `name` | string: lowercase letters, digits and `-` | required | The group's name, unique among the groups. Commands take it as `--group`. |
 | `views` | list of strings | required | The NetBox views whose zones the group serves. A view may be served by more than one group. |
-| `drift_policy` | `enforce`, `report` or `ignore` | `report` | The drift policy of the group's zones that `zone_policies` doesn't name. `ignore` doesn't compare a zone; `report` and `enforce` report its drift, and from M12, `enforce` also corrects it. |
+| `drift_policy` | `enforce`, `report` or `ignore` | `report` | The drift policy of the group's zones that `zone_policies` doesn't name. `ignore` doesn't compare a zone; `report` and `enforce` report its drift, and from M13, `enforce` also corrects it. |
 | `zone_policies` | mapping of zone names to drift policies | none | Drift policies for single zones, which override `drift_policy`, such as `{legacy.example.com: ignore}`. A name the group doesn't serve is reported as a warning. |
 | `primary.url` | an `http` or `https` URL | required | The primary's PowerDNS API: its web server, or a TLS proxy in front of it, such as `https://pdns-a.example.com:8443`. |
 | `primary.api_key` | string, secret | none | The PowerDNS API key, sent as `X-API-Key`. Set this or `primary.api_key_file`. |
@@ -207,6 +325,10 @@ powerdns:
 Every key except the secrets, with its default:
 
 ```yaml
+drift:
+  group_concurrency: 4
+  interval: 5m
+  timeout: 10m
 log:
   format: json
   level: info
@@ -216,7 +338,14 @@ netbox:
   page_size: 500
   timeout: 30s
   url: ""
+otlp:
+  ca_file: ""
+  endpoint: ""
+  protocol: http/protobuf
+  timeout: 10s
 powerdns:
   concurrency: 4
   timeout: 30s
+server:
+  listen: :8080
 ```

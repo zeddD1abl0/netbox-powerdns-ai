@@ -2,12 +2,12 @@
 id: ITEM-0027
 title: Avoid rebuilding the log handler chain per record for grouped loggers
 type: debt # feature | bug | debt | task
-status: open # open | in-progress | blocked | done | wontfix
+status: done # open | in-progress | blocked | done | wontfix
 milestone: M04
 requirements: []
 depends_on: []
 created: 2026-10-06
-closed:
+closed: 2026-10-07
 ---
 
 # ITEM-0027: Avoid rebuilding the log handler chain per record for grouped loggers
@@ -25,8 +25,8 @@ and attributes.
 
 ## Acceptance criteria
 
-- [ ] Logging through a grouped logger with bound attributes doesn't rebuild the handler chain per record. A benchmark shows it.
-- [ ] The IDs stay at the top level, as `TestLogLinesCarryIDs` and the logging tests check.
+- [x] Logging through a grouped logger with bound attributes doesn't rebuild the handler chain per record. A benchmark shows it.
+- [x] The IDs stay at the top level, as `TestLogLinesCarryIDs` and the logging tests check.
 
 ## Notes
 
@@ -36,3 +36,21 @@ and attributes.
   service logs each HTTP request, which is when it starts to matter, so it's
   planned there. One approach: cache the rebuilt chain for the last set of
   IDs, since one request's records share them.
+- 2026-10-07: Part of M04's approved design, in phase M4b.
+- 2026-10-07: Done, a different way from the cache this item's first note
+  suggested: a cache keyed by the IDs would miss on every span, and a
+  refresh's requests each have their own span. Instead, `contextHandler`
+  opens no group on its base handler. It keeps the groups itself, each
+  with the attributes bound inside it, and writes each record's attributes
+  into them as `slog.GroupValue`s, after the IDs, in one record to the base
+  handler. Attributes bound before any group are still preformatted by the
+  base handler's `WithAttrs`. A group left empty is written as no group, as
+  slog's handlers do. `TestNestedGroups` checks two levels, a group that
+  ends up empty, and a secret inside a group, still redacted.
+  `BenchmarkLog`, with one group and five bound attributes, on a 16-thread
+  workstation: 2.0 to 2.2 µs, 1,139 B and 18 allocations per record before;
+  1.69 µs, 721 B and 9 allocations after. Without a group, about 0.97 µs
+  and 4 allocations, unchanged. Attributes bound inside a group are still
+  encoded with each record, as they were before, since slog's handlers can
+  only preformat attributes outside every group; what's gone is the rebuilt
+  handler chain and its allocations.

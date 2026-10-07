@@ -8,6 +8,28 @@ All notable changes to this project are recorded here. The format follows
 
 ### Added
 
+- `nbpdns serve` runs continuously. It refreshes the drift report every
+  `drift.interval`, bounded by `drift.timeout`, and keeps each server
+  group's last-known state when its primary, or NetBox, can't be read. At
+  `server.listen` it serves `/livez`, `/readyz` (ready once the first
+  refresh has finished), `/status`, and Prometheus metrics at `/metrics`.
+  The status page shows the schedule, the outcome of each refresh,
+  NetBox's and each group's state, the names of drifted zones, and the
+  trace export, as text, or as JSON with `?json=1`. The metrics cover drift per group and
+  per drifted zone, refreshes, and requests to NetBox and to each primary,
+  and their reference is generated from the code. Each refresh is its own
+  trace. It stops cleanly on SIGINT or SIGTERM.
+- Documentation: a tutorial on running nbpdns as a service, how-to guides
+  on monitoring drift with Prometheus, with example alert rules, and on
+  exporting traces to an OpenTelemetry collector, an explanation of how
+  nbpdns runs as a service, and references for the metrics and the service
+  endpoints.
+- Spans are exported to an OpenTelemetry collector over OTLP, by
+  HTTP/protobuf or gRPC (`otlp.protocol`), from every command, when
+  `otlp.endpoint` is set. Headers, such as the collector's token, are a
+  secret (`otlp.headers`, with `_FILE`), and a CA file and a timeout are
+  supported. A command sends its last spans as it ends. An `http://`
+  endpoint works, with a warning.
 - `nbpdns drift`: compare the zones NetBox assigns to each PowerDNS server
   group, through its views, with what the group's primary serves, and report
   every difference as a table or JSON, for every group or one (`--group`),
@@ -15,10 +37,11 @@ All notable changes to this project are recorded here. The format follows
   and an SOA without its serial. Zones on a primary that NetBox doesn't
   assign to its group are listed as unmanaged, not drift, and zones whose
   policy is `ignore` aren't compared. The table gives each drifted zone's
-  policy, with `enforce` marked as acting from M12. It exits 0 with no
+  policy, with `enforce` marked as acting from M13. It exits 0 with no
   drift, 3 with drift, and 1 when NetBox or a primary can't be read. A
   group whose primary can't be read is marked failed, and the others are
-  still reported.
+  still reported. Server groups are read and compared concurrently, up to
+  `drift.group_concurrency` at once.
 - Documentation: a tutorial on finding drift between NetBox and PowerDNS, a
   how-to guide on setting a zone's drift policy, and an explanation of how
   nbpdns finds drift.

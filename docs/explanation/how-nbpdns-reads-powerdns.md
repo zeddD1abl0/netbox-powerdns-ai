@@ -29,7 +29,7 @@ flowchart LR
 
 nbpdns reads, and later writes, only the primaries, through their HTTP API.
 The secondaries need no API access: they get their zones from the primary,
-and from M12 they learn which zones exist through catalog zones. From M13,
+and from M13 they learn which zones exist through catalog zones. From M14,
 nbpdns checks them with DNS queries.
 
 Server groups are declared in the config file, under `powerdns.groups`
@@ -120,5 +120,5 @@ So:
 - A plain `http://` URL works, since not every deployment has TLS, but nbpdns
   logs a warning each time it connects that way.
 
-nbpdns only reads until M12, but the key it holds can always write. PowerDNS
+nbpdns only reads until M13, but the key it holds can always write. PowerDNS
 can't give it a read-only key.

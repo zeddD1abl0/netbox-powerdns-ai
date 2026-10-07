@@ -100,3 +100,8 @@ dotenv
 gcc
 golang
 [Uu]nmanaged
+[Ll]iveness
+promlint
+Prometheus
+Grafana
+Alertmanager

@@ -12,55 +12,53 @@
 | [M01](milestones/M01-netbox-read-path.md) | NetBox read path | done | 12 of 12 |
 | [M02](milestones/M02-powerdns-read-path.md) | PowerDNS read path | done | 11 of 11 |
 | [M03](milestones/M03-drift-report.md) | Drift report | done | 7 of 7 |
-| [M04](milestones/M04-service.md) | Service | planned | 0 of 2 |
-| [M05](milestones/M05-rest-api.md) | REST API | planned | — |
-| [M06](milestones/M06-netbox-webhooks.md) | NetBox webhooks | planned | — |
-| [M07](milestones/M07-sqlite-persistence.md) | SQLite persistence | planned | — |
-| [M08](milestones/M08-postgresql-and-ha.md) | PostgreSQL and HA | planned | — |
-| [M09](milestones/M09-authentication.md) | Authentication | planned | — |
-| [M10](milestones/M10-sso-and-rbac.md) | SSO and RBAC | planned | — |
-| [M11](milestones/M11-web-ui.md) | Web UI | planned | — |
-| [M12](milestones/M12-write-path-plan-and-apply.md) | Write path: plan and apply | planned | 0 of 1 |
-| [M13](milestones/M13-change-safety.md) | Change safety | planned | — |
-| [M14](milestones/M14-brownfield-import.md) | Brownfield import | planned | — |
-| [M15](milestones/M15-siem-export.md) | SIEM export | planned | — |
-| [M16](milestones/M16-production-hardening.md) | Production hardening | planned | — |
-| [M17](milestones/M17-terraform-provider.md) | Terraform/OpenTofu provider | planned | — |
-| [M18](milestones/M18-ansible-collection-v1.md) | Ansible collection and v1.0 | planned | — |
+| [M04](milestones/M04-service.md) | Service | done | 10 of 10 |
+| [M05](milestones/M05-packaging.md) | Packaging | planned | — |
+| [M06](milestones/M06-rest-api.md) | REST API | planned | — |
+| [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | planned | — |
+| [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | planned | — |
+| [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | planned | — |
+| [M10](milestones/M10-authentication.md) | Authentication | planned | — |
+| [M11](milestones/M11-sso-and-rbac.md) | SSO and RBAC | planned | — |
+| [M12](milestones/M12-web-ui.md) | Web UI | planned | — |
+| [M13](milestones/M13-write-path-plan-and-apply.md) | Write path: plan and apply | planned | 0 of 1 |
+| [M14](milestones/M14-change-safety.md) | Change safety | planned | — |
+| [M15](milestones/M15-brownfield-import.md) | Brownfield import | planned | — |
+| [M16](milestones/M16-siem-export.md) | SIEM export | planned | — |
+| [M17](milestones/M17-production-hardening.md) | Production hardening | planned | — |
+| [M18](milestones/M18-terraform-provider.md) | Terraform/OpenTofu provider | planned | — |
+| [M19](milestones/M19-ansible-collection-v1.md) | Ansible collection and v1.0 | planned | — |
 
 ## Open items in other milestones
 
 | Item | Title | Type | Status | Waiting on |
 |---|---|---|---|---|
-| [ITEM-0027](items/ITEM-0027-avoid-rebuilding-the-log-handler-chain-per-record.md) | Avoid rebuilding the log handler chain per record for grouped loggers | debt | open | — |
 | [ITEM-0040](items/ITEM-0040-write-record-values-to-powerdns-in-its-own-text-fo.md) | Write record values to PowerDNS in its own text form | task | open | — |
-| [ITEM-0049](items/ITEM-0049-compare-server-groups-concurrently.md) | Compare server groups concurrently | feature | open | — |
 
 ## Open questions
 
-27 open (0 blocking), 29 answered. The questions and their proposed defaults are in [requirements.md](requirements.md#open-questions).
+26 open (0 blocking), 30 answered. The questions and their proposed defaults are in [requirements.md](requirements.md#open-questions).
 
 | Needed by | Open questions |
 |---|---|
-| M04 | Q-038 |
-| M04 (binary, image), M16 (rest) | Q-025 |
-| M05 | Q-041 |
-| M06 | Q-037 |
-| M06 (triggers), M14 (import) | Q-054 |
-| M07 | Q-012, Q-023, Q-024, Q-035, Q-036 |
-| M07 (migrations), M16 (rest) | Q-026 |
-| M09 | Q-029, Q-031, Q-040 |
-| M10 | Q-015, Q-028, Q-030, Q-032 |
-| M11 | Q-016, Q-050, Q-051 |
-| M12 | Q-011 |
-| M13 | Q-013, Q-014 |
-| M15 | Q-033, Q-034 |
-| M17 | Q-042 |
+| M05 (binary, image), M17 (rest) | Q-025 |
+| M06 | Q-041 |
+| M07 | Q-037 |
+| M07 (triggers), M15 (import) | Q-054 |
+| M08 | Q-012, Q-023, Q-024, Q-035, Q-036 |
+| M08 (migrations), M17 (rest) | Q-026 |
+| M10 | Q-029, Q-031, Q-040 |
+| M11 | Q-015, Q-028, Q-030, Q-032 |
+| M12 | Q-016, Q-050, Q-051 |
+| M13 | Q-011 |
+| M14 | Q-013, Q-014 |
+| M16 | Q-033, Q-034 |
+| M18 | Q-042 |
 
 ## Requirements
 
-43 requirements, listed in [requirements.md](requirements.md#requirements). 16 aren't referenced by any item yet: REQ-003, REQ-004, REQ-007, REQ-008, REQ-009, REQ-010, REQ-011, REQ-014, REQ-015, REQ-016, REQ-017, REQ-023, REQ-032, REQ-033, REQ-034, REQ-035.
+44 requirements, listed in [requirements.md](requirements.md#requirements). 14 aren't referenced by any item yet: REQ-004, REQ-007, REQ-008, REQ-009, REQ-010, REQ-011, REQ-015, REQ-016, REQ-017, REQ-023, REQ-032, REQ-033, REQ-034, REQ-035.
 
 ## Decisions
 
-27 ADRs (21 accepted, 6 superseded), listed in [docs/adr](../docs/adr/_index.md).
+29 ADRs (23 accepted, 6 superseded), listed in [docs/adr](../docs/adr/_index.md).

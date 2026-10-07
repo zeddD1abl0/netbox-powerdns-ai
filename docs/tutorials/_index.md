@@ -12,3 +12,4 @@ for that.
 - [Read your NetBox DNS data with nbpdns](read-your-netbox-dns-data.md)
 - [Read your PowerDNS zones with nbpdns](read-your-powerdns-zones-with-nbpdns.md)
 - [Find drift between NetBox and PowerDNS](find-drift-between-netbox-and-powerdns.md)
+- [Run nbpdns as a service](run-nbpdns-as-a-service.md)

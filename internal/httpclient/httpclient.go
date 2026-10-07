@@ -66,7 +66,24 @@ type Options struct {
 	Tracer trace.Tracer
 	// Retry is the retry policy, or DefaultRetry if zero.
 	Retry Retry
+	// Observer, if set, is told of every attempt and retry, for metrics.
+	Observer Observer
 }
+
+// An Observer is told of each request a Client makes, for metrics.
+type Observer interface {
+	// Request reports one attempt: its method, the answer's status code, or
+	// 0 if no answer came, and how long the answer took to start.
+	Request(method string, code int, d time.Duration)
+	// Retry reports that a request is about to be tried again.
+	Retry()
+}
+
+// nopObserver is the Observer of a Client that has none.
+type nopObserver struct{}
+
+func (nopObserver) Request(string, int, time.Duration) {}
+func (nopObserver) Retry()                             {}
 
 // A Client sends GET requests to one server. It's safe for concurrent use.
 type Client struct {
@@ -75,11 +92,12 @@ type Client struct {
 	http    *http.Client
 	log     *slog.Logger
 	retry   Retry
+	obs     Observer
 }
 
 // New returns a Client.
 func New(o Options) (*Client, error) {
-	tlsConf, err := tlsConfig(o)
+	tlsConf, err := TLSConfig(o)
 	if err != nil {
 		return nil, err
 	}
@@ -94,11 +112,16 @@ func New(o Options) (*Client, error) {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
+	var obs Observer = nopObserver{}
+	if o.Observer != nil {
+		obs = o.Observer
+	}
 	c := &Client{
 		service: o.Service,
 		url:     o.URL,
 		log:     log,
 		retry:   o.Retry,
+		obs:     obs,
 		http: &http.Client{
 			Timeout:   o.Timeout,
 			Transport: rt,
@@ -117,9 +140,10 @@ func New(o Options) (*Client, error) {
 // client.
 func (c *Client) Close() { c.http.CloseIdleConnections() }
 
-// tlsConfig trusts the system's roots, plus the certificates in o.CAFile,
-// and presents o's client certificate, if it has one.
-func tlsConfig(o Options) (*tls.Config, error) {
+// TLSConfig returns the TLS configuration of a client with o's files: TLS 1.2
+// or later, trusting the system's roots, plus the certificates in o.CAFile,
+// and presenting o's client certificate, if it has one.
+func TLSConfig(o Options) (*tls.Config, error) {
 	pool, err := x509.SystemCertPool()
 	if err != nil {
 		pool = x509.NewCertPool()
@@ -199,6 +223,7 @@ func (c *Client) Get(ctx context.Context, u *url.URL, header http.Header, out an
 			return unmark(err)
 		}
 		d := c.retry.delay(attempt, retryAfter)
+		c.obs.Retry()
 		c.log.DebugContext(ctx, "retrying an http request", "service", c.service, "path", u.RequestURI(),
 			"attempt", attempt, "delay_seconds", d.Seconds(), "err", err)
 		if serr := c.retry.sleep(ctx, d); serr != nil {
@@ -232,6 +257,7 @@ func (c *Client) try(ctx context.Context, u *url.URL, header http.Header, out an
 	start := time.Now()
 	resp, err := c.http.Do(req)
 	if err != nil {
+		c.obs.Request(http.MethodGet, 0, time.Since(start))
 		c.log.DebugContext(ctx, "http request failed", "service", c.service, "path", u.RequestURI(), "attempt", attempt, "err", err)
 		return 0, &UnreachableError{Service: c.service, URL: c.url, Err: err}
 	}
@@ -239,6 +265,7 @@ func (c *Client) try(ctx context.Context, u *url.URL, header http.Header, out an
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, MaxBody))
 		_ = resp.Body.Close()
 	}()
+	c.obs.Request(http.MethodGet, resp.StatusCode, time.Since(start))
 	c.log.DebugContext(ctx, "http request", "service", c.service, "path", u.RequestURI(), "status", resp.StatusCode,
 		"attempt", attempt, "duration_seconds", time.Since(start).Seconds())
 

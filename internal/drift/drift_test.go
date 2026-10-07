@@ -7,7 +7,10 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/config"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/dns"
@@ -165,6 +168,7 @@ type memory struct {
 	zones   []dns.Zone
 	err     error
 	readErr error
+	mu      sync.Mutex
 	read    []string
 }
 
@@ -184,6 +188,8 @@ func (m *memory) Read(_ context.Context, zones []dns.Zone) ([]dns.Zone, []dns.Pr
 	if m.readErr != nil {
 		return nil, nil, m.readErr
 	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	var out []dns.Zone
 	for _, want := range zones {
 		for _, z := range m.zones {
@@ -236,7 +242,7 @@ func TestRun(t *testing.T) {
 		{Config: config.Group{Name: "site-c", Views: []string{"v"}, DriftPolicy: config.PolicyReport,
 			ZonePolicies: map[string]string{"b.example.": config.PolicyIgnore}}, Err: errors.New("no client")},
 	}
-	r, err := Run(t.Context(), memNetBox{nb}, groups, "")
+	r, err := Run(t.Context(), memNetBox{nb}, groups, Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -263,13 +269,13 @@ func TestRun(t *testing.T) {
 	t.Run("one zone", func(t *testing.T) {
 		// site-a's policy for b.example. isn't warned about, as a zone it
 		// doesn't serve: only c.example. was listed.
-		r, err := Run(t.Context(), memNetBox{nb}, groups[:2], "c.example.")
+		r, err := Run(t.Context(), memNetBox{nb}, groups[:2], Options{Zone: "c.example."})
 		if err != nil || !r.Complete || r.Drift || len(r.Groups[0].Zones) != 0 || len(r.Groups[1].Zones) != 1 ||
 			len(r.Groups[0].Warnings) != 0 || len(r.Groups[1].Warnings) != 0 {
 			t.Errorf("report %+v, %v", r, err)
 		}
 		// The zone's own policy still applies.
-		r, err = Run(t.Context(), memNetBox{nb}, groups[:1], "b.example.")
+		r, err = Run(t.Context(), memNetBox{nb}, groups[:1], Options{Zone: "b.example."})
 		if err != nil || len(r.Groups[0].Zones) != 1 || r.Groups[0].Zones[0].State != StateIgnored || len(r.Groups[0].Warnings) != 0 {
 			t.Errorf("report %+v, %v", r, err)
 		}
@@ -278,19 +284,19 @@ func TestRun(t *testing.T) {
 		// Nothing is read from NetBox for groups that can't be compared.
 		fresh := &memory{zones: nb.zones}
 		down := []Group{{Config: groups[0].Config, Primary: memPrimary{&memory{err: errors.New("refused")}}}, groups[2]}
-		r, err := Run(t.Context(), memNetBox{fresh}, down, "")
+		r, err := Run(t.Context(), memNetBox{fresh}, down, Options{})
 		if err != nil || r.Complete || len(fresh.read) != 0 || r.Groups[0].Error != "refused" {
 			t.Errorf("report %+v, %v; NetBox read %v", r, err, fresh.read)
 		}
 	})
 	t.Run("a zone that's nowhere", func(t *testing.T) {
 		var nf *ZoneNotFoundError
-		if _, err := Run(t.Context(), memNetBox{nb}, groups[:2], "nothere.example."); !errors.As(err, &nf) || nf.Zone != "nothere.example." {
+		if _, err := Run(t.Context(), memNetBox{nb}, groups[:2], Options{Zone: "nothere.example."}); !errors.As(err, &nf) || nf.Zone != "nothere.example." {
 			t.Errorf("Run: %v, want a ZoneNotFoundError", err)
 		}
 	})
 	t.Run("a zone only on a primary", func(t *testing.T) {
-		r, err := Run(t.Context(), memNetBox{nb}, groups[:2], "x.example.")
+		r, err := Run(t.Context(), memNetBox{nb}, groups[:2], Options{Zone: "x.example."})
 		if err != nil || !slices.Equal(r.Groups[0].Unmanaged, []string{"x.example."}) {
 			t.Errorf("report %+v, %v", r, err)
 		}
@@ -298,20 +304,101 @@ func TestRun(t *testing.T) {
 	t.Run("a zone that's nowhere, with a group that can't be read", func(t *testing.T) {
 		// The group that failed might have it, so the report is incomplete,
 		// not wrong.
-		r, err := Run(t.Context(), memNetBox{nb}, groups, "nothere.example.")
+		r, err := Run(t.Context(), memNetBox{nb}, groups, Options{Zone: "nothere.example."})
 		if err != nil || r.Complete {
 			t.Errorf("report %+v, %v", r, err)
 		}
 	})
 	t.Run("NetBox can't be read", func(t *testing.T) {
-		if _, err := Run(t.Context(), memNetBox{&memory{err: errors.New("down")}}, groups, ""); err == nil || err.Error() != "down" {
+		if _, err := Run(t.Context(), memNetBox{&memory{err: errors.New("down")}}, groups, Options{}); err == nil || err.Error() != "down" {
 			t.Errorf("Run: %v, want NetBox's error", err)
 		}
 	})
 	t.Run("a primary that fails while reading", func(t *testing.T) {
 		broken := []Group{{Config: groups[0].Config, Primary: memPrimary{&memory{zones: pdA.zones, readErr: errors.New("reset")}}}}
-		r, err := Run(t.Context(), memNetBox{nb}, broken, "")
+		r, err := Run(t.Context(), memNetBox{nb}, broken, Options{})
 		if err != nil || r.Complete || r.Groups[0].Status != StatusFailed || r.Groups[0].Error != "reset" {
+			t.Errorf("report %+v, %v", r, err)
+		}
+	})
+}
+
+// hooked is a Primary that calls hooks before it lists or reads.
+type hooked struct {
+	memPrimary
+	onZones, onRead func()
+}
+
+func (h hooked) Zones(ctx context.Context, zone string) ([]dns.Zone, error) {
+	if h.onZones != nil {
+		h.onZones()
+	}
+	return h.memPrimary.Zones(ctx, zone)
+}
+
+func (h hooked) Read(ctx context.Context, zones []dns.Zone) ([]dns.Zone, []dns.Problem, error) {
+	if h.onRead != nil {
+		h.onRead()
+	}
+	return h.memPrimary.Read(ctx, zones)
+}
+
+func TestRunConcurrently(t *testing.T) {
+	nb := &memory{zones: []dns.Zone{zone("a.example.", "v", 1)}}
+	group := func(name string, p Primary) Group {
+		return Group{Config: config.Group{Name: name, Views: []string{"v"}, DriftPolicy: config.PolicyReport}, Primary: p}
+	}
+	names := func(r Report) []string {
+		var out []string
+		for _, g := range r.Groups {
+			out = append(out, g.Group)
+		}
+		return out
+	}
+
+	t.Run("up to the limit at once", func(t *testing.T) {
+		var inFlight, most atomic.Int32
+		listing := func() {
+			n := inFlight.Add(1)
+			for {
+				m := most.Load()
+				if n <= m || most.CompareAndSwap(m, n) {
+					break
+				}
+			}
+			time.Sleep(20 * time.Millisecond)
+			inFlight.Add(-1)
+		}
+		var groups []Group
+		for _, n := range []string{"a", "b", "c", "d"} {
+			groups = append(groups, group(n, hooked{memPrimary: memPrimary{&memory{zones: nb.zones}}, onZones: listing}))
+		}
+		for _, limit := range []int{1, 2} {
+			most.Store(0)
+			r, err := Run(t.Context(), memNetBox{nb}, groups, Options{Concurrency: limit})
+			if err != nil || !slices.Equal(names(r), []string{"a", "b", "c", "d"}) {
+				t.Fatalf("limit %d: report %v, %v", limit, names(r), err)
+			}
+			if got := int(most.Load()); got != limit {
+				t.Errorf("limit %d: %d groups listed at once", limit, got)
+			}
+		}
+	})
+
+	t.Run("a slow group doesn't delay the others", func(t *testing.T) {
+		// The first group's read waits for the second's to finish, which it
+		// can only do if they run at once.
+		secondRead := make(chan struct{})
+		slow := hooked{memPrimary: memPrimary{&memory{zones: nb.zones}}, onRead: func() {
+			select {
+			case <-secondRead:
+			case <-time.After(5 * time.Second):
+				t.Error("the second group wasn't read while the first one waited")
+			}
+		}}
+		fast := hooked{memPrimary: memPrimary{&memory{zones: nb.zones}}, onRead: func() { close(secondRead) }}
+		r, err := Run(t.Context(), memNetBox{nb}, []Group{group("slow", slow), group("fast", fast)}, Options{Concurrency: 2})
+		if err != nil || !slices.Equal(names(r), []string{"slow", "fast"}) || r.Groups[0].Counts.InSync != 1 || r.Groups[1].Counts.InSync != 1 {
 			t.Errorf("report %+v, %v", r, err)
 		}
 	})

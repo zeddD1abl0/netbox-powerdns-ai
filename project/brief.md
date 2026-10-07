@@ -259,3 +259,25 @@ options; the label of the chosen option is quoted.
 The user then approved M03's plan, which also answers Q-027 for the command
 line. The decisions are recorded in ADR-0027, and as REQ-043.
 
+
+## Answers, 2026-10-07 (M04 design)
+
+These were given in the M04 design session. Each was chosen from proposed
+options; the label of the chosen option is quoted.
+
+| Question | Answer |
+|---|---|
+| M04's stub bundles the running service with packaging (GoReleaser, the container image). Should packaging stay in M04? | "Split it out": packaging becomes M05, and the stubs after it shift up one number. |
+| When should `nbpdns serve` report ready on its readiness endpoint? | "After the first refresh", whatever its outcome. |
+| How detailed should the drift metrics be? | "Per group, plus drifted zones". |
+| How should traces be exported over OTLP? | "OTLP over HTTP only". |
+
+Reviewing the plan, the user then asked for two changes:
+
+> If we're already requiring GRPC, I'd like to add OTLP/GRPC to the
+> supported list. Also, a /status page should probably be included in this
+> list, returning useful states in a human/json layout (probably default to
+> human and use ?json=1).
+
+The user approved the plan with both. The decisions are recorded in
+ADR-0028 and ADR-0029, and as REQ-044.

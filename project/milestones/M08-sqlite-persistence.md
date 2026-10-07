@@ -1,12 +1,12 @@
 ---
-id: M07
+id: M08
 title: SQLite persistence
 status: planned # planned | in-progress | done
 started:
 closed:
 ---
 
-# M07: SQLite persistence
+# M08: SQLite persistence
 
 ## Goal
 
@@ -24,4 +24,4 @@ nbpdns keeps its state across restarts, in an embedded SQLite database.
 ## Design, non-goals and acceptance criteria
 
 To be written in this milestone's plan-mode session, before implementation
-starts. The milestone's branch is `m07-sqlite-persistence` (ADR-0010).
+starts. The milestone's branch is `m08-sqlite-persistence` (ADR-0010).

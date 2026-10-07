@@ -3,7 +3,7 @@ id: ITEM-0040
 title: Write record values to PowerDNS in its own text form
 type: task # feature | bug | debt | task
 status: open # open | in-progress | blocked | done | wontfix
-milestone: M12
+milestone: M13
 requirements: [REQ-028]
 depends_on: []
 created: 2026-10-06
@@ -35,3 +35,4 @@ not send the normalized one.
   record through PowerDNS 5.1.4's API with `alpn="h3,h2"`. PowerDNS takes
   `alpn=h3,h2`, and nbpdns's normalization reads both the same, so reading
   is fine; only writing is affected.
+- 2026-10-07: M12, "Write path: plan and apply", is now M13 (ADR-0028).

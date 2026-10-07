@@ -57,7 +57,7 @@ The same rules apply to its fields: each is declared once in the code, which
 also generates their reference; an unknown field is an error; an API key can
 come from a file, with `primary.api_key_file`; and `nbpdns config show` lists
 each field of each group, with the key redacted. Once nbpdns has a database
-(M07), resources declared in the file are marked as managed by the file.
+(M08), resources declared in the file are marked as managed by the file.
 
 ## Unknown names are errors
 

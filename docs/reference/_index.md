@@ -15,7 +15,12 @@ by hand:
 | [Configuration](configuration.md) | the config registry | M01 |
 | [Command line](command-line.md) | the command-line definitions | M01 |
 | [Supported versions](supported-versions.md) | the supported NetBox and PowerDNS releases | M01, M02 |
-| Metrics | the metrics registry | M04 |
-| API reference | `api/openapi.yaml` | M05 |
-| Audit events | the audit event registry | M07 |
-| Permissions | the permission registry | M10 |
+| [Metrics](metrics.md) | the metric declarations | M04 |
+| API reference | `api/openapi.yaml` | M06 |
+| Audit events | the audit event registry | M08 |
+| Permissions | the permission registry | M11 |
+
+The others are written by hand:
+
+- [Service endpoints](service-endpoints.md): what `nbpdns serve` answers, and
+  the fields of its status page. A test checks the page against the code.

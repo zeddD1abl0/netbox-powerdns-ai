@@ -59,6 +59,7 @@ When a question is answered:
 | REQ-041 | Reads PowerDNS Authoritative 5.1 through its HTTP API, from each server group's primary. More releases are added as the CI runners have room to test them. Narrowed from 5.1 and 5.0 on 2026-10-06. | Q-053, [ADR-0024](../docs/adr/0024-read-powerdns-through-its-api-from-server-groups-i.md), superseded by [ADR-0026](../docs/adr/0026-read-powerdns-through-its-api-with-powerdns-5-1-on.md) |
 | REQ-042 | Zones are assigned to server groups by NetBox view, and a view may be served by several groups. | User, 2026-10-06; [ADR-0024](../docs/adr/0024-read-powerdns-through-its-api-from-server-groups-i.md), superseded by [ADR-0026](../docs/adr/0026-read-powerdns-through-its-api-with-powerdns-5-1-on.md) |
 | REQ-043 | nbpdns is designed and tested for 1,000 zones and 100,000 records per run; larger targets are set when a deployment needs them. | Q-017, [ADR-0027](../docs/adr/0027-report-drift-between-netbox-and-each-server-group.md) |
+| REQ-044 | nbpdns exposes Prometheus metrics for its drift reports, its refreshes, and its requests to NetBox and PowerDNS. PowerDNS's own statistics stay on PowerDNS's `/metrics`. | Q-038, [ADR-0029](../docs/adr/0029-run-nbpdns-as-a-service-with-prometheus-metrics-an.md) |
 
 ## Open questions
 
@@ -70,56 +71,55 @@ names the milestone that needs the answer, from the milestone list in
 
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
-| Q-011 | Where does data that NetBox doesn't model live: TSIG keys, zone metadata (ALLOW-AXFR-FROM, ALSO-NOTIFY, SOA-EDIT-API), serial policy, DNSSEC key rollover? | In NetBox wherever the plugin models it. Everything else is per-zone or per-group config in this app. | M12 |
-| Q-012 | Does "change settings" mean this app's settings only, or PowerDNS server config (`pdns.conf`) too? | This app's settings plus per-zone PowerDNS metadata. `pdns.conf` stays with Ansible. | M07 |
-| Q-013 | What change safety is needed: dry-run diff, four-eyes approval, change windows, blast-radius limits, rollback? | Every sync computes a plan and auto-applies below thresholds. Above a threshold (such as more than N deletes, or NS/SOA changes) it needs approval. | M13 |
-| Q-014 | What validation runs before and after changes? | Pre-flight checks (CNAME at apex, dangling NS, TTL bounds, syntax). After apply, query every server for the SOA serial and sample records. | M13 |
-| Q-015 | Is multi-tenancy needed: are permissions scoped to zone, NetBox tenant or server group? | Global roles in v1, scoped by server group. Tenant scoping is a later ADR. | M10 |
-| Q-016 | What is the web UI's scope? | Settings, ops dashboard (sync status, drift, per-server health), approvals, audit viewer, users and roles. **No record editor**, since NetBox is the editor. | M11 |
-| Q-054 | The parts of Q-010 not yet answered: how is a sync triggered, and how are existing PowerDNS zones adopted into NetBox (brownfield import)? | A NetBox event-rule webhook plus a periodic full reconcile. An import tool for first adoption, with imported zones starting in report mode. | M06 (triggers), M14 (import) |
+| Q-011 | Where does data that NetBox doesn't model live: TSIG keys, zone metadata (ALLOW-AXFR-FROM, ALSO-NOTIFY, SOA-EDIT-API), serial policy, DNSSEC key rollover? | In NetBox wherever the plugin models it. Everything else is per-zone or per-group config in this app. | M13 |
+| Q-012 | Does "change settings" mean this app's settings only, or PowerDNS server config (`pdns.conf`) too? | This app's settings plus per-zone PowerDNS metadata. `pdns.conf` stays with Ansible. | M08 |
+| Q-013 | What change safety is needed: dry-run diff, four-eyes approval, change windows, blast-radius limits, rollback? | Every sync computes a plan and auto-applies below thresholds. Above a threshold (such as more than N deletes, or NS/SOA changes) it needs approval. | M14 |
+| Q-014 | What validation runs before and after changes? | Pre-flight checks (CNAME at apex, dangling NS, TTL bounds, syntax). After apply, query every server for the SOA serial and sample records. | M14 |
+| Q-015 | Is multi-tenancy needed: are permissions scoped to zone, NetBox tenant or server group? | Global roles in v1, scoped by server group. Tenant scoping is a later ADR. | M11 |
+| Q-016 | What is the web UI's scope? | Settings, ops dashboard (sync status, drift, per-server health), approvals, audit viewer, users and roles. **No record editor**, since NetBox is the editor. | M12 |
+| Q-054 | The parts of Q-010 not yet answered: how is a sync triggered, and how are existing PowerDNS zones adopted into NetBox (brownfield import)? | A NetBox event-rule webhook plus a periodic full reconcile. An import tool for first adoption, with imported zones starting in report mode. | M07 (triggers), M15 (import) |
 
 ### Architecture and deployment
 
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
-| Q-023 | How are secrets stored at rest (PowerDNS API keys, TSIG, OIDC client secrets)? | Envelope encryption with a master key from env or file. Vault/OpenBao later. | M07 |
-| Q-024 | When the UI and IaC both manage a setting, which one owns it? | A `managed_by` field on each resource. Resources owned by IaC are read-only in the UI. | M07 |
-| Q-025 | What packaging is needed? | Static linux amd64/arm64 binary, distroless non-root image, Helm chart, systemd unit, compose example, air-gap bundle. Linux only. | M04 (binary, image), M16 (rest) |
-| Q-026 | How are upgrades, backup and restore, and config export handled? | Forward-only migrations. `export` and `import` commands for app config. | M07 (migrations), M16 (rest) |
+| Q-023 | How are secrets stored at rest (PowerDNS API keys, TSIG, OIDC client secrets)? | Envelope encryption with a master key from env or file. Vault/OpenBao later. | M08 |
+| Q-024 | When the UI and IaC both manage a setting, which one owns it? | A `managed_by` field on each resource. Resources owned by IaC are read-only in the UI. | M08 |
+| Q-025 | What packaging is needed? | Static linux amd64/arm64 binary, distroless non-root image, Helm chart, systemd unit, compose example, air-gap bundle. Linux only. | M05 (binary, image), M17 (rest) |
+| Q-026 | How are upgrades, backup and restore, and config export handled? | Forward-only migrations. `export` and `import` commands for app config. | M08 (migrations), M17 (rest) |
 
 ### Identity and access
 
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
-| Q-028 | Which IdP and protocols? | Authentik, with OIDC, SAML and trusted proxy headers, each toggled independently. No LDAP in v1. | M10 |
-| Q-029 | Are local users, MFA and break-glass access needed? | Local users with TOTP/WebAuthn, plus an env-only break-glass token. Every use is audited. | M09 |
-| Q-030 | What RBAC model? | Viewer, Operator and Admin built in. Custom roles. IdP group → role mapping. Permissions checked per action. | M10 |
-| Q-031 | How do Terraform, Ansible and CI pipelines authenticate? | Scoped, expiring, hashed API tokens and service accounts. OIDC workload identity (CI JWTs) later. | M09 |
-| Q-032 | Is SCIM provisioning needed? | Not in v1. | M10 |
+| Q-028 | Which IdP and protocols? | Authentik, with OIDC, SAML and trusted proxy headers, each toggled independently. No LDAP in v1. | M11 |
+| Q-029 | Are local users, MFA and break-glass access needed? | Local users with TOTP/WebAuthn, plus an env-only break-glass token. Every use is audited. | M10 |
+| Q-030 | What RBAC model? | Viewer, Operator and Admin built in. Custom roles. IdP group → role mapping. Permissions checked per action. | M11 |
+| Q-031 | How do Terraform, Ansible and CI pipelines authenticate? | Scoped, expiring, hashed API tokens and service accounts. OIDC workload identity (CI JWTs) later. | M10 |
+| Q-032 | Is SCIM provisioning needed? | Not in v1. | M11 |
 
 ### Audit, logging and SIEM
 
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
-| Q-033 | Which SIEMs or log platforms must be supported (Splunk, Elastic, Sentinel, Wazuh, Graylog, Loki, QRadar)? | Sinks: stdout JSON, file, syslog RFC 5424 over TLS, HTTP (HEC-compatible), OTLP logs. | M15 |
-| Q-034 | What wire format? | Native versioned JSON first. OCSF and CEF mappings are ADR candidates. | M15 |
-| Q-035 | What audit coverage, retention and tamper evidence are needed, and what happens when the SIEM is down? | All auth, config, RBAC, token, plan, apply, drift and approval events. Hash-chained. Retention configurable. An outbox buffers events, with an alert on backlog. | M07 |
-| Q-036 | Which compliance frameworks apply (ISO 27001, SOC 2, PCI DSS, Essential Eight/ISM, NIS2)? | Needs an answer. It affects retention, crypto and MFA. | M07 |
-| Q-037 | How far does traceability go? | End to end: carry NetBox's changelog identity (user, `request_id`, ObjectChange ID) through sync → apply → each server → verification, so one trace links the NetBox edit to every PowerDNS write. | M06 |
+| Q-033 | Which SIEMs or log platforms must be supported (Splunk, Elastic, Sentinel, Wazuh, Graylog, Loki, QRadar)? | Sinks: stdout JSON, file, syslog RFC 5424 over TLS, HTTP (HEC-compatible), OTLP logs. | M16 |
+| Q-034 | What wire format? | Native versioned JSON first. OCSF and CEF mappings are ADR candidates. | M16 |
+| Q-035 | What audit coverage, retention and tamper evidence are needed, and what happens when the SIEM is down? | All auth, config, RBAC, token, plan, apply, drift and approval events. Hash-chained. Retention configurable. An outbox buffers events, with an alert on backlog. | M08 |
+| Q-036 | Which compliance frameworks apply (ISO 27001, SOC 2, PCI DSS, Essential Eight/ISM, NIS2)? | Needs an answer. It affects retention, crypto and MFA. | M08 |
+| Q-037 | How far does traceability go? | End to end: carry NetBox's changelog identity (user, `request_id`, ObjectChange ID) through sync → apply → each server → verification, so one trace links the NetBox edit to every PowerDNS write. | M07 |
 
 ### API, metrics and extensibility
 
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
-| Q-038 | Do "clearly defined metrics" cover this app only, or PowerDNS stats too? | App metrics: sync lag, plan size, failures, drift count, per-server serial lag, API RED metrics. PowerDNS stats stay on PowerDNS's own `/metrics`. | M04 |
-| Q-040 | Are rate limits and quotas needed? | Limits per token and per IP. | M09 |
+| Q-040 | Are rate limits and quotas needed? | Limits per token and per IP. | M10 |
 
 ### IaC
 
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
-| Q-041 | What does IaC manage? With NetBox as the source of truth, DNS records go through NetBox's own Terraform provider. | IaC for this app covers **its own config**: server groups, sync policies, sinks, roles, tokens and settings. | M05 |
-| Q-042 | Where do the Terraform/OpenTofu provider and the Ansible collection live, and which registries do they publish to? | Separate repos in later milestones, built with terraform-plugin-framework. The API is designed for them from M1: declarative, idempotent, stable IDs, import support. | M17 |
+| Q-041 | What does IaC manage? With NetBox as the source of truth, DNS records go through NetBox's own Terraform provider. | IaC for this app covers **its own config**: server groups, sync policies, sinks, roles, tokens and settings. | M06 |
+| Q-042 | Where do the Terraform/OpenTofu provider and the Ansible collection live, and which registries do they publish to? | Separate repos in later milestones, built with terraform-plugin-framework. The API is designed for them from M1: declarative, idempotent, stable IDs, import support. | M18 |
 
 ### Documentation
 
@@ -130,8 +130,8 @@ names the milestone that needs the answer, from the milestone list in
 
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
-| Q-050 | Which UI technology? | Server-rendered templ + htmx with vendored assets and no Node build, embedded in the binary. | M11 |
-| Q-051 | What accessibility and localisation level? | WCAG 2.2 AA. English only. | M11 |
+| Q-050 | Which UI technology? | Server-rendered templ + htmx with vendored assets and no Node build, embedded in the binary. | M12 |
+| Q-051 | What accessibility and localisation level? | WCAG 2.2 AA. English only. | M12 |
 
 ## Answered
 
@@ -162,7 +162,8 @@ names the milestone that needs the answer, from the milestone list in
 | Q-021 | How does the app reach PowerDNS: direct push, or agents on the DNS hosts? | Directly, through each primary's API, over HTTPS wherever it's behind TLS. No agents. | 2026-10-06 | REQ-041, [ADR-0024](../docs/adr/0024-read-powerdns-through-its-api-from-server-groups-i.md) |
 | Q-022 | How is the PowerDNS API secured in transit? Its built-in webserver has no native TLS. | `http://` is allowed, with a warning. The reference setup is a TLS reverse proxy on the PowerDNS host, passing all methods, with an optional client certificate (mTLS); the webserver binds to `127.0.0.1` and the key is stored hashed. | 2026-10-06 | [ADR-0024](../docs/adr/0024-read-powerdns-through-its-api-from-server-groups-i.md) |
 | Q-039 | How will the app be extended in future? | No backend interface or plugin runtime yet. The PowerDNS client returns the shared model, and M03, the first code using two sources, defines the interface it needs. A plugin runtime needs its own ADR. | 2026-10-06 | [ADR-0024](../docs/adr/0024-read-powerdns-through-its-api-from-server-groups-i.md) |
-| Q-043 | Is a declarative config file (GitOps) needed? | Server groups are declared in the config file. When M07 stores resources in the database, those from the file become `managed_by=file`. | 2026-10-06 | [ADR-0024](../docs/adr/0024-read-powerdns-through-its-api-from-server-groups-i.md) |
+| Q-043 | Is a declarative config file (GitOps) needed? | Server groups are declared in the config file. When M08 stores resources in the database, those from the file become `managed_by=file`. | 2026-10-06 | [ADR-0024](../docs/adr/0024-read-powerdns-through-its-api-from-server-groups-i.md) |
 | Q-053 | Which PowerDNS Authoritative versions must be supported? | 5.1 and 5.0. 4.9 reached end of life around September 2026. Later the same day, narrowed to 5.1 only, since the CI runners couldn't fit both. | 2026-10-06 | REQ-041, [ADR-0024](../docs/adr/0024-read-powerdns-through-its-api-from-server-groups-i.md), [ADR-0026](../docs/adr/0026-read-powerdns-through-its-api-with-powerdns-5-1-on.md) |
-| Q-017 | What are the scale targets: servers, zones, records, change rate, propagation latency from NetBox to servers? | 1,000 zones and 100,000 records per run for now, tested and measured; raised when a deployment needs more. Propagation latency applies once nbpdns writes (M12). | 2026-10-06 | REQ-043, [ADR-0027](../docs/adr/0027-report-drift-between-netbox-and-each-server-group.md) |
-| Q-027 | What happens when things fail? | For the command line (M03): if NetBox can't be read, the run fails; if a group's primary can't be read, that group is marked failed and the others are still compared, and the run fails as incomplete. Keeping the last-known state and alerting come with the service (M04) and the database (M07). | 2026-10-06 | [ADR-0027](../docs/adr/0027-report-drift-between-netbox-and-each-server-group.md) |
+| Q-017 | What are the scale targets: servers, zones, records, change rate, propagation latency from NetBox to servers? | 1,000 zones and 100,000 records per run for now, tested and measured; raised when a deployment needs more. Propagation latency applies once nbpdns writes (M13). | 2026-10-06 | REQ-043, [ADR-0027](../docs/adr/0027-report-drift-between-netbox-and-each-server-group.md) |
+| Q-027 | What happens when things fail? | For the command line (M03): if NetBox can't be read, the run fails; if a group's primary can't be read, that group is marked failed and the others are still compared, and the run fails as incomplete. Keeping the last-known state and alerting come with the service (M04) and the database (M08). | 2026-10-06 | [ADR-0027](../docs/adr/0027-report-drift-between-netbox-and-each-server-group.md) |
+| Q-038 | Do "clearly defined metrics" cover this app only, or PowerDNS stats too? | This app's only: drift per server group and per drifted zone, refreshes, and requests to NetBox and PowerDNS, through `prometheus/client_golang`. PowerDNS's statistics stay on PowerDNS's own `/metrics`. Sync lag and plan size come with writes (M13), and serial lag on secondaries with M14. | 2026-10-07 | REQ-044, [ADR-0029](../docs/adr/0029-run-nbpdns-as-a-service-with-prometheus-metrics-an.md) |

@@ -1,12 +1,12 @@
 ---
-id: M09
+id: M10
 title: Authentication
 status: planned # planned | in-progress | done
 started:
 closed:
 ---
 
-# M09: Authentication
+# M10: Authentication
 
 ## Goal
 
@@ -23,4 +23,4 @@ Lock down the API before anything can change state from outside.
 ## Design, non-goals and acceptance criteria
 
 To be written in this milestone's plan-mode session, before implementation
-starts. The milestone's branch is `m09-authentication` (ADR-0010).
+starts. The milestone's branch is `m10-authentication` (ADR-0010).

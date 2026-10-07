@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"strings"
 	"testing"
@@ -137,5 +138,82 @@ func TestNewRejectsBadSettings(t *testing.T) {
 	}
 	if _, err := New(&bytes.Buffer{}, "json", "loud"); err == nil {
 		t.Error("level loud accepted")
+	}
+}
+
+func TestNestedGroups(t *testing.T) {
+	ctx, sc := spanContext(t)
+	var buf bytes.Buffer
+	log, err := New(&buf, "json", "debug")
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := log.With("top", 1).WithGroup("a").With("x", 1).WithGroup("b").With("y", 2, "token", config.NewSecret("s3cret"))
+	g.InfoContext(ctx, "deep", "z", 3)
+	// A group that ends up with nothing in it isn't written.
+	log.WithGroup("empty").InfoContext(ctx, "no attrs")
+
+	recs := lines(t, buf.String())
+	if len(recs) != 2 {
+		t.Fatalf("got %d lines:\n%s", len(recs), buf.String())
+	}
+	a, _ := recs[0]["a"].(map[string]any)
+	b, _ := a["b"].(map[string]any)
+	if recs[0]["top"] != 1.0 || a["x"] != 1.0 || b["y"] != 2.0 || b["z"] != 3.0 || b["token"] != "[redacted]" {
+		t.Errorf("nested line: %v", recs[0])
+	}
+	if strings.Contains(buf.String(), "s3cret") {
+		t.Errorf("a secret was logged:\n%s", buf.String())
+	}
+	for _, r := range recs {
+		if r["trace_id"] != sc.TraceID().String() || r["request_id"] != "req-1" {
+			t.Errorf("line %q lacks the IDs: %v", r["msg"], r)
+		}
+	}
+	if _, ok := recs[1]["empty"]; ok {
+		t.Errorf("an empty group was written: %v", recs[1])
+	}
+}
+
+// BenchmarkLog logs through a logger without groups, and through one with a
+// group and bound attributes, whose cost per record shouldn't grow with
+// them (ITEM-0027).
+func BenchmarkLog(b *testing.B) {
+	ctx := WithRequestID(b.Context(), "req-1")
+	ctx, span := tracing.Tracer(tracing.NewProvider("test")).Start(ctx, "command")
+	defer span.End()
+	log, err := New(io.Discard, "json", "info")
+	if err != nil {
+		b.Fatal(err)
+	}
+	attrs := []any{"a", 1, "b", "two", "c", 3.0, "d", true, "e", "five"}
+	for _, bb := range []struct {
+		name string
+		log  *slog.Logger
+	}{
+		{"flat", log.With(attrs...)},
+		{"grouped", log.WithGroup("netbox").With(attrs...)},
+	} {
+		b.Run(bb.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				bb.log.InfoContext(ctx, "http request", "path", "/api/status/", "status", 200)
+			}
+		})
+	}
+}
+
+func TestBound(t *testing.T) {
+	ctx, sc := spanContext(t)
+	var buf bytes.Buffer
+	log, err := New(&buf, "json", "info")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// As an http.Server logs: through a log.Logger, with no context.
+	slog.NewLogLogger(Bound(log.Handler(), ctx), slog.LevelWarn).Print("http: TLS handshake error")
+	recs := lines(t, buf.String())
+	if len(recs) != 1 || recs[0]["trace_id"] != sc.TraceID().String() || recs[0]["request_id"] != "req-1" || recs[0]["level"] != "WARN" {
+		t.Errorf("line: %v", recs)
 	}
 }

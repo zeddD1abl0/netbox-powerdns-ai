@@ -56,11 +56,12 @@ JSON, with exit codes that scripts can act on. Read-only.
   secrets. The review's findings are fixed in ITEM-0048, or deferred in
   ITEM-0049; M03 touches no secrets, so `/security-review` didn't run (see
   below).
-- [ ] The manual verification is recorded. The GitLab and GitHub pipelines
+- [x] The manual verification is recorded. The GitLab and GitHub pipelines
   pass, and the user has merged through an MR with a merge commit. The
   verification is recorded below. On `597ae3a`, the user reported that the
-  pipeline passed, and GitHub Actions run 37479147765 passed every job. The
-  merge is to come.
+  pipeline passed, and GitHub Actions run 37479147765 passed every job.
+  Merged through a GitLab merge request, merge commit `ad24852`, on
+  2026-10-07; GitHub Actions run 37491839318 on it passed.
 
 ## Decided after approval
 
@@ -173,6 +174,11 @@ Append-only and dated. Record what was run and what was seen.
   through a GitLab merge request with a merge commit. After that, M04 (the
   service) is designed in plan mode; ITEM-0049, comparing server groups
   concurrently, is already in it.
+- 2026-10-07: **Merged.** The user merged `m03-drift-report` through a
+  GitLab merge request. `main` is at the merge commit `ad24852`, whose
+  parents are the old `main`, `d96f5ca`, and the branch tip, `391d5c8`, so
+  every per-item commit is kept (ADR-0018). The mirror carried it to
+  GitHub, where Actions run 37491839318 on `ad24852` passed.
 
 ## Approved design
 

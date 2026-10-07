@@ -1,12 +1,12 @@
 ---
-id: M11
+id: M12
 title: Web UI
 status: planned # planned | in-progress | done
 started:
 closed:
 ---
 
-# M11: Web UI
+# M12: Web UI
 
 ## Goal
 
@@ -21,4 +21,4 @@ A web interface for operators.
 ## Design, non-goals and acceptance criteria
 
 To be written in this milestone's plan-mode session, before implementation
-starts. The milestone's branch is `m11-web-ui` (ADR-0010).
+starts. The milestone's branch is `m12-web-ui` (ADR-0010).

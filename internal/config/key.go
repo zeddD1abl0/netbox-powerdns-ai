@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"slices"
 	"strconv"
@@ -125,13 +126,19 @@ func enumKey(dst *string, k Key, allowed ...string) Key {
 }
 
 // secretKey declares a secret string key stored in dst.
-func secretKey(dst *Secret, k Key) Key {
+func secretKey(dst *Secret, k Key, check func(string) error) Key {
 	k.Secret = true
 	k.typ, k.flagType = "string, secret", "string"
 	k.parse = func(raw any) error {
 		s, err := secretString(raw)
 		if err != nil {
 			return err
+		}
+		// A check's error mustn't hold the value.
+		if s != "" && check != nil {
+			if err := check(s); err != nil {
+				return err
+			}
 		}
 		*dst = NewSecret(s)
 		return nil
@@ -140,8 +147,9 @@ func secretKey(dst *Secret, k Key) Key {
 	return k
 }
 
-// intKey declares an integer key stored in dst, from lo to hi inclusive.
-func intKey(dst *int, k Key, lo, hi int) Key {
+// intKey declares an integer key stored in dst, from 1 to hi inclusive.
+func intKey(dst *int, k Key, hi int) Key {
+	const lo = 1
 	k.typ = fmt.Sprintf("integer, %d to %d", lo, hi)
 	k.flagType = "integer"
 	k.parse = func(raw any) error {
@@ -190,22 +198,60 @@ func durationKey(dst *time.Duration, k Key) Key {
 	return k
 }
 
+// durationKeyAtLeast is durationKey, for a duration of at least least.
+func durationKeyAtLeast(dst *time.Duration, k Key, least time.Duration) Key {
+	k = durationKey(dst, k)
+	k.typ = "duration, at least `" + least.String() + "`"
+	parse := k.parse
+	k.parse = func(raw any) error {
+		old := *dst
+		if err := parse(raw); err != nil {
+			return err
+		}
+		if d := *dst; d < least {
+			*dst = old
+			return fmt.Errorf("%s is shorter than %s", d, least)
+		}
+		return nil
+	}
+	return k
+}
+
+// checkListen accepts a TCP address to listen on, such as :8080 or
+// 127.0.0.1:8080.
+func checkListen(s string) error {
+	_, port, err := net.SplitHostPort(s)
+	if err != nil {
+		return fmt.Errorf("%q isn't an address such as :8080 or 127.0.0.1:8080", s)
+	}
+	if n, err := strconv.Atoi(port); err != nil || n < 0 || n > 65535 {
+		return fmt.Errorf("%q has no port number from 0 to 65535", s)
+	}
+	return nil
+}
+
 // checkURL accepts an absolute http or https URL with a host, and no
 // credentials, query or fragment.
 func checkURL(s string) error {
+	// A value that may hold credentials, such as user:token@host, is never
+	// quoted, so that they aren't printed.
+	shown := strconv.Quote(s)
+	if strings.Contains(s, "@") {
+		shown = "the URL"
+	}
 	u, err := url.Parse(s)
 	if err != nil {
-		return fmt.Errorf("%q isn't a URL", s)
+		return fmt.Errorf("%s isn't a URL", shown)
 	}
 	switch {
-	case u.Scheme != "http" && u.Scheme != "https":
-		return fmt.Errorf("%q needs an http:// or https:// scheme", s)
-	case u.Host == "":
-		return fmt.Errorf("%q has no host", s)
 	case u.User != nil:
 		return errors.New("the URL mustn't contain credentials; set the token or API key in its own key")
+	case u.Scheme != "http" && u.Scheme != "https":
+		return fmt.Errorf("%s needs an http:// or https:// scheme", shown)
+	case u.Host == "":
+		return fmt.Errorf("%s has no host", shown)
 	case u.RawQuery != "" || u.Fragment != "":
-		return fmt.Errorf("%q mustn't have a query or fragment", s)
+		return fmt.Errorf("%s mustn't have a query or fragment", shown)
 	}
 	return nil
 }
