@@ -1,5 +1,5 @@
 # CI for nbpdns on GitHub, mirroring .gitlab-ci.yml's stages with `needs`
-# (ADR-0016): lint, then test, then build, then security. Every job only runs
+# (ADR-0032): lint, then test, then build, then security. Every job only runs
 # make targets (ADR-0022). `make project-lint` checks that together the jobs
 # run exactly what `make ci` runs, in the Makefile's CI_IMAGE.
 name: ci
@@ -99,6 +99,27 @@ jobs:
         with:
           persist-credentials: false
       - run: make build
+
+  # The release check builds the release as a snapshot, publishing nothing,
+  # and tests it (ADR-0030), with its image in a Docker-in-Docker service,
+  # reached through LAB_DOCKER_HOST as the integration tests reach theirs.
+  release-check:
+    needs: [unit-test, integration-test]
+    runs-on: ubuntu-latest
+    container: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
+    services:
+      docker:
+        image: docker:29.8.1-dind@sha256:3f3c01aaaebf7cce837356b688b7c059a4749f10bd7660dec7c58fc454a283f0
+        options: --privileged
+        env:
+          DOCKER_TLS_CERTDIR: ""
+    env:
+      LAB_DOCKER_HOST: tcp://docker:2375
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: make release-check
 
   docs-site:
     needs: [unit-test, integration-test]

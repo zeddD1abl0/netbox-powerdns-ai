@@ -47,3 +47,34 @@ checksum:
 
 changelog:
   disable: true
+
+# The image (ADR-0030, ADR-0031): one multi-arch index, built by ko on
+# Debian's distroless static base, pinned by its index's digest, as user
+# 65532, with an SPDX SBOM. In snapshot mode, ko loads it into the Docker
+# daemon at DOCKER_HOST, as goreleaser.ko.local; otherwise it pushes it to
+# RELEASE_IMAGE. The source label is the module's path, not the clone URL,
+# which in CI carries a token.
+kos:
+  - id: nbpdns
+    build: nbpdns
+    base_image: gcr.io/distroless/static-debian13:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3
+    repositories:
+      - '{{ envOrDefault "RELEASE_IMAGE" "nbpdns" }}'
+    platforms: [linux/amd64, linux/arm64]
+    tags:
+      - "{{ .Version }}"
+      - "{{ .Major }}.{{ .Minor }}"
+      - latest
+    bare: true
+    user: "65532:65532"
+    sbom: spdx
+    creation_time: "{{ .CommitTimestamp }}"
+    ko_data_creation_time: "{{ .CommitTimestamp }}"
+    labels:
+      org.opencontainers.image.title: nbpdns
+      org.opencontainers.image.description: Keeps PowerDNS Authoritative in step with NetBox's DNS plugin.
+      org.opencontainers.image.source: https://github.com/zeddD1abl0/netbox-powerdns-ai
+      org.opencontainers.image.licenses: Apache-2.0
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.created: "{{ .CommitDate }}"

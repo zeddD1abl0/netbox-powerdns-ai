@@ -1,4 +1,4 @@
-# CI for nbpdns on GitLab, in stages (ADR-0016). Every job only runs make
+# CI for nbpdns on GitLab, in stages (ADR-0032). Every job only runs make
 # targets (ADR-0022). `make project-lint` checks that together the jobs run
 # exactly what `make ci` runs, in the Makefile's CI_IMAGE. To add a check, add
 # a make target, add it to `ci`, and add a job here and in
@@ -17,7 +17,7 @@ workflow:
       when: never
     - if: $CI_COMMIT_BRANCH
 
-# Every job: the official Go image (Debian, glibc: ADR-0015), pinned by digest.
+# Every job: the official Go image (Debian, glibc: ADR-0031), pinned by digest.
 # It ships Go 1.27.1, go.mod's toolchain, so no other Go is ever downloaded.
 .go:
   image: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
@@ -78,6 +78,22 @@ build:
   stage: build
   script:
     - make build
+
+# The release check builds the release as a snapshot, publishing nothing,
+# and tests it (ADR-0030). Its image goes into a Docker-in-Docker service,
+# without the lab, so it needs a fraction of the integration job's memory.
+release-check:
+  extends: .go
+  stage: build
+  services:
+    - name: docker:29.8.1-dind@sha256:3f3c01aaaebf7cce837356b688b7c059a4749f10bd7660dec7c58fc454a283f0
+      alias: docker
+      variables:
+        DOCKER_TLS_CERTDIR: ""
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+  script:
+    - make release-check
 
 docs-site:
   extends: .go

@@ -1,5 +1,5 @@
 # The single entry point for building, checking and tracking nbpdns.
-# CI jobs run these targets and nothing else (ADR-0016). Run `make` for the list.
+# CI jobs run these targets and nothing else (ADR-0032). Run `make` for the list.
 
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
@@ -11,7 +11,7 @@ ROOT := $(CURDIR)
 comma := ,
 
 # The image CI runs in, pinned by digest. `make project-lint` checks that both
-# forges' CI files use exactly this image (ADR-0016).
+# forges' CI files use exactly this image (ADR-0032).
 CI_IMAGE := golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
 
 ##@ Tools
@@ -72,7 +72,7 @@ shell: ## Open a shell in the CI image with the repository mounted (for macOS, W
 check: vet lint test vuln secrets docs-lint api-lint project-lint generate-check ## Everything CI checks (formatting is checked by lint)
 
 .PHONY: ci
-ci: check build docs-links test-integration ## Every CI job's targets, run locally in one go
+ci: check build docs-links test-integration release-check ## Every CI job's targets, run locally in one go
 
 # Go modules that fmt, vet, lint, test and vuln cover. A module with no
 # packages yet is skipped.
@@ -158,9 +158,9 @@ generate-check: ## Fail if a generated reference page is out of date
 
 ##@ Development lab
 
-# The lab (deploy/dev/compose.yaml, REQ-036) runs on the Docker host that
-# DOCKER_HOST names, or the local one. LAB_DOCKER_HOST, if set, takes its
-# place: a GitHub container job hands its environment to the runner's own
+# The lab (deploy/dev/compose.yaml, REQ-036), and the release check's image,
+# use the Docker host that DOCKER_HOST names, or the local one.
+# LAB_DOCKER_HOST, if set, takes its place: a GitHub container job hands its environment to the runner's own
 # docker commands too, so a DOCKER_HOST there would send them to the job's
 # Docker-in-Docker service, which only the job can reach (ITEM-0041).
 ifdef LAB_DOCKER_HOST
