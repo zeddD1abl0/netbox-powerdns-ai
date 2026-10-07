@@ -1,6 +1,6 @@
 ---
 title: "0015: glibc-based Debian or Ubuntu images for CI and containers"
-status: accepted
+status: superseded by ADR-0031
 date: 2026-09-25
 decision-makers: [jordan]
 requirements: [REQ-003, REQ-038]

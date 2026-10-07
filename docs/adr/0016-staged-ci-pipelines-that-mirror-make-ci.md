@@ -1,6 +1,6 @@
 ---
 title: "0016: Staged CI pipelines that mirror `make ci`"
-status: accepted
+status: superseded by ADR-0032
 date: 2026-09-25
 decision-makers: [jordan]
 requirements: [REQ-026, REQ-039]

@@ -28,8 +28,8 @@ from [`template.md`](template.md).
 | [0012](0012-api-standard.md) | API standard — OpenAPI 3.1 spec-first, Zalando guidelines | accepted |
 | [0013](0013-toolchain-per-tool-modules-and-c-compiler.md) | Self-contained toolchain, revised — per-tool modules and a C compiler | superseded by ADR-0014 |
 | [0014](0014-toolchain-pinned-release-binaries-on-glibc-linux.md) | Toolchain: pinned release binaries on glibc Linux | superseded by ADR-0022 |
-| [0015](0015-glibc-based-debian-or-ubuntu-images-for-ci-and-con.md) | glibc-based Debian or Ubuntu images for CI and containers | accepted |
-| [0016](0016-staged-ci-pipelines-that-mirror-make-ci.md) | Staged CI pipelines that mirror `make ci` | accepted |
+| [0015](0015-glibc-based-debian-or-ubuntu-images-for-ci-and-con.md) | glibc-based Debian or Ubuntu images for CI and containers | superseded by ADR-0031 |
+| [0016](0016-staged-ci-pipelines-that-mirror-make-ci.md) | Staged CI pipelines that mirror `make ci` | superseded by ADR-0032 |
 | [0017](0017-documentation-platform-hugo-restated-for-the-relea.md) | Documentation platform — Hugo, restated for the release-binary toolchain | accepted |
 | [0018](0018-merge-milestones-through-gitlab-merge-requests.md) | Merge milestones through GitLab merge requests | accepted |
 | [0019](0019-re-slice-the-milestones-into-smaller-steps.md) | Re-slice the milestones into smaller steps | accepted |
@@ -43,5 +43,8 @@ from [`template.md`](template.md).
 | [0027](0027-report-drift-between-netbox-and-each-server-group.md) | Report drift between NetBox and each server group's primary | accepted |
 | [0028](0028-split-packaging-into-its-own-milestone.md) | Split packaging into its own milestone | accepted |
 | [0029](0029-run-nbpdns-as-a-service-with-prometheus-metrics-an.md) | Run nbpdns as a service with Prometheus metrics and OTLP traces | accepted |
+| [0030](0030-release-with-goreleaser-and-ko-to-gitlab-on-versio.md) | Release with GoReleaser and ko to GitLab on version tags | accepted |
+| [0031](0031-debian-images-for-ci-with-a-distroless-static-runt.md) | Debian images for CI, with a distroless static runtime image | accepted |
+| [0032](0032-staged-ci-pipelines-with-a-tag-only-release-stage.md) | Staged CI pipelines with a tag-only release stage | accepted |
 
 <!-- projctl:adr-index:end -->
