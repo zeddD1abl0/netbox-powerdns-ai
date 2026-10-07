@@ -9,6 +9,7 @@ stages:
   - test
   - build
   - security
+  - release
 
 workflow:
   rules:
@@ -16,6 +17,8 @@ workflow:
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
       when: never
     - if: $CI_COMMIT_BRANCH
+    # A tag's pipeline runs every check, then, for a version tag, publishes.
+    - if: $CI_COMMIT_TAG
 
 # Every job: the official Go image (Debian, glibc: ADR-0031), pinned by digest.
 # It ships Go 1.27.1, go.mod's toolchain, so no other Go is ever downloaded.
@@ -114,3 +117,24 @@ secrets:
     GIT_DEPTH: "0" # gitleaks scans the whole history
   script:
     - make secrets
+
+# Publishing (ADR-0030), the one tag-only job that `make project-lint` allows
+# (ADR-0032): for a version tag, after every other stage of the tag's
+# pipeline has passed. GitLab's variables are mapped to the names that
+# `make release` takes, so the Makefile names no forge. The job token pushes
+# the image to the project's registry, and makes the release.
+release:
+  extends: .go
+  stage: release
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/'
+  variables:
+    RELEASE_IMAGE: $CI_REGISTRY_IMAGE
+    RELEASE_REGISTRY: $CI_REGISTRY
+    RELEASE_REGISTRY_USER: $CI_REGISTRY_USER
+    RELEASE_REGISTRY_PASSWORD: $CI_REGISTRY_PASSWORD
+    GITLAB_TOKEN: $CI_JOB_TOKEN
+    GITLAB_API_URL: $CI_API_V4_URL
+    GITLAB_URL: $CI_SERVER_URL
+  script:
+    - make release

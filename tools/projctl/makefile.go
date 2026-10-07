@@ -110,7 +110,7 @@ func makeTargets(cmds []string) []string {
 
 // lintCoverage checks that a CI file's jobs, together, run exactly the
 // targets `make ci` runs, and that each job runs in the Makefile's CI_IMAGE
-// (ADR-0016).
+// (ADR-0032).
 func (m *makefile) lintCoverage(rel string, cmds []string, jobs []ciJob) []Problem {
 	var probs []Problem
 	want := m.work([]string{"ci"})

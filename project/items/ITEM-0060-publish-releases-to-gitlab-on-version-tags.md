@@ -2,7 +2,7 @@
 id: ITEM-0060
 title: Publish releases to GitLab on version tags
 type: feature # feature | bug | debt | task
-status: open # open | in-progress | blocked | done | wontfix
+status: in-progress # open | in-progress | blocked | done | wontfix
 milestone: M05
 requirements: [REQ-045]
 depends_on: [ITEM-0059]

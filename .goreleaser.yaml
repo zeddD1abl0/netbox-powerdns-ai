@@ -78,3 +78,16 @@ kos:
       org.opencontainers.image.version: "{{ .Version }}"
       org.opencontainers.image.revision: "{{ .FullCommit }}"
       org.opencontainers.image.created: "{{ .CommitDate }}"
+
+# The GitLab release, made only when GITLAB_TOKEN is set (ADR-0030): with
+# the CI job token, the archives and checksums go to the project's generic
+# package registry, and the release links to them. The release notes are the
+# CHANGELOG's section, which `make release` passes in.
+release:
+  disable: '{{ not (isEnvSet "GITLAB_TOKEN") }}'
+
+gitlab_urls:
+  api: '{{ envOrDefault "GITLAB_API_URL" "" }}'
+  download: '{{ envOrDefault "GITLAB_URL" "" }}'
+  use_job_token: true
+  use_package_registry: true

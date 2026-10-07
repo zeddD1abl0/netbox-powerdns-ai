@@ -139,6 +139,28 @@ release-check: $(GORELEASER) ## Build the release as a snapshot, into dist/, pub
 	$(GORELEASER) release --snapshot --clean
 	go test -race -count=1 -tags release ./internal/release/
 
+# make release publishes the release of the version tag at HEAD (ADR-0030):
+# the image to RELEASE_IMAGE, logging in to RELEASE_REGISTRY as
+# RELEASE_REGISTRY_USER with RELEASE_REGISTRY_PASSWORD, and, if GITLAB_TOKEN
+# is set, the archives to a GitLab release at GITLAB_URL (API GITLAB_API_URL),
+# with the CHANGELOG's section as its notes. GitLab's tag-only release job
+# runs it (ADR-0032). The credentials stay in shell variables, never make's,
+# so no recipe line can print them.
+.PHONY: release
+release: $(GORELEASER) ## Publish the version tag at HEAD: the image, and the GitLab release (CI runs it for tags)
+	@tag=$$(git describe --exact-match --tags HEAD 2>/dev/null) || { echo "release: HEAD isn't at a tag" >&2; exit 1; }; \
+	: "$${RELEASE_IMAGE:?release: set RELEASE_IMAGE, such as registry.example.com/group/nbpdns}"; \
+	: "$${RELEASE_REGISTRY:?release: set RELEASE_REGISTRY, such as registry.example.com}"; \
+	: "$${RELEASE_REGISTRY_USER:?release: set RELEASE_REGISTRY_USER}"; \
+	: "$${RELEASE_REGISTRY_PASSWORD:?release: set RELEASE_REGISTRY_PASSWORD}"; \
+	tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' EXIT; \
+	go run ./internal/cmd/releasenotes -tag "$$tag" CHANGELOG.md > "$$tmp/notes.md"; \
+	mkdir -m 700 "$$tmp/docker"; \
+	auth=$$(printf '%s:%s' "$$RELEASE_REGISTRY_USER" "$$RELEASE_REGISTRY_PASSWORD" | base64 -w0); \
+	printf '{"auths":{"%s":{"auth":"%s"}}}\n' "$$RELEASE_REGISTRY" "$$auth" > "$$tmp/docker/config.json"; \
+	echo "release: publishing $$tag to $$RELEASE_IMAGE"; \
+	DOCKER_CONFIG="$$tmp/docker" $(GORELEASER) release --clean --release-notes "$$tmp/notes.md"
+
 # The reference pages generated from the code (internal/cmd/gendocs). Never
 # edit them by hand.
 .PHONY: generate

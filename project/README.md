@@ -34,7 +34,7 @@
 
 | Item | Title | Type | Status | Waiting on |
 |---|---|---|---|---|
-| [ITEM-0060](items/ITEM-0060-publish-releases-to-gitlab-on-version-tags.md) | Publish releases to GitLab on version tags | feature | open | — |
+| [ITEM-0060](items/ITEM-0060-publish-releases-to-gitlab-on-version-tags.md) | Publish releases to GitLab on version tags | feature | in-progress | — |
 | [ITEM-0061](items/ITEM-0061-release-docs-and-the-changelog-as-0-1-0.md) | Release docs and the CHANGELOG as 0.1.0 | task | open | ITEM-0060 |
 | [ITEM-0058](items/ITEM-0058-pin-goreleaser-and-build-the-archives-and-checksum.md) | Pin GoReleaser and build the archives and checksums | feature | done 2026-10-07 | — |
 | [ITEM-0059](items/ITEM-0059-the-container-image-with-ko-and-the-release-tests.md) | The container image with ko and the release tests | feature | done 2026-10-07 | — |

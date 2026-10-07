@@ -321,10 +321,15 @@ func lintLinks(root string) ([]Problem, error) {
 	return probs, err
 }
 
+// releaseRule is the one rule GitLab's release job may have: run for a
+// version tag (ADR-0032).
+const releaseRule = `$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/`
+
 // lintCI checks that forge CI files only run make targets, don't pull CI
 // logic in any other way (ADR-0022), and together run exactly what `make ci`
 // runs, with every job in the Makefile's CI_IMAGE and none able to pass or be
-// skipped while its target fails (ADR-0016).
+// skipped while its target fails (ADR-0032). The one exception is GitLab's
+// release job, which gitlabRelease checks.
 func lintCI(root string) ([]Problem, error) {
 	var probs []Problem
 	mk, err := loadMakefile(root)
@@ -336,6 +341,8 @@ func lintCI(root string) ([]Problem, error) {
 		env     string                   // the key that sets environment variables
 		jobs    func(*yaml.Node) []ciJob // the file's jobs
 		extra   func(rel string, doc *yaml.Node)
+		// release allows the release job, on GitLab only.
+		release bool
 	}
 	check := func(rel string, f forge) error {
 		src, err := os.ReadFile(filepath.Join(root, rel))
@@ -351,6 +358,22 @@ func lintCI(root string) ([]Problem, error) {
 			return nil
 		}
 		cmds := scriptLines(&doc, f.scripts)
+		jobs := f.jobs(&doc)
+		if f.release {
+			relProbs, ok := gitlabRelease(rel, &doc, f.scripts)
+			probs = append(probs, relProbs...)
+			if ok {
+				// The release job's command and its rule are the exception.
+				if i := slices.Index(cmds, "make release"); i >= 0 {
+					cmds = slices.Delete(cmds, i, i+1)
+				}
+				for i := range jobs {
+					if jobs[i].name == "release" {
+						jobs[i].skips = slices.DeleteFunc(jobs[i].skips, func(k string) bool { return k == "rules" })
+					}
+				}
+			}
+		}
 		for _, cmd := range cmds {
 			if !makeOnlyRE.MatchString(cmd) {
 				probs = append(probs, Problem{rel, fmt.Sprintf("runs %q; CI files may only run `make <target>…`", cmd)})
@@ -361,7 +384,6 @@ func lintCI(root string) ([]Problem, error) {
 				probs = append(probs, Problem{rel, "sets " + v + ", which changes what make runs"})
 			}
 		}
-		jobs := f.jobs(&doc)
 		for _, j := range jobs {
 			for _, k := range j.skips {
 				probs = append(probs, Problem{rel, "job " + j.name + " uses " + k + ":, which can let it pass or skip while its make target fails"})
@@ -377,6 +399,7 @@ func lintCI(root string) ([]Problem, error) {
 		scripts: []string{"script", "before_script", "after_script", "pre_get_sources_script"},
 		env:     "variables",
 		jobs:    gitlabJobs,
+		release: true,
 		extra: func(rel string, doc *yaml.Node) {
 			if hasKey(doc, "include") {
 				probs = append(probs, Problem{rel, "uses include:; all CI logic must live in the Makefile"})
@@ -476,4 +499,28 @@ func scriptLines(n *yaml.Node, keys []string) []string {
 	}
 	walk(n)
 	return out
+}
+
+// gitlabRelease checks GitLab's job named release, the one job that may
+// publish (ADR-0032): it may run only `make release`, and must have exactly
+// one rule, releaseRule, so that it runs for version tags alone. It returns
+// the problems, and whether the job is there and is that exception.
+func gitlabRelease(rel string, doc *yaml.Node, scripts []string) ([]Problem, bool) {
+	job := mapGet(root(doc), "release")
+	if job == nil {
+		return nil, false
+	}
+	var probs []Problem
+	if cmds := scriptLines(job, scripts); !slices.Equal(cmds, []string{"make release"}) {
+		probs = append(probs, Problem{rel, fmt.Sprintf("job release runs %q; it may only run `make release`", cmds)})
+	}
+	rules := mapGet(job, "rules")
+	var only *yaml.Node
+	if rules != nil && rules.Kind == yaml.SequenceNode && len(rules.Content) == 1 {
+		only = deref(rules.Content[0])
+	}
+	if only == nil || !slices.Equal(mapKeys(only), []string{"if"}) || mapGet(only, "if").Value != releaseRule {
+		probs = append(probs, Problem{rel, "job release must have exactly one rule, if: " + releaseRule})
+	}
+	return probs, len(probs) == 0
 }
