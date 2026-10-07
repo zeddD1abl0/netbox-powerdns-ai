@@ -36,6 +36,12 @@ in the [configuration reference](configuration.md).
 | `--netbox-token` | `string` | none | The NetBox API token that nbpdns reads with. |
 | `--netbox-token-file` | `path` | none | Read `netbox.token` from this file. |
 | `--netbox-url` | `url` | none | NetBox's base URL, such as `https://netbox.example.com`. |
+| `--otlp-ca-file` | `path` | none | A PEM file of CA certificates to trust for the collector, as well as the system's. |
+| `--otlp-endpoint` | `url` | none | The URL of the OpenTelemetry collector that nbpdns exports its spans to, over OTLP. |
+| `--otlp-headers` | `string` | none | Headers to send with every export, such as the collector's token, as `name=value,name=value`. |
+| `--otlp-headers-file` | `path` | none | Read `otlp.headers` from this file. |
+| `--otlp-protocol` | `string` | `http/protobuf` | The OTLP protocol to export spans with. |
+| `--otlp-timeout` | `duration` | `10s` | How long one export may take, and how long a command waits to send its last spans as it ends. |
 | `--powerdns-concurrency` | `integer` | `4` | How many requests to each PowerDNS API may be in flight at once. |
 | `--powerdns-timeout` | `duration` | `30s` | How long one request to a PowerDNS API may take. |
 

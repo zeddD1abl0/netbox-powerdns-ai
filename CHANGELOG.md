@@ -8,6 +8,12 @@ All notable changes to this project are recorded here. The format follows
 
 ### Added
 
+- Spans are exported to an OpenTelemetry collector over OTLP, by
+  HTTP/protobuf or gRPC (`otlp.protocol`), from every command, when
+  `otlp.endpoint` is set. Headers, such as the collector's token, are a
+  secret (`otlp.headers`, with `_FILE`), and a CA file and a timeout are
+  supported. A command sends its last spans as it ends. An `http://`
+  endpoint works, with a warning.
 - `nbpdns drift`: compare the zones NetBox assigns to each PowerDNS server
   group, through its views, with what the group's primary serves, and report
   every difference as a table or JSON, for every group or one (`--group`),

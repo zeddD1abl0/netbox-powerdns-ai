@@ -1,9 +1,9 @@
 // Package tracing gives each run of nbpdns OpenTelemetry trace context.
 // Spans get real trace and span IDs, for the logs and for the W3C
-// traceparent header on outgoing requests. Nothing is exported until M04
-// adds an exporter, configured by nbpdns's own keys. The standard OTEL_
-// environment variables aren't a supported interface, so the provider sets
-// its sampler and resource itself.
+// traceparent header on outgoing requests. internal/otlp exports them, when
+// nbpdns's own otlp keys say where. The standard OTEL_ environment
+// variables aren't a supported interface, so the provider sets its sampler
+// and resource itself.
 package tracing
 
 import (

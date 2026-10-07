@@ -13,7 +13,7 @@
 | [M01](milestones/M01-netbox-read-path.md) | NetBox read path | done | 12 of 12 |
 | [M02](milestones/M02-powerdns-read-path.md) | PowerDNS read path | done | 11 of 11 |
 | [M03](milestones/M03-drift-report.md) | Drift report | done | 7 of 7 |
-| [M04](milestones/M04-service.md) | Service | in-progress | 2 of 8 |
+| [M04](milestones/M04-service.md) | Service | in-progress | 3 of 8 |
 | [M05](milestones/M05-packaging.md) | Packaging | planned | — |
 | [M06](milestones/M06-rest-api.md) | REST API | planned | — |
 | [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | planned | — |
@@ -36,12 +36,12 @@
 |---|---|---|---|---|
 | [ITEM-0027](items/ITEM-0027-avoid-rebuilding-the-log-handler-chain-per-record.md) | Avoid rebuilding the log handler chain per record for grouped loggers | debt | open | — |
 | [ITEM-0049](items/ITEM-0049-compare-server-groups-concurrently.md) | Compare server groups concurrently | feature | open | — |
-| [ITEM-0052](items/ITEM-0052-otlp-trace-export-over-http-and-grpc.md) | OTLP trace export over HTTP and gRPC | feature | open | — |
-| [ITEM-0053](items/ITEM-0053-nbpdns-serve.md) | nbpdns serve | feature | open | ITEM-0052 |
+| [ITEM-0053](items/ITEM-0053-nbpdns-serve.md) | nbpdns serve | feature | open | — |
 | [ITEM-0054](items/ITEM-0054-service-docs-and-changelog.md) | Service docs and CHANGELOG | task | open | ITEM-0053, ITEM-0055 |
 | [ITEM-0055](items/ITEM-0055-the-status-page.md) | The status page | feature | open | ITEM-0053 |
 | [ITEM-0050](items/ITEM-0050-split-packaging-into-its-own-milestone.md) | Split packaging into its own milestone | task | done 2026-10-07 | — |
 | [ITEM-0051](items/ITEM-0051-metrics-registry-request-metrics-and-the-generated.md) | Metrics registry, request metrics and the generated reference | feature | done 2026-10-07 | — |
+| [ITEM-0052](items/ITEM-0052-otlp-trace-export-over-http-and-grpc.md) | OTLP trace export over HTTP and gRPC | feature | done 2026-10-07 | — |
 
 ## Open items in other milestones
 

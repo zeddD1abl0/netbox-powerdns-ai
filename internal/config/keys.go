@@ -12,6 +12,7 @@ type Config struct {
 	Log      LogConfig
 	NetBox   NetBoxConfig
 	PowerDNS PowerDNSConfig
+	OTLP     OTLPConfig
 }
 
 // LogConfig configures the operational log, written to standard error.
@@ -36,6 +37,25 @@ type PowerDNSConfig struct {
 	Concurrency int
 	// Groups come from the config file's powerdns.groups (ADR-0026).
 	Groups []Group
+}
+
+// The OTLP protocols.
+const (
+	OTLPHTTP = "http/protobuf"
+	OTLPGRPC = "grpc"
+)
+
+// OTLPConfig configures the export of spans to an OpenTelemetry collector,
+// over OTLP (ADR-0029).
+type OTLPConfig struct {
+	// Endpoint is the collector's URL. If it's empty, nothing is exported.
+	Endpoint string
+	// Protocol is OTLPHTTP or OTLPGRPC.
+	Protocol string
+	// Headers are sent with every export, as name=value,name=value.
+	Headers Secret
+	CAFile  string
+	Timeout time.Duration
 }
 
 // Group returns the group named name.
@@ -114,6 +134,35 @@ func keys(c *Config) []Key {
 			Summary: "How many requests to each PowerDNS API may be in flight at once.",
 			Default: "4",
 		}, 1, 32),
+		stringKey(&c.OTLP.Endpoint, "an `http` or `https` URL", "url", Key{
+			Name:    "otlp.endpoint",
+			Summary: "The URL of the OpenTelemetry collector that nbpdns exports its spans to, over OTLP.",
+			Details: "Such as `https://otel.example.com:4318`, or port 4317 for `grpc`. " +
+				"For `http/protobuf`, nbpdns adds `/v1/traces` to the path of the URL, as the OTLP specification says. " +
+				"If it's unset, nothing is exported. Every command exports its spans, and sends the last of them as it ends.",
+			Warning: "With an `http://` URL, the spans, and any `otlp.headers`, such as a token, " +
+				"cross the network unencrypted. nbpdns logs a warning each time it exports that way.",
+		}, checkURL),
+		enumKey(&c.OTLP.Protocol, Key{
+			Name:    "otlp.protocol",
+			Summary: "The OTLP protocol to export spans with.",
+			Default: OTLPHTTP,
+		}, OTLPHTTP, OTLPGRPC),
+		secretKey(&c.OTLP.Headers, Key{
+			Name:    "otlp.headers",
+			Summary: "Headers to send with every export, such as the collector's token, as `name=value,name=value`.",
+			Details: "Over `grpc`, they're sent as metadata. Percent-encode a comma or `=` in a value, such as `%2C`.",
+		}),
+		stringKey(&c.OTLP.CAFile, "path", "path", Key{
+			Name:    "otlp.ca_file",
+			Summary: "A PEM file of CA certificates to trust for the collector, as well as the system's.",
+		}, nil),
+		durationKey(&c.OTLP.Timeout, Key{
+			Name:    "otlp.timeout",
+			Summary: "How long one export may take, and how long a command waits to send its last spans as it ends.",
+			Details: "Write it with a unit, such as `10s`.",
+			Default: "10s",
+		}),
 	}
 	slices.SortFunc(ks, func(a, b Key) int { return cmp.Compare(a.Name, b.Name) })
 	return ks

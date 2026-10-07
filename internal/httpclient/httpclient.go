@@ -97,7 +97,7 @@ type Client struct {
 
 // New returns a Client.
 func New(o Options) (*Client, error) {
-	tlsConf, err := tlsConfig(o)
+	tlsConf, err := TLSConfig(o)
 	if err != nil {
 		return nil, err
 	}
@@ -140,9 +140,10 @@ func New(o Options) (*Client, error) {
 // client.
 func (c *Client) Close() { c.http.CloseIdleConnections() }
 
-// tlsConfig trusts the system's roots, plus the certificates in o.CAFile,
-// and presents o's client certificate, if it has one.
-func tlsConfig(o Options) (*tls.Config, error) {
+// TLSConfig returns the TLS configuration of a client with o's files: TLS 1.2
+// or later, trusting the system's roots, plus the certificates in o.CAFile,
+// and presenting o's client certificate, if it has one.
+func TLSConfig(o Options) (*tls.Config, error) {
 	pool, err := x509.SystemCertPool()
 	if err != nil {
 		pool = x509.NewCertPool()

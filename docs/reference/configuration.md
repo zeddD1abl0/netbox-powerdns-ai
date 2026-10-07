@@ -37,6 +37,11 @@ a secret's value.
 | [`netbox.timeout`](#netboxtimeout) | duration | `30s` |
 | [`netbox.token`](#netboxtoken) | string, secret | none |
 | [`netbox.url`](#netboxurl) | an `http` or `https` URL | none |
+| [`otlp.ca_file`](#otlpca_file) | path | none |
+| [`otlp.endpoint`](#otlpendpoint) | an `http` or `https` URL | none |
+| [`otlp.headers`](#otlpheaders) | string, secret | none |
+| [`otlp.protocol`](#otlpprotocol) | `http/protobuf` or `grpc` | `http/protobuf` |
+| [`otlp.timeout`](#otlptimeout) | duration | `10s` |
 | [`powerdns.concurrency`](#powerdnsconcurrency) | integer, 1 to 32 | `4` |
 | [`powerdns.timeout`](#powerdnstimeout) | duration | `30s` |
 | [`powerdns.groups`](#powerdnsgroups) | list of server groups, config file only | none |
@@ -129,6 +134,65 @@ reads from NetBox needs it.
 > anyone on the path can read it. Use `https://` wherever NetBox offers it.
 > nbpdns logs a warning each time it connects to NetBox over `http://`.
 
+## `otlp.ca_file`
+
+A PEM file of CA certificates to trust for the collector, as well as the
+system's.
+
+- **Type:** path
+- **Default:** none
+- **Environment variable:** `NBPDNS_OTLP_CA_FILE`
+- **Flag:** `--otlp-ca-file`
+
+## `otlp.endpoint`
+
+The URL of the OpenTelemetry collector that nbpdns exports its spans to, over
+OTLP. Such as `https://otel.example.com:4318`, or port 4317 for `grpc`. For
+`http/protobuf`, nbpdns adds `/v1/traces` to the path of the URL, as the OTLP
+specification says. If it's unset, nothing is exported. Every command exports
+its spans, and sends the last of them as it ends.
+
+- **Type:** an `http` or `https` URL
+- **Default:** none
+- **Environment variable:** `NBPDNS_OTLP_ENDPOINT`
+- **Flag:** `--otlp-endpoint`
+
+> [!WARNING]
+> With an `http://` URL, the spans, and any `otlp.headers`, such as a token,
+> cross the network unencrypted. nbpdns logs a warning each time it exports
+> that way.
+
+## `otlp.headers`
+
+Headers to send with every export, such as the collector's token, as
+`name=value,name=value`. Over `grpc`, they're sent as metadata. Percent-encode
+a comma or `=` in a value, such as `%2C`.
+
+- **Type:** string, secret
+- **Default:** none
+- **Environment variable:** `NBPDNS_OTLP_HEADERS`
+- **Flag:** `--otlp-headers`
+- **From a file:** `NBPDNS_OTLP_HEADERS_FILE`, `--otlp-headers-file`, or `otlp.headers_file` in the config file
+
+## `otlp.protocol`
+
+The OTLP protocol to export spans with.
+
+- **Type:** `http/protobuf` or `grpc`
+- **Default:** `http/protobuf`
+- **Environment variable:** `NBPDNS_OTLP_PROTOCOL`
+- **Flag:** `--otlp-protocol`
+
+## `otlp.timeout`
+
+How long one export may take, and how long a command waits to send its last
+spans as it ends. Write it with a unit, such as `10s`.
+
+- **Type:** duration
+- **Default:** `10s`
+- **Environment variable:** `NBPDNS_OTLP_TIMEOUT`
+- **Flag:** `--otlp-timeout`
+
 ## `powerdns.concurrency`
 
 How many requests to each PowerDNS API may be in flight at once.
@@ -216,6 +280,11 @@ netbox:
   page_size: 500
   timeout: 30s
   url: ""
+otlp:
+  ca_file: ""
+  endpoint: ""
+  protocol: http/protobuf
+  timeout: 10s
 powerdns:
   concurrency: 4
   timeout: 30s

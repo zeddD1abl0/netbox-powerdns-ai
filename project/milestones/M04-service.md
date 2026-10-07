@@ -71,6 +71,17 @@ OTLP/gRPC when configured. It's read-only, as before.
 - [ ] The manual verification is recorded. The GitLab and GitHub pipelines
   pass, and the user has merged through an MR with a merge commit.
 
+## Decided after approval
+
+> [!IMPORTANT]
+> Changed during implementation, with the reasons recorded in the items
+> named. These override the approved design below.
+>
+> - **The OTLP keys are `otlp.endpoint`, `otlp.protocol`, `otlp.headers`,
+>   `otlp.ca_file` and `otlp.timeout`**, not `tracing.otlp.*`. Every key
+>   has two levels, which the registry checks, and the reference's example
+>   config file relies on (ITEM-0052).
+
 ## Verification log
 
 Append-only and dated. Record what was run and what was seen.
