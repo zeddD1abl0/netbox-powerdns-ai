@@ -105,3 +105,14 @@ promlint
 Prometheus
 Grafana
 Alertmanager
+ko
+buildx
+Dockerfiles?
+[Kk]eyless
+libc
+passwd
+Rekor
+Sigstore
+cosign
+distroless
+GoReleaser

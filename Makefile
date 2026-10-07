@@ -1,5 +1,5 @@
 # The single entry point for building, checking and tracking nbpdns.
-# CI jobs run these targets and nothing else (ADR-0016). Run `make` for the list.
+# CI jobs run these targets and nothing else (ADR-0032). Run `make` for the list.
 
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
@@ -7,9 +7,11 @@ SHELL := /bin/bash
 MAKEFLAGS += --no-print-directory
 
 ROOT := $(CURDIR)
+# A comma, which $(call …) would otherwise take as an argument separator.
+comma := ,
 
 # The image CI runs in, pinned by digest. `make project-lint` checks that both
-# forges' CI files use exactly this image (ADR-0016).
+# forges' CI files use exactly this image (ADR-0032).
 CI_IMAGE := golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
 
 ##@ Tools
@@ -70,7 +72,7 @@ shell: ## Open a shell in the CI image with the repository mounted (for macOS, W
 check: vet lint test vuln secrets docs-lint api-lint project-lint generate-check ## Everything CI checks (formatting is checked by lint)
 
 .PHONY: ci
-ci: check build docs-links test-integration ## Every CI job's targets, run locally in one go
+ci: check build docs-links test-integration release-check ## Every CI job's targets, run locally in one go
 
 # Go modules that fmt, vet, lint, test and vuln cover. A module with no
 # packages yet is skipped.
@@ -96,7 +98,7 @@ fmt: $(GOLANGCI_LINT) ## Format Go code with the configured formatters (gofmt, g
 # too; otherwise they'd skip those files.
 .PHONY: vet
 vet: ## Run go vet
-	$(call each_module,go vet -tags integration ./...)
+	$(call each_module,go vet -tags integration$(comma)release ./...)
 
 # The hook tests in tools/hooktest run the pinned jq and golangci-lint.
 TEST_TOOLS := $(JQ) $(GOLANGCI_LINT)
@@ -127,6 +129,42 @@ test-integration: lab-up $(TEST_TOOLS) ## Start the lab, then run the integratio
 build: ## Build nbpdns as a static binary, bin/nbpdns
 	CGO_ENABLED=0 go build -trimpath -o bin/nbpdns ./cmd/nbpdns
 
+##@ Release
+
+# GoReleaser builds the release from .goreleaser.yaml (ADR-0030): archives
+# for linux/amd64 and linux/arm64, and checksums.txt, in dist/.
+.PHONY: release-check
+release-check: $(GORELEASER) ## Build the release as a snapshot, into dist/, publishing nothing, and test it
+	$(need_cgo)
+	$(GORELEASER) release --snapshot --clean
+	go test -race -count=1 -tags release ./internal/release/
+
+# make release publishes the release of the version tag at HEAD (ADR-0030):
+# the image to RELEASE_IMAGE, logging in to RELEASE_REGISTRY as
+# RELEASE_REGISTRY_USER with RELEASE_REGISTRY_PASSWORD, and, if GITLAB_TOKEN
+# is set, the archives to a GitLab release at GITLAB_URL (API GITLAB_API_URL),
+# with the CHANGELOG's section as its notes. GitLab's tag-only release job
+# runs it (ADR-0032). HEAD must have exactly one v tag, vMAJOR.MINOR.PATCH,
+# so that Go, which stamps the version, the notes, and GoReleaser, which
+# names the release, all use it. The credentials stay in shell variables,
+# never make's, so no recipe line can print them.
+.PHONY: release
+release: $(GORELEASER) ## Publish the version tag at HEAD: the image, and the GitLab release (CI runs it for tags)
+	@tag=$$(git tag --points-at HEAD --list 'v*'); \
+	[[ $$tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+$$ ]] || { echo "release: HEAD needs exactly one v tag, of the form vMAJOR.MINOR.PATCH; it has: $$(echo $${tag:-none})" >&2; exit 1; }; \
+	: "$${RELEASE_IMAGE:?release: set RELEASE_IMAGE, such as registry.example.com/group/nbpdns}"; \
+	: "$${RELEASE_REGISTRY:?release: set RELEASE_REGISTRY, such as registry.example.com}"; \
+	: "$${RELEASE_REGISTRY_USER:?release: set RELEASE_REGISTRY_USER}"; \
+	: "$${RELEASE_REGISTRY_PASSWORD:?release: set RELEASE_REGISTRY_PASSWORD}"; \
+	[[ $$RELEASE_REGISTRY =~ ^[A-Za-z0-9.-]+(:[0-9]+)?$$ ]] || { echo "release: RELEASE_REGISTRY must be a host, or host:port, such as registry.example.com" >&2; exit 1; }; \
+	tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' EXIT; \
+	go run ./internal/cmd/releasenotes -tag "$$tag" CHANGELOG.md > "$$tmp/notes.md"; \
+	mkdir -m 700 "$$tmp/docker"; \
+	auth=$$(printf '%s:%s' "$$RELEASE_REGISTRY_USER" "$$RELEASE_REGISTRY_PASSWORD" | base64 -w0); \
+	printf '{"auths":{"%s":{"auth":"%s"}}}\n' "$$RELEASE_REGISTRY" "$$auth" > "$$tmp/docker/config.json"; \
+	echo "release: publishing $$tag to $$RELEASE_IMAGE"; \
+	DOCKER_CONFIG="$$tmp/docker" GORELEASER_CURRENT_TAG="$$tag" $(GORELEASER) release --clean --release-notes "$$tmp/notes.md"
+
 # The reference pages generated from the code (internal/cmd/gendocs). Never
 # edit them by hand.
 .PHONY: generate
@@ -146,9 +184,9 @@ generate-check: ## Fail if a generated reference page is out of date
 
 ##@ Development lab
 
-# The lab (deploy/dev/compose.yaml, REQ-036) runs on the Docker host that
-# DOCKER_HOST names, or the local one. LAB_DOCKER_HOST, if set, takes its
-# place: a GitHub container job hands its environment to the runner's own
+# The lab (deploy/dev/compose.yaml, REQ-036), and the release check's image,
+# use the Docker host that DOCKER_HOST names, or the local one.
+# LAB_DOCKER_HOST, if set, takes its place: a GitHub container job hands its environment to the runner's own
 # docker commands too, so a DOCKER_HOST there would send them to the job's
 # Docker-in-Docker service, which only the job can reach (ITEM-0041).
 ifdef LAB_DOCKER_HOST

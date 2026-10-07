@@ -70,6 +70,15 @@ DOCKER_COMPOSE_ASSET_linux-amd64    = docker-compose-linux-x86_64
 DOCKER_COMPOSE_SHA256_linux-amd64   := db1889184726840f75c4f9c001048430d4f25b3be3cb084d3ddd762bc0aed576
 DOCKER_COMPOSE_MEMBER_linux-amd64   = -
 
+# GoReleaser builds the releases: archives, checksums and the image
+# (ADR-0030).
+GORELEASER_REPO                     := goreleaser/goreleaser
+GORELEASER_VERSION                  := 2.18.2
+GORELEASER_CHECKSUMS                = checksums.txt
+GORELEASER_ASSET_linux-amd64        = goreleaser_Linux_x86_64.tar.gz
+GORELEASER_SHA256_linux-amd64       := 0a96edc9d9bc594e4a41cc4d59467c182062910ab24d9d1f6dd7b667d32606d3
+GORELEASER_MEMBER_linux-amd64       = goreleaser
+
 # Tools pinned as release binaries, as <VARIABLE PREFIX>:<binary name>.
 BINARY_TOOLS := GOLANGCI_LINT:golangci-lint HUGO:hugo VALE:vale VACUUM:vacuum GITLEAKS:gitleaks HTMLTEST:htmltest JQ:jq \
-	DOCKER_COMPOSE:docker-compose
+	DOCKER_COMPOSE:docker-compose GORELEASER:goreleaser

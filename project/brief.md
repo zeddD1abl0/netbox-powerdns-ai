@@ -281,3 +281,19 @@ Reviewing the plan, the user then asked for two changes:
 
 The user approved the plan with both. The decisions are recorded in
 ADR-0028 and ADR-0029, and as REQ-044.
+
+## Answers, 2026-10-07 (M05 design)
+
+These were given in the M05 design session. Each was chosen from proposed
+options; the label of the chosen option is quoted.
+
+| Question | Answer |
+|---|---|
+| Where should releases be published? | "GitLab, on version tags": the image to GitLab's container registry, the archives and checksums to a GitLab release. |
+| Which runtime base image should the container use? | "distroless static". |
+| Should releases be signed, and carry SBOMs, in M05? | "Image SBOM now, signing in M17". |
+| Should M05 end with a first release? | "Yes: you tag v0.1.0 after merging". |
+
+The user then approved M05's plan. The decisions are recorded in ADR-0030,
+ADR-0031 (superseding ADR-0015) and ADR-0032 (superseding ADR-0016), and as
+REQ-045, answering Q-025 for the binaries and the image.

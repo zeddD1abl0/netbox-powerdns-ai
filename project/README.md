@@ -13,7 +13,7 @@
 | [M02](milestones/M02-powerdns-read-path.md) | PowerDNS read path | done | 11 of 11 |
 | [M03](milestones/M03-drift-report.md) | Drift report | done | 7 of 7 |
 | [M04](milestones/M04-service.md) | Service | done | 10 of 10 |
-| [M05](milestones/M05-packaging.md) | Packaging | planned | — |
+| [M05](milestones/M05-packaging.md) | Packaging | done | 5 of 5 |
 | [M06](milestones/M06-rest-api.md) | REST API | planned | — |
 | [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | planned | — |
 | [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | planned | — |
@@ -25,7 +25,7 @@
 | [M14](milestones/M14-change-safety.md) | Change safety | planned | — |
 | [M15](milestones/M15-brownfield-import.md) | Brownfield import | planned | — |
 | [M16](milestones/M16-siem-export.md) | SIEM export | planned | — |
-| [M17](milestones/M17-production-hardening.md) | Production hardening | planned | — |
+| [M17](milestones/M17-production-hardening.md) | Production hardening | planned | 0 of 1 |
 | [M18](milestones/M18-terraform-provider.md) | Terraform/OpenTofu provider | planned | — |
 | [M19](milestones/M19-ansible-collection-v1.md) | Ansible collection and v1.0 | planned | — |
 
@@ -34,14 +34,14 @@
 | Item | Title | Type | Status | Waiting on |
 |---|---|---|---|---|
 | [ITEM-0040](items/ITEM-0040-write-record-values-to-powerdns-in-its-own-text-fo.md) | Write record values to PowerDNS in its own text form | task | open | — |
+| [ITEM-0062](items/ITEM-0062-keep-the-image-s-latest-tag-on-the-newest-release.md) | Keep the image's latest tag on the newest release | debt | open | — |
 
 ## Open questions
 
-26 open (0 blocking), 30 answered. The questions and their proposed defaults are in [requirements.md](requirements.md#open-questions).
+25 open (0 blocking), 31 answered. The questions and their proposed defaults are in [requirements.md](requirements.md#open-questions).
 
 | Needed by | Open questions |
 |---|---|
-| M05 (binary, image), M17 (rest) | Q-025 |
 | M06 | Q-041 |
 | M07 | Q-037 |
 | M07 (triggers), M15 (import) | Q-054 |
@@ -57,8 +57,8 @@
 
 ## Requirements
 
-44 requirements, listed in [requirements.md](requirements.md#requirements). 14 aren't referenced by any item yet: REQ-004, REQ-007, REQ-008, REQ-009, REQ-010, REQ-011, REQ-015, REQ-016, REQ-017, REQ-023, REQ-032, REQ-033, REQ-034, REQ-035.
+45 requirements, listed in [requirements.md](requirements.md#requirements). 14 aren't referenced by any item yet: REQ-004, REQ-007, REQ-008, REQ-009, REQ-010, REQ-011, REQ-015, REQ-016, REQ-017, REQ-023, REQ-032, REQ-033, REQ-034, REQ-035.
 
 ## Decisions
 
-29 ADRs (23 accepted, 6 superseded), listed in [docs/adr](../docs/adr/_index.md).
+32 ADRs (24 accepted, 8 superseded), listed in [docs/adr](../docs/adr/_index.md).

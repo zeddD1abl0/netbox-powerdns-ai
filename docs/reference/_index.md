@@ -24,3 +24,6 @@ The others are written by hand:
 
 - [Service endpoints](service-endpoints.md): what `nbpdns serve` answers, and
   the fields of its status page. A test checks the page against the code.
+- [Release artifacts](release-artifacts.md): what each release publishes:
+  the archives, their checksums, and the container image, with its tags,
+  settings, labels, and SBOMs.

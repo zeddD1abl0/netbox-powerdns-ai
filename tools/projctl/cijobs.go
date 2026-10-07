@@ -81,6 +81,31 @@ func gitlabChain(top, job *yaml.Node, seen map[*yaml.Node]bool) []*yaml.Node {
 	return chain
 }
 
+// gitlabStages returns the stages of a .gitlab-ci.yml in the order GitLab
+// runs them: .pre, those that stages: lists, or GitLab's default ones, then
+// .post.
+func gitlabStages(top *yaml.Node) []string {
+	stages := []string{"build", "test", "deploy"}
+	if s := mapGet(top, "stages"); s != nil && s.Kind == yaml.SequenceNode {
+		stages = nil
+		for _, c := range s.Content {
+			stages = append(stages, deref(c).Value)
+		}
+	}
+	return append(append([]string{".pre"}, stages...), ".post")
+}
+
+// gitlabStage returns a job's stage, its own or the one it inherits through
+// extends, or GitLab's default, test.
+func gitlabStage(top, job *yaml.Node) string {
+	for _, n := range gitlabChain(top, job, map[*yaml.Node]bool{}) {
+		if s := mapGet(n, "stage"); s != nil {
+			return s.Value
+		}
+	}
+	return "test"
+}
+
 // githubJobs returns the jobs in a GitHub workflow, with the image from each
 // job's container and the skip keys set on the job or any of its steps.
 func githubJobs(doc *yaml.Node) []ciJob {
