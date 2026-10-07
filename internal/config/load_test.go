@@ -81,6 +81,7 @@ func TestLoadDefaults(t *testing.T) {
 		Log:      LogConfig{Level: "info", Format: "json"},
 		NetBox:   NetBoxConfig{Timeout: 30 * time.Second, PageSize: 500, Concurrency: 4},
 		PowerDNS: PowerDNSConfig{Timeout: 30 * time.Second, Concurrency: 4},
+		Drift:    DriftConfig{GroupConcurrency: 4},
 		OTLP:     OTLPConfig{Protocol: OTLPHTTP, Timeout: 10 * time.Second},
 	}
 	if !reflect.DeepEqual(*cfg, want) {

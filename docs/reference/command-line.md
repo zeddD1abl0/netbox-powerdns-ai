@@ -27,6 +27,7 @@ in the [configuration reference](configuration.md).
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--config` | `string` | none | The YAML config file to read, instead of `$NBPDNS_CONFIG`. |
+| `--drift-group-concurrency` | `integer` | `4` | How many server groups are read and compared at once. |
 | `--log-format` | `string` | `json` | How log lines are written to standard error. |
 | `--log-level` | `string` | `info` | The lowest level of log message to write. |
 | `--netbox-ca-file` | `path` | none | A PEM file of CA certificates to trust for NetBox, as well as the system's. |

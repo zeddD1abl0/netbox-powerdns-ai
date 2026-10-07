@@ -86,7 +86,7 @@ func newDriftCmd(a *app) *cobra.Command {
 				}
 				sources[i].Primary = &primarySource{c: c}
 			}
-			r, err := drift.Run(ctx, &netboxSource{c: nb}, sources, name)
+			r, err := drift.Run(ctx, &netboxSource{c: nb}, sources, drift.Options{Zone: name, Concurrency: s.cfg.Drift.GroupConcurrency})
 			if err != nil {
 				return err
 			}

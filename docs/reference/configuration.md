@@ -29,6 +29,7 @@ a secret's value.
 
 | Key | Type | Default |
 |---|---|---|
+| [`drift.group_concurrency`](#driftgroup_concurrency) | integer, 1 to 32 | `4` |
 | [`log.format`](#logformat) | `json` or `text` | `json` |
 | [`log.level`](#loglevel) | `debug`, `info`, `warn` or `error` | `info` |
 | [`netbox.ca_file`](#netboxca_file) | path | none |
@@ -45,6 +46,17 @@ a secret's value.
 | [`powerdns.concurrency`](#powerdnsconcurrency) | integer, 1 to 32 | `4` |
 | [`powerdns.timeout`](#powerdnstimeout) | duration | `30s` |
 | [`powerdns.groups`](#powerdnsgroups) | list of server groups, config file only | none |
+
+## `drift.group_concurrency`
+
+How many server groups are read and compared at once. Each group's primary also
+takes up to `powerdns.concurrency` requests at once, and NetBox is read once
+for every group.
+
+- **Type:** integer, 1 to 32
+- **Default:** `4`
+- **Environment variable:** `NBPDNS_DRIFT_GROUP_CONCURRENCY`
+- **Flag:** `--drift-group-concurrency`
 
 ## `log.format`
 
@@ -271,6 +283,8 @@ powerdns:
 Every key except the secrets, with its default:
 
 ```yaml
+drift:
+  group_concurrency: 4
 log:
   format: json
   level: info

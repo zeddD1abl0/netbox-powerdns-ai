@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"sync"
 
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/config"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/dns"
@@ -46,16 +47,28 @@ func (e *ZoneNotFoundError) Error() string {
 	return fmt.Sprintf("zone %s isn't in any server group's NetBox views, or on any group's primary", e.Zone)
 }
 
-// Run compares every group, or only the zone named zone if it isn't empty.
-// It lists NetBox's zones once, for every group's views, then each group's
-// primary's zones in turn. It then reads RRsets, from NetBox once and from
-// each primary, only for the zones it compares, and compares each group. If
+// Options say what Run compares, and how.
+type Options struct {
+	// Zone, if it isn't empty, is the one zone compared, as an absolute
+	// name.
+	Zone string
+	// Concurrency is how many groups are listed, read and compared at once.
+	// Below 1, it's 1.
+	Concurrency int
+}
+
+// Run compares every group, or only the zone o names. It lists NetBox's
+// zones once, for every group's views, then each group's primary's zones.
+// It then reads RRsets, from NetBox once and from each primary, only for the
+// zones it compares, and compares each group. Up to o.Concurrency groups are
+// listed, read and compared at once, and the report keeps their order. If
 // NetBox can't be read, Run returns the error. A group whose primary can't
 // be read is marked failed, and the others are still compared (ADR-0027).
-// If zone isn't empty and every group was read, but neither side has the
-// zone, Run returns a ZoneNotFoundError, so that a mistyped name isn't
-// reported as in sync.
-func Run(ctx context.Context, nb NetBox, groups []Group, zone string) (Report, error) {
+// If o names a zone, and every group was read, but neither side has it, Run
+// returns a ZoneNotFoundError, so that a mistyped name isn't reported as in
+// sync.
+func Run(ctx context.Context, nb NetBox, groups []Group, o Options) (Report, error) {
+	zone := o.Zone
 	var views []string
 	for _, g := range groups {
 		for _, v := range g.Config.Views {
@@ -78,13 +91,15 @@ func Run(ctx context.Context, nb NetBox, groups []Group, zone string) (Report, e
 		err    error
 	}
 	states := make([]state, len(groups))
-	needed := map[id]dns.Zone{}
-	for i, g := range groups {
-		st := &states[i]
+	each(len(groups), o.Concurrency, func(i int) {
+		g, st := groups[i], &states[i]
 		st.cfg, st.nb, st.err = forZone(g.Config, zone), inViews(listed, g.Config.Views), g.Err
 		if st.err == nil {
 			st.pd, st.err = g.Primary.Zones(ctx, zone)
 		}
+	})
+	needed := map[id]dns.Zone{}
+	for _, st := range states {
 		if st.err != nil {
 			continue
 		}
@@ -107,22 +122,24 @@ func Run(ctx context.Context, nb NetBox, groups []Group, zone string) (Report, e
 		full[id{z.View, z.Name}] = z
 	}
 
-	r := Report{Complete: true, Groups: []GroupReport{}}
-	for i, g := range groups {
-		st := states[i]
-		var gr GroupReport
+	reports := make([]GroupReport, len(groups))
+	each(len(groups), o.Concurrency, func(i int) {
+		g, st := groups[i], states[i]
 		if st.err != nil {
-			gr = failed(g.Config.Name, st.err)
-		} else {
-			nbZones := make([]dns.Zone, len(st.nb))
-			for j, z := range st.nb {
-				nbZones[j] = z
-				if f, ok := full[id{z.View, z.Name}]; ok {
-					nbZones[j] = f
-				}
-			}
-			gr = compareGroup(ctx, g.Primary, st.cfg, nbZones, st.pd, nbProbs)
+			reports[i] = failed(g.Config.Name, st.err)
+			return
 		}
+		nbZones := make([]dns.Zone, len(st.nb))
+		for j, z := range st.nb {
+			nbZones[j] = z
+			if f, ok := full[id{z.View, z.Name}]; ok {
+				nbZones[j] = f
+			}
+		}
+		reports[i] = compareGroup(ctx, g.Primary, st.cfg, nbZones, st.pd, nbProbs)
+	})
+	r := Report{Complete: true, Groups: []GroupReport{}}
+	for _, gr := range reports {
 		if gr.Status != StatusOK {
 			r.Complete = false
 		}
@@ -140,6 +157,21 @@ func Run(ctx context.Context, nb NetBox, groups []Group, zone string) (Report, e
 		}
 	}
 	return r, nil
+}
+
+// each calls fn for 0 to n-1, running up to limit at once, and returns when
+// every call has.
+func each(n, limit int, fn func(i int)) {
+	sem := make(chan struct{}, max(limit, 1))
+	var wg sync.WaitGroup
+	for i := range n {
+		sem <- struct{}{}
+		wg.Go(func() {
+			defer func() { <-sem }()
+			fn(i)
+		})
+	}
+	wg.Wait()
 }
 
 // forZone returns g as Run compares it: with only zone's policy, if zone

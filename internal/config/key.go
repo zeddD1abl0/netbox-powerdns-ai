@@ -140,8 +140,9 @@ func secretKey(dst *Secret, k Key) Key {
 	return k
 }
 
-// intKey declares an integer key stored in dst, from lo to hi inclusive.
-func intKey(dst *int, k Key, lo, hi int) Key {
+// intKey declares an integer key stored in dst, from 1 to hi inclusive.
+func intKey(dst *int, k Key, hi int) Key {
+	const lo = 1
 	k.typ = fmt.Sprintf("integer, %d to %d", lo, hi)
 	k.flagType = "integer"
 	k.parse = func(raw any) error {

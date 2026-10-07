@@ -12,7 +12,14 @@ type Config struct {
 	Log      LogConfig
 	NetBox   NetBoxConfig
 	PowerDNS PowerDNSConfig
+	Drift    DriftConfig
 	OTLP     OTLPConfig
+}
+
+// DriftConfig says how drift is compared.
+type DriftConfig struct {
+	// GroupConcurrency is how many server groups are compared at once.
+	GroupConcurrency int
 }
 
 // LogConfig configures the operational log, written to standard error.
@@ -117,12 +124,12 @@ func keys(c *Config) []Key {
 			Summary: "How many objects to ask NetBox for in each page of a list.",
 			Details: "NetBox returns no more than its own `MAX_PAGE_SIZE`, 1000 by default.",
 			Default: "500",
-		}, 1, 1000),
+		}, 1000),
 		intKey(&c.NetBox.Concurrency, Key{
 			Name:    "netbox.concurrency",
 			Summary: "How many requests to NetBox may be in flight at once.",
 			Default: "4",
-		}, 1, 32),
+		}, 32),
 		durationKey(&c.PowerDNS.Timeout, Key{
 			Name:    "powerdns.timeout",
 			Summary: "How long one request to a PowerDNS API may take.",
@@ -133,7 +140,14 @@ func keys(c *Config) []Key {
 			Name:    "powerdns.concurrency",
 			Summary: "How many requests to each PowerDNS API may be in flight at once.",
 			Default: "4",
-		}, 1, 32),
+		}, 32),
+		intKey(&c.Drift.GroupConcurrency, Key{
+			Name:    "drift.group_concurrency",
+			Summary: "How many server groups are read and compared at once.",
+			Details: "Each group's primary also takes up to `powerdns.concurrency` requests at once, " +
+				"and NetBox is read once for every group.",
+			Default: "4",
+		}, 32),
 		stringKey(&c.OTLP.Endpoint, "an `http` or `https` URL", "url", Key{
 			Name:    "otlp.endpoint",
 			Summary: "The URL of the OpenTelemetry collector that nbpdns exports its spans to, over OTLP.",

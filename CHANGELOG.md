@@ -24,7 +24,8 @@ All notable changes to this project are recorded here. The format follows
   policy, with `enforce` marked as acting from M13. It exits 0 with no
   drift, 3 with drift, and 1 when NetBox or a primary can't be read. A
   group whose primary can't be read is marked failed, and the others are
-  still reported.
+  still reported. Server groups are read and compared concurrently, up to
+  `drift.group_concurrency` at once.
 - Documentation: a tutorial on finding drift between NetBox and PowerDNS, a
   how-to guide on setting a zone's drift policy, and an explanation of how
   nbpdns finds drift.
