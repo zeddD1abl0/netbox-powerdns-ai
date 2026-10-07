@@ -158,13 +158,37 @@ func TestShutdown(t *testing.T) {
 }
 
 func TestTimeout(t *testing.T) {
-	s, _, _ := testService(t, Options{Timeout: 20 * time.Millisecond, Refresh: func(ctx context.Context) (drift.Report, error) {
-		<-ctx.Done()
-		return drift.Report{}, ctx.Err()
-	}})
-	s.refresh(t.Context(), time.Now())
-	if got := testutil.ToFloat64(s.o.Metrics.Refreshes.WithLabelValues(metrics.OutcomeFailed)); got != 1 {
-		t.Errorf("a refresh past its timeout: %v failed refreshes, want 1", got)
+	// A good refresh, then two that run out of time: one while NetBox is
+	// read, one while a group is. Neither blames them.
+	var n atomic.Int32
+	s, logs, _ := testService(t, Options{Timeout: 20 * time.Millisecond, Groups: []Primary{{"a", "https://a"}},
+		Refresh: func(ctx context.Context) (drift.Report, error) {
+			switch n.Add(1) {
+			case 1:
+				return report(group("a", drift.StateInSync)), nil
+			case 2:
+				<-ctx.Done()
+				return drift.Report{}, ctx.Err()
+			default:
+				<-ctx.Done()
+				return report(drift.GroupReport{Group: "a", Status: drift.StatusFailed, Error: ctx.Err().Error()}), nil
+			}
+		}})
+	m := s.o.Metrics
+	for range 3 {
+		s.refresh(t.Context(), time.Now())
+	}
+	if testutil.ToFloat64(m.Refreshes.WithLabelValues(metrics.OutcomeFailed)) != 2 ||
+		testutil.ToFloat64(m.NetBoxUp.WithLabelValues()) != 1 || testutil.ToFloat64(m.GroupUp.WithLabelValues("a")) != 1 {
+		t.Errorf("after two timeouts:\n%s", gathered(t, m))
+	}
+	st := s.Status()
+	if lr := st.Schedule.LastRefresh; lr == nil || lr.Outcome != metrics.OutcomeFailed || !strings.Contains(lr.Error, "longer than drift.timeout") ||
+		st.Groups[0].Status != drift.StatusOK || st.NetBox.Error != "" {
+		t.Errorf("status after two timeouts: %+v", st)
+	}
+	if !strings.Contains(logs.String(), "took longer than drift.timeout") {
+		t.Errorf("the timeout wasn't logged:\n%s", logs)
 	}
 }
 
@@ -238,7 +262,7 @@ func TestLastKnownState(t *testing.T) {
 	if zones("site-a", drift.StateDrift) != 1 || zones("site-a", drift.StateInSync) != 1 || up("site-a") != 1 ||
 		testutil.ToFloat64(m.ZoneDrifted.WithLabelValues("site-a", "a.example.", drift.StateDrift)) != 1 ||
 		testutil.ToFloat64(m.RRsetChanges.WithLabelValues("site-a", drift.ChangeChanged)) != 1 ||
-		testutil.ToFloat64(m.NetBoxUp) != 1 {
+		testutil.ToFloat64(m.NetBoxUp.WithLabelValues()) != 1 {
 		t.Fatalf("after a complete refresh:\n%s", gathered(t, m))
 	}
 
@@ -251,7 +275,7 @@ func TestLastKnownState(t *testing.T) {
 
 	// NetBox fails: everything keeps its value, and the groups' up too.
 	s.record(t.Context(), drift.Report{}, errors.New("NetBox isn't reachable"), t0, t0)
-	if testutil.ToFloat64(m.NetBoxUp) != 0 || up("site-a") != 0 || up("site-b") != 1 || zones("site-a", drift.StateDrift) != 1 ||
+	if testutil.ToFloat64(m.NetBoxUp.WithLabelValues()) != 0 || up("site-a") != 0 || up("site-b") != 1 || zones("site-a", drift.StateDrift) != 1 ||
 		testutil.ToFloat64(m.Refreshes.WithLabelValues(metrics.OutcomeFailed)) != 1 {
 		t.Errorf("after NetBox failed:\n%s", gathered(t, m))
 	}

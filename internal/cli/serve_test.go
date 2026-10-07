@@ -4,13 +4,22 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"encoding/pem"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/config"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/tracing"
 )
 
 // lockedBuffer is a bytes.Buffer that's safe for concurrent use.
@@ -182,5 +191,70 @@ func TestServeWithoutNetBox(t *testing.T) {
 		if !strings.Contains(s.stderr.String(), want) {
 			t.Errorf("no %q in the logs:\n%s", want, s.stderr)
 		}
+	}
+}
+
+// testSession returns a session with the defaults, for code that only makes
+// clients.
+func testSession(t *testing.T) *session {
+	t.Helper()
+	return &session{
+		cfg:    &config.Config{PowerDNS: config.PowerDNSConfig{Timeout: 5 * time.Second, Concurrency: 1}},
+		log:    slog.New(slog.DiscardHandler),
+		tracer: tracing.Tracer(tracing.NewProvider("test")),
+	}
+}
+
+func TestRetryClients(t *testing.T) {
+	// The group's CA file isn't there when serve starts, as a secret mount
+	// may not be.
+	srv := httptest.NewTLSServer(http.NotFoundHandler())
+	defer srv.Close()
+	ca := filepath.Join(t.TempDir(), "ca.pem")
+	g := config.Group{Name: "site-a", Primary: config.Primary{URL: srv.URL, APIKey: config.NewSecret("k"), ServerID: "localhost", CAFile: ca}}
+	s := testSession(t)
+	clients := s.groupClients(t.Context(), []config.Group{g})
+	defer closeClients(clients)
+	if clients[0].err == nil {
+		t.Fatal("a client without its CA file")
+	}
+	s.retryClients(t.Context(), clients)
+	if clients[0].err == nil || clients[0].c != nil {
+		t.Fatalf("a retry without the CA file: %+v", clients[0])
+	}
+	if err := os.WriteFile(ca, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: srv.Certificate().Raw}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s.retryClients(t.Context(), clients)
+	if clients[0].err != nil || clients[0].c == nil {
+		t.Errorf("a retry with the CA file: %v", clients[0].err)
+	}
+}
+
+func TestServersCheckedOnce(t *testing.T) {
+	var checks atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v1/servers/localhost":
+			checks.Add(1)
+			_, _ = io.WriteString(w, `{"id": "localhost", "daemon_type": "authoritative", "version": "5.1.4"}`)
+		case "/api/v1/servers/localhost/zones":
+			_, _ = io.WriteString(w, `[]`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	g := config.Group{Name: "site-a", Primary: config.Primary{URL: srv.URL, APIKey: config.NewSecret("k"), ServerID: "localhost"}}
+	clients := testSession(t).groupClients(t.Context(), []config.Group{g})
+	defer closeClients(clients)
+	// Two refreshes' listings, each with its own source, as compare makes.
+	for range 2 {
+		if _, err := (&primarySource{g: &clients[0]}).Zones(t.Context(), ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := checks.Load(); n != 1 {
+		t.Errorf("the server was checked %d times, want once", n)
 	}
 }

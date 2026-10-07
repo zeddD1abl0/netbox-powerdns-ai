@@ -53,8 +53,8 @@ a secret's value.
 ## `drift.group_concurrency`
 
 How many server groups are read and compared at once. Each group's primary also
-takes up to `powerdns.concurrency` requests at once, and NetBox is read once
-for every group.
+takes up to `powerdns.concurrency` requests at once. NetBox is read once, for
+all the groups together, whatever this is.
 
 - **Type:** integer, 1 to 32
 - **Default:** `4`
@@ -76,7 +76,9 @@ NetBox and from each primary, so make it much longer than a refresh takes.
 ## `drift.timeout`
 
 How long one refresh of `nbpdns serve` may take before it's stopped. A refresh
-that's stopped counts as failed, and the next one starts on schedule.
+that's stopped counts as failed, and every server group keeps its last report:
+a slow refresh says nothing about what PowerDNS serves. The next one starts on
+schedule.
 
 - **Type:** duration
 - **Default:** `10m`
@@ -203,7 +205,7 @@ its spans, and sends the last of them as it ends.
 
 Headers to send with every export, such as the collector's token, as
 `name=value,name=value`. Over `grpc`, they're sent as metadata. Percent-encode
-a comma or `=` in a value, such as `%2C`.
+a comma in a value as `%2C`.
 
 - **Type:** string, secret
 - **Default:** none

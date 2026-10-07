@@ -128,3 +128,31 @@ func (c contextHandler) WithGroup(name string) slog.Handler {
 	}
 	return contextHandler{base: c.base, groups: append(slices.Clip(c.groups), group{name: name})}
 }
+
+// Bound returns a handler that handles every record with ctx, so that it
+// carries ctx's IDs. It's for a logger that can't pass a context, such as
+// the log.Logger an http.Server writes its errors to.
+func Bound(h slog.Handler, ctx context.Context) slog.Handler { //nolint:revive // The context belongs to the handler, not to a call.
+	return boundHandler{h: h, ctx: ctx}
+}
+
+type boundHandler struct {
+	h   slog.Handler
+	ctx context.Context //nolint:containedctx // The context every record is handled with.
+}
+
+func (b boundHandler) Enabled(_ context.Context, level slog.Level) bool {
+	return b.h.Enabled(b.ctx, level) //nolint:contextcheck // The bound context is the point.
+}
+
+func (b boundHandler) Handle(_ context.Context, r slog.Record) error {
+	return b.h.Handle(b.ctx, r) //nolint:contextcheck // The bound context is the point.
+}
+
+func (b boundHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return boundHandler{h: b.h.WithAttrs(attrs), ctx: b.ctx}
+}
+
+func (b boundHandler) WithGroup(name string) slog.Handler {
+	return boundHandler{h: b.h.WithGroup(name), ctx: b.ctx}
+}

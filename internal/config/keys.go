@@ -119,7 +119,7 @@ func keys(c *Config) []Key {
 				"A v1 token still works, with a warning. " +
 				"Pass the token in a file or the environment rather than as a flag, " +
 				"which other users of the host can see in the process list.",
-		}),
+		}, nil),
 		stringKey(&c.NetBox.CAFile, "path", "path", Key{
 			Name:    "netbox.ca_file",
 			Summary: "A PEM file of CA certificates to trust for NetBox, as well as the system's.",
@@ -156,8 +156,8 @@ func keys(c *Config) []Key {
 		intKey(&c.Drift.GroupConcurrency, Key{
 			Name:    "drift.group_concurrency",
 			Summary: "How many server groups are read and compared at once.",
-			Details: "Each group's primary also takes up to `powerdns.concurrency` requests at once, " +
-				"and NetBox is read once for every group.",
+			Details: "Each group's primary also takes up to `powerdns.concurrency` requests at once. " +
+				"NetBox is read once, for all the groups together, whatever this is.",
 			Default: "4",
 		}, 32),
 		durationKeyAtLeast(&c.Drift.Interval, Key{
@@ -170,7 +170,8 @@ func keys(c *Config) []Key {
 		durationKey(&c.Drift.Timeout, Key{
 			Name:    "drift.timeout",
 			Summary: "How long one refresh of `nbpdns serve` may take before it's stopped.",
-			Details: "A refresh that's stopped counts as failed, and the next one starts on schedule.",
+			Details: "A refresh that's stopped counts as failed, and every server group keeps its last report: " +
+				"a slow refresh says nothing about what PowerDNS serves. The next one starts on schedule.",
 			Default: "10m",
 		}),
 		stringKey(&c.Server.Listen, "a TCP address", "address", Key{
@@ -198,8 +199,8 @@ func keys(c *Config) []Key {
 		secretKey(&c.OTLP.Headers, Key{
 			Name:    "otlp.headers",
 			Summary: "Headers to send with every export, such as the collector's token, as `name=value,name=value`.",
-			Details: "Over `grpc`, they're sent as metadata. Percent-encode a comma or `=` in a value, such as `%2C`.",
-		}),
+			Details: "Over `grpc`, they're sent as metadata. Percent-encode a comma in a value as `%2C`.",
+		}, func(s string) error { _, err := ParseHeaders(s); return err }),
 		stringKey(&c.OTLP.CAFile, "path", "path", Key{
 			Name:    "otlp.ca_file",
 			Summary: "A PEM file of CA certificates to trust for the collector, as well as the system's.",

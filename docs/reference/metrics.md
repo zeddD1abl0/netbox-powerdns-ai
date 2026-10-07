@@ -17,14 +17,14 @@ PowerDNS's own `/metrics`.
 |---|---|---|---|
 | `nbpdns_drift_refreshes_total` | counter | `outcome`: `complete`, `incomplete`, `failed` | Drift refreshes finished, by outcome. A refresh is incomplete if a server group couldn't be read, and failed if NetBox couldn't be read. |
 | `nbpdns_drift_refresh_duration_seconds` | histogram | none | How long each drift refresh took. Buckets, in seconds: 1, 5, 10, 30, 60, 120, 300, 600, 1200. |
-| `nbpdns_drift_last_refresh_timestamp_seconds` | gauge | none | When the last drift refresh finished, whatever its outcome, as a Unix time. |
-| `nbpdns_drift_last_complete_refresh_timestamp_seconds` | gauge | none | When the last complete drift refresh finished, as a Unix time. |
+| `nbpdns_drift_last_refresh_timestamp_seconds` | gauge | none | When the last drift refresh finished, whatever its outcome, as a Unix time. It has no value before the first. |
+| `nbpdns_drift_last_complete_refresh_timestamp_seconds` | gauge | none | When the last complete drift refresh finished, as a Unix time. It has no value before the first. |
 | `nbpdns_drift_zones` | gauge | `group`; `state`: `in_sync`, `drift`, `missing`, `inactive_in_netbox`, `ignored`, `unmanaged` | The server group's zones, by state, as of its primary's last successful read. |
 | `nbpdns_drift_rrset_changes` | gauge | `group`; `kind`: `missing`, `extra`, `changed` | The RRsets that differ in the server group's zones, by kind. |
 | `nbpdns_drift_zone_drifted` | gauge | `group`; `zone`; `state`: `drift`, `missing`, `inactive_in_netbox` | 1 for each zone that drifted, by its state. A zone back in sync has no series. |
 | `nbpdns_drift_problems` | gauge | `group` | Problems in the data that normalization worked around, in the server group's zones. |
 | `nbpdns_drift_warnings` | gauge | `group` | Warnings about the configuration or NetBox's zones, for the server group. |
-| `nbpdns_netbox_up` | gauge | none | 1 if the last drift refresh could read NetBox, else 0. |
+| `nbpdns_netbox_up` | gauge | none | 1 if the last drift refresh could read NetBox, else 0. It has no value before the first refresh, nor after one stopped by drift.timeout, which keeps the value before it. |
 | `nbpdns_server_group_up` | gauge | `group` | 1 if the server group's primary could be read the last time a refresh tried, else 0. A refresh that can't read NetBox doesn't try the primaries. |
 | `nbpdns_server_group_last_success_timestamp_seconds` | gauge | `group` | When the server group's primary was last read and compared, as a Unix time. |
 | `nbpdns_http_client_requests_total` | counter | `service`: `NetBox`, `PowerDNS`; `target`; `method`: `GET`; `code` | Requests to NetBox and to each primary, one per attempt. The target is `netbox`, or the server group's name, and the code is the answer's status, or `error` if none came. |

@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/drift"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/logging"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/metrics"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/service"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/version"
@@ -52,15 +53,20 @@ func newServeCmd(a *app) *cobra.Command {
 			defer closeClients(clients)
 			for _, c := range clients {
 				if c.err != nil {
-					s.log.WarnContext(ctx, "a server group has no client, so every refresh reports it failed", "group", c.cfg.Name, "err", c.err)
+					s.log.WarnContext(ctx, "a server group has no client; each refresh tries again, and reports it failed until one works",
+						"group", c.cfg.Name, "err", c.err)
 				}
 			}
+			nbc := &netboxConn{c: nb}
 			primaries := make([]service.Primary, len(groups))
 			for i, g := range groups {
 				primaries[i] = service.Primary{Group: g.Name, URL: g.Primary.URL}
 			}
 			svc := service.New(service.Options{
-				Refresh:   func(ctx context.Context) (drift.Report, error) { return s.compare(ctx, nb, clients, "") },
+				Refresh: func(ctx context.Context) (drift.Report, error) {
+					s.retryClients(ctx, clients)
+					return s.compare(ctx, nbc, clients, "")
+				},
 				Interval:  s.cfg.Drift.Interval,
 				Timeout:   s.cfg.Drift.Timeout,
 				Log:       s.log,
@@ -77,6 +83,22 @@ func newServeCmd(a *app) *cobra.Command {
 	return cmd
 }
 
+// retryClients tries again to make a client for each group that has none,
+// such as one whose certificate file couldn't be read when serve started.
+// Refreshes never overlap, so it can change clients.
+func (s *session) retryClients(ctx context.Context, clients []groupClient) {
+	for i := range clients {
+		g := &clients[i]
+		if g.c != nil {
+			continue
+		}
+		g.c, g.err = s.powerdns(ctx, g.cfg)
+		if g.err == nil {
+			s.log.InfoContext(ctx, "a server group has a client now", "group", g.cfg.Name)
+		}
+	}
+}
+
 // serve listens at server.listen, and runs svc until ctx is canceled or the
 // listener fails. Then it lets the requests in flight finish.
 func serve(ctx context.Context, s *session, svc *service.Service) error {
@@ -90,7 +112,7 @@ func serve(ctx context.Context, s *session, svc *service.Service) error {
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       2 * time.Minute,
-		ErrorLog:          slog.NewLogLogger(s.log.Handler(), slog.LevelWarn),
+		ErrorLog:          slog.NewLogLogger(logging.Bound(s.log.Handler(), ctx), slog.LevelWarn),
 	}
 	runCtx, stop := context.WithCancel(ctx)
 	defer stop()

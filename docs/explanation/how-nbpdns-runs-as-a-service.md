@@ -25,12 +25,14 @@ them ([How nbpdns finds drift](how-nbpdns-finds-drift.md)).
   then starts at once, with a warning in the log. Refreshes never overlap,
   so NetBox and the primaries never see two at a time.
 - A refresh is stopped after `drift.timeout`, 10 minutes by default. It
-  then counts as failed, or as incomplete if only some groups ran out of
-  time.
+  then counts as failed, whatever it was reading when it was stopped.
 - Each refresh is its own trace, with its own `request_id` in the logs, so
   the requests and log lines of one refresh can be followed together.
 - `serve` makes its clients for NetBox and each primary once, when it
-  starts, and reuses them. A change to the config file, or to a key file,
+  starts, and reuses them. It checks each server's release once, until a
+  check succeeds, not every refresh. A group whose client can't be made,
+  such as when its certificate file isn't readable yet, gets another try
+  each refresh. Any other change to the config file, or to a key file,
   takes a restart.
 
 ## What it keeps when something fails
@@ -45,6 +47,10 @@ one idea: a failure to *read* PowerDNS isn't news about what PowerDNS
 - **NetBox can't be read:** nothing can be compared, so the refresh fails,
   every group keeps its last report, and `nbpdns_netbox_up` goes to 0. The
   primaries aren't tried, so their groups' `up` stays as it was.
+- **The refresh runs out of time:** it fails, and the status page says it
+  took longer than `drift.timeout`. Every group keeps its last report, and
+  neither NetBox's `up` nor any group's changes: a slow read isn't a failed
+  one.
 
 Forgetting the last report instead would make an outage look like
 everything had come back in sync, and resolve the very drift alerts that

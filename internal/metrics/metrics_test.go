@@ -22,14 +22,14 @@ func filled(t *testing.T) *Metrics {
 	t.Helper()
 	m := New(info)
 	m.RefreshDuration.Observe(12)
-	m.LastRefresh.SetToCurrentTime()
-	m.LastCompleteRefresh.SetToCurrentTime()
+	m.LastRefresh.WithLabelValues().SetToCurrentTime()
+	m.LastCompleteRefresh.WithLabelValues().SetToCurrentTime()
 	m.Zones.WithLabelValues("site-a", "in_sync").Set(3)
 	m.RRsetChanges.WithLabelValues("site-a", "changed").Set(1)
 	m.ZoneDrifted.WithLabelValues("site-a", "example.com.", "drift").Set(1)
 	m.Problems.WithLabelValues("site-a").Set(0)
 	m.Warnings.WithLabelValues("site-a").Set(0)
-	m.NetBoxUp.Set(1)
+	m.NetBoxUp.WithLabelValues().Set(1)
 	m.GroupUp.WithLabelValues("site-a").Set(1)
 	m.GroupLastSuccess.WithLabelValues("site-a").SetToCurrentTime()
 	o := m.Observer("NetBox", "netbox")
@@ -108,6 +108,13 @@ func TestHandler(t *testing.T) {
 	} {
 		if !strings.Contains(string(b), want) {
 			t.Errorf("no %q in:\n%s", want, b)
+		}
+	}
+	// Until a refresh sets them, these have no value, rather than one that
+	// reads as NetBox down, or a refresh in 1970.
+	for _, absent := range []string{"nbpdns_netbox_up ", "nbpdns_drift_last_refresh_timestamp_seconds ", "nbpdns_drift_last_complete_refresh_timestamp_seconds "} {
+		if strings.Contains(string(b), absent) {
+			t.Errorf("%q has a value before any refresh:\n%s", absent, b)
 		}
 	}
 }

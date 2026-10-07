@@ -50,9 +50,9 @@ type def struct {
 
 // The zone states and RRset changes, as the drift report names them.
 var (
-	zoneStates    = []string{drift.StateInSync, drift.StateDrift, drift.StateMissing, drift.StateInactive, drift.StateIgnored, "unmanaged"}
-	driftedStates = []string{drift.StateDrift, drift.StateMissing, drift.StateInactive}
-	changeKinds   = []string{drift.ChangeMissing, drift.ChangeExtra, drift.ChangeChanged}
+	zoneStates    = drift.States
+	driftedStates = drift.DriftedStates
+	changeKinds   = drift.ChangeKinds
 	// The services nbpdns sends requests to, as internal/httpclient names
 	// them, and the methods it sends.
 	services = []string{"NetBox", "PowerDNS"}
@@ -68,9 +68,9 @@ var (
 		buckets: []float64{1, 5, 10, 30, 60, 120, 300, 600, 1200},
 		help:    "How long each drift refresh took."}
 	defLastRefresh = def{name: "nbpdns_drift_last_refresh_timestamp_seconds", kind: gauge,
-		help: "When the last drift refresh finished, whatever its outcome, as a Unix time."}
+		help: "When the last drift refresh finished, whatever its outcome, as a Unix time. It has no value before the first."}
 	defLastComplete = def{name: "nbpdns_drift_last_complete_refresh_timestamp_seconds", kind: gauge,
-		help: "When the last complete drift refresh finished, as a Unix time."}
+		help: "When the last complete drift refresh finished, as a Unix time. It has no value before the first."}
 	defZones = def{name: "nbpdns_drift_zones", kind: gauge, labels: []string{"group", "state"},
 		values: map[string][]string{"state": zoneStates},
 		help:   "The server group's zones, by state, as of its primary's last successful read."}
@@ -85,7 +85,7 @@ var (
 	defWarnings = def{name: "nbpdns_drift_warnings", kind: gauge, labels: []string{"group"},
 		help: "Warnings about the configuration or NetBox's zones, for the server group."}
 	defNetBoxUp = def{name: "nbpdns_netbox_up", kind: gauge,
-		help: "1 if the last drift refresh could read NetBox, else 0."}
+		help: "1 if the last drift refresh could read NetBox, else 0. It has no value before the first refresh, nor after one stopped by drift.timeout, which keeps the value before it."}
 	defGroupUp = def{name: "nbpdns_server_group_up", kind: gauge, labels: []string{"group"},
 		help: "1 if the server group's primary could be read the last time a refresh tried, else 0. A refresh that can't read NetBox doesn't try the primaries."}
 	defGroupLastSuccess = def{name: "nbpdns_server_group_last_success_timestamp_seconds", kind: gauge, labels: []string{"group"},
@@ -116,16 +116,19 @@ var (
 type Metrics struct {
 	Registry *prometheus.Registry
 
-	Refreshes           *prometheus.CounterVec
-	RefreshDuration     prometheus.Histogram
-	LastRefresh         prometheus.Gauge
-	LastCompleteRefresh prometheus.Gauge
+	Refreshes       *prometheus.CounterVec
+	RefreshDuration prometheus.Histogram
+	// LastRefresh, LastCompleteRefresh and NetBoxUp have no labels. They're
+	// vectors so that they have no series until they're first set, which
+	// would otherwise read as a refresh at 1970 and NetBox down.
+	LastRefresh         *prometheus.GaugeVec
+	LastCompleteRefresh *prometheus.GaugeVec
 	Zones               *prometheus.GaugeVec
 	RRsetChanges        *prometheus.GaugeVec
 	ZoneDrifted         *prometheus.GaugeVec
 	Problems            *prometheus.GaugeVec
 	Warnings            *prometheus.GaugeVec
-	NetBoxUp            prometheus.Gauge
+	NetBoxUp            *prometheus.GaugeVec
 	GroupUp             *prometheus.GaugeVec
 	GroupLastSuccess    *prometheus.GaugeVec
 
@@ -143,14 +146,14 @@ func New(info version.Info) *Metrics {
 		Registry:            reg,
 		Refreshes:           register(reg, prometheus.NewCounterVec(counterOpts(defRefreshes), defRefreshes.labels)),
 		RefreshDuration:     register(reg, prometheus.NewHistogram(histogramOpts(defRefreshDuration))),
-		LastRefresh:         register(reg, prometheus.NewGauge(gaugeOpts(defLastRefresh))),
-		LastCompleteRefresh: register(reg, prometheus.NewGauge(gaugeOpts(defLastComplete))),
+		LastRefresh:         register(reg, prometheus.NewGaugeVec(gaugeOpts(defLastRefresh), nil)),
+		LastCompleteRefresh: register(reg, prometheus.NewGaugeVec(gaugeOpts(defLastComplete), nil)),
 		Zones:               register(reg, prometheus.NewGaugeVec(gaugeOpts(defZones), defZones.labels)),
 		RRsetChanges:        register(reg, prometheus.NewGaugeVec(gaugeOpts(defRRsetChanges), defRRsetChanges.labels)),
 		ZoneDrifted:         register(reg, prometheus.NewGaugeVec(gaugeOpts(defZoneDrifted), defZoneDrifted.labels)),
 		Problems:            register(reg, prometheus.NewGaugeVec(gaugeOpts(defProblems), defProblems.labels)),
 		Warnings:            register(reg, prometheus.NewGaugeVec(gaugeOpts(defWarnings), defWarnings.labels)),
-		NetBoxUp:            register(reg, prometheus.NewGauge(gaugeOpts(defNetBoxUp))),
+		NetBoxUp:            register(reg, prometheus.NewGaugeVec(gaugeOpts(defNetBoxUp), nil)),
 		GroupUp:             register(reg, prometheus.NewGaugeVec(gaugeOpts(defGroupUp), defGroupUp.labels)),
 		GroupLastSuccess:    register(reg, prometheus.NewGaugeVec(gaugeOpts(defGroupLastSuccess), defGroupLastSuccess.labels)),
 		requests:            register(reg, prometheus.NewCounterVec(counterOpts(defRequests), defRequests.labels)),

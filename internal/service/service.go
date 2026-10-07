@@ -6,6 +6,7 @@ package service
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -75,7 +76,9 @@ type state struct {
 	lastStart time.Time
 	lastEnd   time.Time
 	// lastOutcome is the last refresh's: a metrics.Outcome constant.
-	lastOutcome  string
+	lastOutcome string
+	// lastError is why the last refresh failed, if it did.
+	lastError    string
 	lastComplete time.Time
 	next         time.Time
 	refreshes    map[string]int
@@ -147,6 +150,11 @@ func (s *Service) refresh(ctx context.Context, start time.Time) {
 	if ctx.Err() != nil {
 		return
 	}
+	// A refresh stopped by its timeout says nothing about NetBox or the
+	// primaries, though the reads it stopped failed.
+	if errors.Is(rctx.Err(), context.DeadlineExceeded) && (err != nil || !r.Complete) {
+		err = &TimeoutError{Timeout: s.o.Timeout}
+	}
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
@@ -154,9 +162,16 @@ func (s *Service) refresh(ctx context.Context, start time.Time) {
 	s.record(rctx, r, err, start, s.o.now())
 }
 
+// TimeoutError is the error of a refresh stopped by drift.timeout.
+type TimeoutError struct{ Timeout time.Duration }
+
+func (e *TimeoutError) Error() string {
+	return fmt.Sprintf("the refresh took longer than drift.timeout, %s, so it was stopped", e.Timeout)
+}
+
 // record keeps what a refresh found, sets the metrics, and logs it. A group
 // that couldn't be read keeps its last report, and if NetBox couldn't be
-// read, every group does.
+// read, or the refresh ran out of time, every group does.
 func (s *Service) record(ctx context.Context, r drift.Report, err error, start, end time.Time) {
 	m := s.o.Metrics
 	outcome := metrics.OutcomeComplete
@@ -168,28 +183,38 @@ func (s *Service) record(ctx context.Context, r drift.Report, err error, start, 
 	}
 	m.Refreshes.WithLabelValues(outcome).Inc()
 	m.RefreshDuration.Observe(end.Sub(start).Seconds())
-	m.LastRefresh.Set(unix(end))
+	m.LastRefresh.WithLabelValues().Set(unix(end))
 	if outcome == metrics.OutcomeComplete {
-		m.LastCompleteRefresh.Set(unix(end))
+		m.LastCompleteRefresh.WithLabelValues().Set(unix(end))
 	}
 
 	s.mu.Lock()
 	st := &s.st
-	st.ready, st.lastEnd, st.lastOutcome = true, end, outcome
+	st.ready, st.lastEnd, st.lastOutcome, st.lastError = true, end, outcome, ""
 	st.refreshes[outcome]++
 	if outcome == metrics.OutcomeComplete {
 		st.lastComplete = end
 	}
+	var te *TimeoutError
+	if errors.As(err, &te) {
+		st.lastError = err.Error()
+		s.mu.Unlock()
+		s.o.Log.WarnContext(ctx, "the drift refresh took longer than drift.timeout, so it was stopped, and every server group keeps its last report",
+			"timeout_seconds", te.Timeout.Seconds())
+		return
+	}
 	if err != nil {
+		st.lastError = err.Error()
 		st.netboxUp, st.netboxError = false, err.Error()
 		s.mu.Unlock()
-		m.NetBoxUp.Set(0)
+		m.NetBoxUp.WithLabelValues().Set(0)
 		s.o.Log.WarnContext(ctx, "the drift refresh couldn't read NetBox, so every server group keeps its last report", "err", err)
 		return
 	}
 	st.netboxUp, st.netboxError = true, ""
 	type change struct {
 		g       drift.GroupReport
+		now     map[[2]string]bool
 		removed [][2]string
 	}
 	var changes []change
@@ -213,11 +238,11 @@ func (s *Service) record(ctx context.Context, r drift.Report, err error, start, 
 			}
 		}
 		gs.drifted = now
-		changes = append(changes, change{g: g, removed: removed})
+		changes = append(changes, change{g: g, now: now, removed: removed})
 	}
 	s.mu.Unlock()
 
-	m.NetBoxUp.Set(1)
+	m.NetBoxUp.WithLabelValues().Set(1)
 	for _, c := range changes {
 		g := c.g
 		if g.Status != drift.StatusOK {
@@ -227,7 +252,7 @@ func (s *Service) record(ctx context.Context, r drift.Report, err error, start, 
 		}
 		m.GroupUp.WithLabelValues(g.Group).Set(1)
 		m.GroupLastSuccess.WithLabelValues(g.Group).Set(unix(end))
-		setGroup(m, g, c.removed)
+		setGroup(m, g, c.now, c.removed)
 		cs := g.Counts
 		s.o.Log.InfoContext(ctx, "drift refreshed", "group", g.Group, "in_sync", cs.InSync, "drift", cs.Drift,
 			"missing", cs.Missing, "inactive_in_netbox", cs.Inactive, "ignored", cs.Ignored, "unmanaged", cs.Unmanaged)
@@ -235,39 +260,36 @@ func (s *Service) record(ctx context.Context, r drift.Report, err error, start, 
 			s.o.Log.WarnContext(ctx, "the drift report worked around a problem", "group", g.Group, "warning", w)
 		}
 		for _, z := range g.Zones {
-			if isDrifted(z.State) {
+			if drift.IsDrifted(z.State) {
 				s.o.Log.DebugContext(ctx, "zone drifted", "group", g.Group, "zone", z.Zone, "state", z.State, "changes", len(z.Changes))
 			}
 		}
 	}
 }
 
-// setGroup sets a compared group's drift metrics, and removes the
-// drifted-zone series of zones that no longer drifted. A series that
-// stays is set again, never removed first, so that no scrape misses it.
-func setGroup(m *metrics.Metrics, g drift.GroupReport, removed [][2]string) {
-	c := g.Counts
-	for state, n := range map[string]int{
-		drift.StateInSync: c.InSync, drift.StateDrift: c.Drift, drift.StateMissing: c.Missing,
-		drift.StateInactive: c.Inactive, drift.StateIgnored: c.Ignored, "unmanaged": c.Unmanaged,
-	} {
+// setGroup sets a compared group's drift metrics. now are its drifted
+// zones, and removed the drifted-zone series of zones that no longer
+// drifted. A series that stays is set again, never removed first, so that
+// no scrape misses it.
+func setGroup(m *metrics.Metrics, g drift.GroupReport, now map[[2]string]bool, removed [][2]string) {
+	for state, n := range g.Counts.ByState() {
 		m.Zones.WithLabelValues(g.Group, state).Set(float64(n))
 	}
-	kinds := map[string]int{drift.ChangeMissing: 0, drift.ChangeExtra: 0, drift.ChangeChanged: 0}
+	kinds := map[string]int{}
 	for _, z := range g.Zones {
 		for _, ch := range z.Changes {
 			kinds[ch.Kind]++
 		}
 	}
-	for kind, n := range kinds {
-		m.RRsetChanges.WithLabelValues(g.Group, kind).Set(float64(n))
+	for _, kind := range drift.ChangeKinds {
+		m.RRsetChanges.WithLabelValues(g.Group, kind).Set(float64(kinds[kind]))
 	}
 	m.Problems.WithLabelValues(g.Group).Set(float64(len(g.Problems)))
 	m.Warnings.WithLabelValues(g.Group).Set(float64(len(g.Warnings)))
 	for _, k := range removed {
 		m.ZoneDrifted.DeleteLabelValues(g.Group, k[0], k[1])
 	}
-	for k := range drifted(g) {
+	for k := range now {
 		m.ZoneDrifted.WithLabelValues(g.Group, k[0], k[1]).Set(1)
 	}
 }
@@ -276,15 +298,11 @@ func setGroup(m *metrics.Metrics, g drift.GroupReport, removed [][2]string) {
 func drifted(g drift.GroupReport) map[[2]string]bool {
 	out := map[[2]string]bool{}
 	for _, z := range g.Zones {
-		if isDrifted(z.State) {
+		if drift.IsDrifted(z.State) {
 			out[[2]string{z.Zone, z.State}] = true
 		}
 	}
 	return out
-}
-
-func isDrifted(state string) bool {
-	return state == drift.StateDrift || state == drift.StateMissing || state == drift.StateInactive
 }
 
 func unix(t time.Time) float64 { return float64(t.UnixNano()) / 1e9 }

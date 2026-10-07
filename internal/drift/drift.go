@@ -27,7 +27,21 @@ const (
 	StateInactive = "inactive_in_netbox"
 	// StateIgnored is a zone whose policy is ignore, which isn't compared.
 	StateIgnored = "ignored"
+	// StateUnmanaged names the count of a primary's zones that NetBox
+	// doesn't assign to its group. They're listed apart from the zones, so
+	// no ZoneReport has this state.
+	StateUnmanaged = "unmanaged"
 )
+
+// States are every state that Counts counts, as the metrics and the status
+// page name them.
+var States = []string{StateInSync, StateDrift, StateMissing, StateInactive, StateIgnored, StateUnmanaged}
+
+// DriftedStates are the states of a zone that drifted.
+var DriftedStates = []string{StateDrift, StateMissing, StateInactive}
+
+// IsDrifted reports whether a zone in state drifted.
+func IsDrifted(state string) bool { return slices.Contains(DriftedStates, state) }
 
 // How an RRset differs.
 const (
@@ -38,6 +52,9 @@ const (
 	// ChangeChanged is an RRset whose values or TTL differ.
 	ChangeChanged = "changed"
 )
+
+// ChangeKinds are every kind of change.
+var ChangeKinds = []string{ChangeMissing, ChangeExtra, ChangeChanged}
 
 // A group's status in the report.
 const (
@@ -90,6 +107,14 @@ type Counts struct {
 // DriftedZones counts the zones that drifted: those in drift, missing, or
 // served though inactive in NetBox.
 func (c Counts) DriftedZones() int { return c.Drift + c.Missing + c.Inactive }
+
+// ByState returns the counts by state, as States names them.
+func (c Counts) ByState() map[string]int {
+	return map[string]int{
+		StateInSync: c.InSync, StateDrift: c.Drift, StateMissing: c.Missing,
+		StateInactive: c.Inactive, StateIgnored: c.Ignored, StateUnmanaged: c.Unmanaged,
+	}
+}
 
 // Drifted reports whether any zone counted drifted.
 func (c Counts) Drifted() bool { return c.DriftedZones() > 0 }

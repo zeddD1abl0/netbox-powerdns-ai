@@ -15,7 +15,6 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"golang.org/x/net/http/httpguts"
 	"google.golang.org/grpc/credentials"
 	_ "google.golang.org/grpc/encoding/gzip" // Registers gzip for the gRPC exporter's compression.
 
@@ -36,9 +35,9 @@ func NewExporter(ctx context.Context, c config.OTLPConfig, log *slog.Logger) (sd
 	if err != nil {
 		return nil, fmt.Errorf("otlp.endpoint: %w", err)
 	}
-	headers, err := parseHeaders(c.Headers.Reveal())
+	headers, err := config.ParseHeaders(c.Headers.Reveal())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("otlp.headers: %w", err)
 	}
 	plain := u.Scheme == "http"
 	if plain {
@@ -81,28 +80,4 @@ func NewExporter(ctx context.Context, c config.OTLPConfig, log *slog.Logger) (sd
 		opts = append(opts, otlptracehttp.WithTLSClientConfig(tlsConf))
 	}
 	return otlptracehttp.New(ctx, opts...)
-}
-
-// parseHeaders reads otlp.headers: name=value pairs, separated by commas,
-// with each value percent-decoded, as OTEL_EXPORTER_OTLP_HEADERS is written.
-// The value is a secret, so an error says which pair is wrong by its
-// number, and never what it holds.
-func parseHeaders(s string) (map[string]string, error) {
-	h := map[string]string{}
-	if strings.TrimSpace(s) == "" {
-		return h, nil
-	}
-	for i, pair := range strings.Split(s, ",") {
-		name, value, ok := strings.Cut(pair, "=")
-		name = strings.TrimSpace(name)
-		if !ok || !httpguts.ValidHeaderFieldName(name) {
-			return nil, fmt.Errorf("otlp.headers: pair %d isn't a header name, =, and a value", i+1)
-		}
-		v, err := url.PathUnescape(strings.TrimSpace(value))
-		if err != nil {
-			return nil, fmt.Errorf("otlp.headers: pair %d's value isn't percent-encoded correctly", i+1)
-		}
-		h[name] = v
-	}
-	return h, nil
 }

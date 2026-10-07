@@ -56,6 +56,9 @@ type Refresh struct {
 	DurationSeconds float64   `json:"duration_seconds"`
 	// Outcome is complete, incomplete or failed.
 	Outcome string `json:"outcome"`
+	// Error is why a failed refresh failed: NetBox's error, or the
+	// timeout's. A group's error is with the group.
+	Error string `json:"error"`
 }
 
 // Refreshes counts the refreshes that finished, by outcome.
@@ -134,7 +137,7 @@ func (s *Service) Status() Status {
 	if st.ready {
 		out.Schedule.LastRefresh = &Refresh{
 			Started: st.lastStart.UTC(), Finished: st.lastEnd.UTC(),
-			DurationSeconds: st.lastEnd.Sub(st.lastStart).Seconds(), Outcome: st.lastOutcome,
+			DurationSeconds: st.lastEnd.Sub(st.lastStart).Seconds(), Outcome: st.lastOutcome, Error: st.lastError,
 		}
 		up := st.netboxUp
 		out.NetBox.Up = &up
@@ -158,7 +161,7 @@ func (s *Service) Status() Status {
 				r := gs.report
 				gi.Counts, gi.Problems, gi.Warnings = r.Counts, len(r.Problems), len(r.Warnings)
 				for _, z := range r.Zones {
-					if isDrifted(z.State) {
+					if drift.IsDrifted(z.State) {
 						gi.DriftedZones = append(gi.DriftedZones, DriftedZone{Zone: z.Zone, State: z.State, Changes: len(z.Changes)})
 					}
 				}
@@ -206,6 +209,9 @@ func writeStatus(w io.Writer, st Status) error {
 	p("Drift refreshes, every %s, each for up to %s:\n", seconds(sc.IntervalSeconds), seconds(sc.TimeoutSeconds))
 	if lr := sc.LastRefresh; lr != nil {
 		p("  last:          %s, %s, in %s\n", when(&lr.Finished), lr.Outcome, seconds(lr.DurationSeconds))
+		if lr.Error != "" {
+			p("                 %s\n", lr.Error)
+		}
 	} else {
 		p("  last:          none yet; there's no drift report until the first refresh finishes\n")
 	}

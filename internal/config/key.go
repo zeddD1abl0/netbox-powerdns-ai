@@ -126,13 +126,19 @@ func enumKey(dst *string, k Key, allowed ...string) Key {
 }
 
 // secretKey declares a secret string key stored in dst.
-func secretKey(dst *Secret, k Key) Key {
+func secretKey(dst *Secret, k Key, check func(string) error) Key {
 	k.Secret = true
 	k.typ, k.flagType = "string, secret", "string"
 	k.parse = func(raw any) error {
 		s, err := secretString(raw)
 		if err != nil {
 			return err
+		}
+		// A check's error mustn't hold the value.
+		if s != "" && check != nil {
+			if err := check(s); err != nil {
+				return err
+			}
 		}
 		*dst = NewSecret(s)
 		return nil

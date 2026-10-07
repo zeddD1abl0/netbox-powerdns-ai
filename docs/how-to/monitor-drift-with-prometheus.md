@@ -108,6 +108,9 @@ You need:
      read, so their alerts keep firing.
    - **`NbpdnsNoCompleteRefresh`** uses `3 * 300`, three times the default
      `drift.interval` of 5 minutes, in seconds. Change it with the interval.
+   - Before nbpdns's first refresh finishes, `nbpdns_netbox_up` and the
+     refresh times have no value, so these rules don't fire while it starts.
+     `NbpdnsDown` covers an nbpdns that never answers.
 
 2. Check the rules:
 

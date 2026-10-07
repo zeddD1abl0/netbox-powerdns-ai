@@ -13,7 +13,7 @@
 | [M01](milestones/M01-netbox-read-path.md) | NetBox read path | done | 12 of 12 |
 | [M02](milestones/M02-powerdns-read-path.md) | PowerDNS read path | done | 11 of 11 |
 | [M03](milestones/M03-drift-report.md) | Drift report | done | 7 of 7 |
-| [M04](milestones/M04-service.md) | Service | in-progress | 8 of 8 |
+| [M04](milestones/M04-service.md) | Service | in-progress | 9 of 9 |
 | [M05](milestones/M05-packaging.md) | Packaging | planned | — |
 | [M06](milestones/M06-rest-api.md) | REST API | planned | — |
 | [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | planned | — |
@@ -42,6 +42,7 @@
 | [ITEM-0053](items/ITEM-0053-nbpdns-serve.md) | nbpdns serve | feature | done 2026-10-07 | — |
 | [ITEM-0054](items/ITEM-0054-service-docs-and-changelog.md) | Service docs and CHANGELOG | task | done 2026-10-07 | — |
 | [ITEM-0055](items/ITEM-0055-the-status-page.md) | The status page | feature | done 2026-10-07 | — |
+| [ITEM-0056](items/ITEM-0056-fix-the-m04-code-review-findings.md) | Fix the M04 code review findings | bug | done 2026-10-07 | — |
 
 ## Open items in other milestones
 

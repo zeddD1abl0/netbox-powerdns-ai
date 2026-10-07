@@ -53,7 +53,8 @@ be read:
       "started": "2026-10-07T01:55:00Z",
       "finished": "2026-10-07T01:55:42.3Z",
       "duration_seconds": 42.3,
-      "outcome": "incomplete"
+      "outcome": "incomplete",
+      "error": ""
     },
     "last_complete_refresh": "2026-10-07T01:50:41.9Z",
     "next_refresh": "2026-10-07T02:00:00Z",
@@ -134,7 +135,8 @@ be read:
 | `schedule.last_refresh.started` | time | When it started. |
 | `schedule.last_refresh.finished` | time | When it finished. |
 | `schedule.last_refresh.duration_seconds` | number | How long it took. |
-| `schedule.last_refresh.outcome` | string | `complete`; `incomplete`, if a server group couldn't be read; or `failed`, if NetBox couldn't be read. |
+| `schedule.last_refresh.outcome` | string | `complete`; `incomplete`, if a server group couldn't be read; or `failed`, if NetBox couldn't be read, or the refresh took longer than `drift.timeout`. |
+| `schedule.last_refresh.error` | string | Why a failed refresh failed: NetBox's error, or the timeout. Empty otherwise; a group's error is in `groups[].error`. |
 | `schedule.last_complete_refresh` | time or null | When the last complete refresh finished, or `null` if none has. |
 | `schedule.next_refresh` | time or null | When the next refresh starts, or `null` while one runs. |
 | `schedule.refreshes.complete` | integer | Refreshes that finished complete since the service started. |

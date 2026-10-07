@@ -202,3 +202,18 @@ func BenchmarkLog(b *testing.B) {
 		})
 	}
 }
+
+func TestBound(t *testing.T) {
+	ctx, sc := spanContext(t)
+	var buf bytes.Buffer
+	log, err := New(&buf, "json", "info")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// As an http.Server logs: through a log.Logger, with no context.
+	slog.NewLogLogger(Bound(log.Handler(), ctx), slog.LevelWarn).Print("http: TLS handshake error")
+	recs := lines(t, buf.String())
+	if len(recs) != 1 || recs[0]["trace_id"] != sc.TraceID().String() || recs[0]["request_id"] != "req-1" || recs[0]["level"] != "WARN" {
+		t.Errorf("line: %v", recs)
+	}
+}
