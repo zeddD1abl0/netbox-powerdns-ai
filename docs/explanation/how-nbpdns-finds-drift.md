@@ -76,7 +76,7 @@ A primary often holds zones that predate nbpdns, or that another team
 manages. If they were drift, every report would fail until each one was
 dealt with, and a zone NetBox doesn't know about would look like something to
 delete. nbpdns lists them, so that none goes unseen, and leaves the decision
-to brownfield import, which adopts them from M14.
+to brownfield import, which adopts them from M15.
 
 ### A zone in two views
 
@@ -116,8 +116,8 @@ Each zone has a **drift policy**, set in nbpdns's config file per server
 group, with overrides for single zones:
 
 - **`report`**, the default: compare the zone and report its drift.
-- **`enforce`:** the same, until M12. From then, nbpdns also corrects the
-  drift on the primary. The table marks these zones `enforce (from M12)`.
+- **`enforce`:** the same, until M13. From then, nbpdns also corrects the
+  drift on the primary. The table marks these zones `enforce (from M13)`.
 - **`ignore`:** don't compare the zone.
 
 The policy lives in nbpdns's config, not in NetBox. NetBox users can't see or
@@ -188,9 +188,9 @@ nbpdns is designed and tested for 1,000 zones and 100,000 records per run
 
 ## What it doesn't do yet
 
-- **Correct drift.** nbpdns writes nothing to PowerDNS until M12, when
+- **Correct drift.** nbpdns writes nothing to PowerDNS until M13, when
   `enforce` starts to act.
 - **Check secondaries.** Only each group's primary is read. Secondaries copy
-  their zones from it, and from M13 nbpdns checks them with DNS queries.
+  their zones from it, and from M14 nbpdns checks them with DNS queries.
 - **Remember.** Each run stands alone, with no history, schedule, alerts, or
-  metrics. Those arrive with the service (M04) and its database (M07).
+  metrics. Those arrive with the service (M04) and its database (M08).

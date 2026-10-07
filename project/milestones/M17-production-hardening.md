@@ -1,12 +1,12 @@
 ---
-id: M16
+id: M17
 title: Production hardening
 status: planned # planned | in-progress | done
 started:
 closed:
 ---
 
-# M16: Production hardening
+# M17: Production hardening
 
 ## Goal
 
@@ -21,4 +21,4 @@ Ready to run in production at the agreed scale.
 ## Design, non-goals and acceptance criteria
 
 To be written in this milestone's plan-mode session, before implementation
-starts. The milestone's branch is `m16-production-hardening` (ADR-0010).
+starts. The milestone's branch is `m17-production-hardening` (ADR-0010).

@@ -1,12 +1,12 @@
 ---
-id: M06
+id: M07
 title: NetBox webhooks
 status: planned # planned | in-progress | done
 started:
 closed:
 ---
 
-# M06: NetBox webhooks
+# M07: NetBox webhooks
 
 ## Goal
 
@@ -21,4 +21,4 @@ React to changes in NetBox as they happen, instead of waiting for the next sched
 ## Design, non-goals and acceptance criteria
 
 To be written in this milestone's plan-mode session, before implementation
-starts. The milestone's branch is `m06-netbox-webhooks` (ADR-0010).
+starts. The milestone's branch is `m07-netbox-webhooks` (ADR-0010).

@@ -1,12 +1,12 @@
 ---
-id: M08
+id: M09
 title: PostgreSQL and HA
 status: planned # planned | in-progress | done
 started:
 closed:
 ---
 
-# M08: PostgreSQL and HA
+# M09: PostgreSQL and HA
 
 ## Goal
 
@@ -21,4 +21,4 @@ Run several replicas on PostgreSQL, with exactly one active sync worker.
 ## Design, non-goals and acceptance criteria
 
 To be written in this milestone's plan-mode session, before implementation
-starts. The milestone's branch is `m08-postgresql-and-ha` (ADR-0010).
+starts. The milestone's branch is `m09-postgresql-and-ha` (ADR-0010).

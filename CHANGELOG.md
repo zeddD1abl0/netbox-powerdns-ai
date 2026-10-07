@@ -15,7 +15,7 @@ All notable changes to this project are recorded here. The format follows
   and an SOA without its serial. Zones on a primary that NetBox doesn't
   assign to its group are listed as unmanaged, not drift, and zones whose
   policy is `ignore` aren't compared. The table gives each drifted zone's
-  policy, with `enforce` marked as acting from M12. It exits 0 with no
+  policy, with `enforce` marked as acting from M13. It exits 0 with no
   drift, 3 with drift, and 1 when NetBox or a primary can't be read. A
   group whose primary can't be read is marked failed, and the others are
   still reported.

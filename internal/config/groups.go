@@ -22,7 +22,7 @@ const GroupsKey = "powerdns.groups"
 
 // The drift policies (ADR-0008, ADR-0027).
 const (
-	// PolicyEnforce corrects PowerDNS to match NetBox, from M12. Until then
+	// PolicyEnforce corrects PowerDNS to match NetBox, from M13. Until then
 	// it's reported like PolicyReport.
 	PolicyEnforce = "enforce"
 	// PolicyReport reports drift and changes nothing.
@@ -181,7 +181,7 @@ func GroupFields() []Field {
 		{
 			Name: "drift_policy", Type: "`enforce`, `report` or `ignore`", Default: PolicyReport,
 			Summary: "The drift policy of the group's zones that `zone_policies` doesn't name. `ignore` doesn't compare a zone; " +
-				"`report` and `enforce` report its drift, and from M12, `enforce` also corrects it.",
+				"`report` and `enforce` report its drift, and from M13, `enforce` also corrects it.",
 			parse: str(func(g *Group) *string { return &g.DriftPolicy }, checkPolicy),
 			show:  func(g *Group) string { return g.DriftPolicy },
 		},
