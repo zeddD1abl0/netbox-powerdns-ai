@@ -1,9 +1,9 @@
 ---
 id: M05
 title: Packaging
-status: in-progress # planned | in-progress | done
+status: done # planned | in-progress | done
 started: 2026-10-07
-closed:
+closed: 2026-10-08
 ---
 
 # M05: Packaging
@@ -50,10 +50,12 @@ release without publishing it.
   the archives. Shown by the dry runs below for all but GitLab's release
   step, which needs a tag pipeline's job token, and runs first at `v0.1.0`
   (ITEM-0060, ITEM-0063).
-- [ ] `projctl` allows only the tag-only `release` job, which tests show.
+- [x] `projctl` allows only the tag-only `release` job, which tests show.
   Both forges' CI files pass `make project-lint`, and `release-check` runs
   on both. The tests and the lint pass (ITEM-0060, ITEM-0063: the job must
-  also run last); `release-check` on the forges awaits the pipelines.
+  also run last). On `e213b6a`, the user reported GitLab's pipeline
+  passing, and GitHub Actions run 37629191805 passed, `release-check`
+  included.
 - [x] The docs pages above exist, and the CHANGELOG is 0.1.0.
 - [x] `/code-review high` has run. `/security-review` runs, since M05 adds
   publishing credentials to CI. Fixed in ITEM-0063, or recorded in
@@ -200,6 +202,19 @@ Append-only and dated. Record what was run and what was seen.
   - `make release-check` passes: snapshot `0.0.0-SNAPSHOT-690f460`, both
     archives, the image, and the release tests.
   - `make docs-links` passes, on 68 pages.
+- 2026-10-08: **Pipelines.** The user pushed `m05-packaging` at `e213b6a`,
+  and reported its GitLab pipeline passing, the first to run
+  `release-check` with Docker-in-Docker on GitLab. GitHub Actions run
+  37629191805 on `e213b6a` passed every job: the lint jobs, `unit-test`,
+  `integration-test` (6m56s), `build`, `release-check` (2m01s),
+  `docs-site`, `secrets` and `vuln`.
+- 2026-10-08: **Closed**, with every item done. ITEM-0062 is M17's. Two
+  criteria wait for the user, and are recorded on the next branch:
+  - merging through a GitLab merge request with a merge commit;
+  - tagging `v0.1.0` on `main`. Its pipeline's `release` job is the first
+    run of GitLab's release step: check the release's archives and
+    checksums, and that the registry's image covers both platforms and
+    reports `v0.1.0`.
 
 ## Approved design
 
