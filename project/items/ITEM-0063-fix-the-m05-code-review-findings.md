@@ -89,3 +89,6 @@ This item fixes them, or records why not.
   - `make release` refused HEAD with no `v` tag, HEAD with `v0.1.0` and
     `v0.1.0-rc.1`, and `RELEASE_REGISTRY='bad"host'`, each with its
     message.
+- 2026-10-07: After the rewrite, the reviewed commit, `876963f`, is
+  `e1ec6c1`, and this item's fix is `690f460`. M05's verification log
+  lists every old and new hash.

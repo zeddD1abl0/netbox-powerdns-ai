@@ -37,30 +37,169 @@ release without publishing it.
 
 ## Acceptance criteria
 
-- [ ] ADR-0030, ADR-0031 and ADR-0032 are accepted. ADR-0015 and ADR-0016
+- [x] ADR-0030, ADR-0031 and ADR-0032 are accepted. ADR-0015 and ADR-0016
   are superseded, Q-025 is answered, and REQ-045 exists.
-- [ ] GoReleaser is pinned by SHA-256, and `make release-check` builds the
+- [x] GoReleaser is pinned by SHA-256, and `make release-check` builds the
   archives for amd64 and arm64, with `checksums.txt`, and the image.
-- [ ] The release tests pass. The binaries are static and of the right
+- [x] The release tests pass. The binaries are static and of the right
   architecture, and report the build's version. The image runs as 65532,
   read-only, with no shell, and has its labels.
-- [ ] The same commit builds byte-identical archives twice.
+- [x] The same commit builds byte-identical archives twice.
 - [ ] `make release` refuses to run off a version tag, or without a CHANGELOG
   section, and publishes the image, with its SBOM, and a GitLab release with
-  the archives.
+  the archives. Shown by the dry runs below for all but GitLab's release
+  step, which needs a tag pipeline's job token, and runs first at `v0.1.0`
+  (ITEM-0060, ITEM-0063).
 - [ ] `projctl` allows only the tag-only `release` job, which tests show.
   Both forges' CI files pass `make project-lint`, and `release-check` runs
-  on both.
-- [ ] The docs pages above exist, and the CHANGELOG is 0.1.0.
-- [ ] `/code-review high` has run. `/security-review` runs, since M05 adds
-  publishing credentials to CI.
+  on both. The tests and the lint pass (ITEM-0060, ITEM-0063: the job must
+  also run last); `release-check` on the forges awaits the pipelines.
+- [x] The docs pages above exist, and the CHANGELOG is 0.1.0.
+- [x] `/code-review high` has run. `/security-review` runs, since M05 adds
+  publishing credentials to CI. Fixed in ITEM-0063, or recorded in
+  ITEM-0062 (see below).
 - [ ] The manual verification is recorded. The pipelines pass, and the user
   has merged through an MR with a merge commit, then tagged `v0.1.0`, whose
   pipeline published the release.
 
+## Decided after approval
+
+> [!IMPORTANT]
+> Changed during implementation, with the reasons recorded in the items
+> named. These override the approved design below.
+>
+> - **The base image is `distroless/static-debian13:nonroot`**, pinned by
+>   its index's digest, which covers amd64 and arm64: the debian12
+>   fallback wasn't needed (ITEM-0059).
+> - **The image's source label is the module's URL**,
+>   `https://github.com/zeddD1abl0/netbox-powerdns-ai`, not GoReleaser's
+>   `.GitURL`. In GitLab CI, `.GitURL` is the clone URL, which carries the
+>   job token (ITEM-0059).
+> - **The dry-run publish used a throwaway `v0.0.1`**, on a throwaway
+>   branch, not `v0.0.0-rc.1`: `make release` refuses any tag but
+>   `vMAJOR.MINOR.PATCH`, as designed, which the dry run also showed
+>   (ITEM-0060).
+>
+> Changed after the reviews, on 2026-10-07:
+>
+> - **`make release` takes the one `v` tag at HEAD.** It refuses HEAD with
+>   none, or more than one, and passes the tag to GoReleaser as
+>   `GORELEASER_CURRENT_TAG`, so Go, the notes and the release can't
+>   disagree. `RELEASE_REGISTRY` must be a host or host:port (ITEM-0063).
+> - **`projctl`'s release-job rule also requires the job to run last:** no
+>   `needs:`, and every other job in an earlier stage, `.post` included
+>   (ITEM-0063).
+> - **A snapshot's version may be the tag, or any pseudo-version of its
+>   commit**, so `release-check` passes at and after a tag (ITEM-0063).
+> - **Releases are made from `main`, in version order.** A release of an
+>   older version would move `latest` back; ITEM-0062 (M17) guards it.
+> - **Two GitLab settings join tag protection:** protected container tags
+>   for the image's release tags, and no duplicate generic packages. Every
+>   GitLab job has the registry's credentials and a job token, so these
+>   stop a developer's branch pipeline from pushing over a release
+>   (ITEM-0063, from `/security-review`).
+
 ## Verification log
 
 Append-only and dated. Record what was run and what was seen.
+
+- 2026-10-07: **Reproducibility** (ITEM-0058). Two `make release-check`
+  builds of one commit, with Go's build cache cleared between them, gave
+  identical `checksums.txt`. A build at a throwaway local tag,
+  `v0.0.1-test.1`, never pushed and deleted after, reported that tag. The
+  stripped binary is 19.4 MB, from 28.2 MB.
+- 2026-10-07: **Dry-run publish** (ITEM-0060), on a throwaway branch and
+  tags, all deleted, none pushed:
+  - `make release` refused HEAD at no tag, a tag with no CHANGELOG
+    section, `v0.0.9-rc.1`, and a missing `RELEASE_IMAGE`, each with its
+    reason.
+  - At `v0.0.1`, against a temporary `registry:3`, without `GITLAB_TOKEN`,
+    it published one OCI index tagged `0.0.1`, `0.0` and `latest`, for
+    linux/amd64 and linux/arm64, with three `text/spdx+json` SBOMs.
+    GoReleaser skipped the GitLab release ("release is disabled").
+  - The pulled amd64 image ran read-only, and reported `v0.0.1`. The arm64
+    image is linux/arm64, user 65532.
+- 2026-10-07: **The docs, against a snapshot build** (ITEM-0061):
+  - "Install nbpdns": `sha256sum --ignore-missing --check` passed, and the
+    unpacked binary reported its version.
+  - "Run nbpdns in a container": the Docker recipe, against the lab, with
+    the snapshot image. With `--read-only`, `--cap-drop ALL`,
+    `no-new-privileges`, and secrets owned by 65532 at mode 0400 in
+    `/run/secrets`, it was ready after its first refresh, and
+    `docker stop` gave exit 0. The Kubernetes example wasn't applied to a
+    cluster.
+  - "Release artifacts": the image's config, as listed. From a second
+    throwaway publish, the SBOMs are SPDX 2.3, under `sha256-<hex>.sbom`.
+    Each platform's lists 44 Go modules and the base image, and the
+    index's lists the base and both images.
+  - "Make a release": annotated and lightweight tags both stamp the
+    version, and `docker buildx imagetools inspect` lists linux/amd64 and
+    linux/arm64/v8.
+- 2026-10-07: **`/code-review high`** on `origin/main...m05-packaging` at
+  `876963f`, now `e1ec6c1` (see below), found eight things (ITEM-0063):
+  1. **A blocker:** the snapshot test would have failed at the `v0.1.0`
+     tag, so its pipeline would never reach the release stage, and in
+     every pipeline after it. Fixed.
+  2. A 4 MB `tools/projctl/projctl` binary was committed. Removed from the
+     history, and ignored.
+  3. `projctl` let the release job run early, through `needs:`, or an
+     earlier or `.post` stage. Fixed.
+  4. `latest` can move back when an older version is released. Recorded
+     as ITEM-0062 (M17), with the release order documented.
+  5. `make release` and GoReleaser could pick different tags. Fixed.
+  6. `RELEASE_REGISTRY` wasn't escaped in `config.json`. It's now
+     checked.
+  7. The tests' `releaseIf` copies `releaseRule`. Kept on purpose, so that
+     loosening the rule fails the tests.
+  8. `checkStatic` copied each binary. Fixed.
+- 2026-10-07: **`/security-review`** on `origin/main...m05-packaging` at
+  `876963f`, with the fixes uncommitted: nothing at the report's bar. It
+  checked:
+  - **Logs:** no credential reaches the job log, since the recipe isn't
+    echoed and GoReleaser runs without `--verbose`.
+  - **Published files:** nothing published holds a secret. That covers
+    the archives, the binary's build info, the labels, the SBOMs and
+    `dist/`, and no job uploads artifacts.
+  - **The Docker config:** it's in a mode-700 temporary directory, removed
+    on exit, and the credentials go only to `RELEASE_REGISTRY`.
+  - **Triggers:** only a `vMAJOR.MINOR.PATCH` tag can publish. Merge
+    request, fork and GitHub pipelines publish nothing, and the tools and
+    images are pinned.
+
+  One LOW note was fixed in ITEM-0063. The explanation said that only the
+  release job has the publishing credentials, but GitLab gives every job
+  the registry's credentials and a job token. The docs now say so, and
+  name the settings that limit it.
+- 2026-10-07: **History rewritten before any push.** `e6e91f9`, which
+  carried the binary, was rebuilt without it by cherry-picking, and the
+  three commits after it were replayed. The branch's tree differed from
+  the old tip only by the binary. New hashes:
+  - `e6e91f9` is now `c862067`;
+  - `db441f1` is now `f4662f8`;
+  - `876963f` is now `e1ec6c1`;
+  - `0ed7cae` is now `690f460`.
+
+  `origin/m05-packaging` was at `d1a6741`, so the push is a
+  fast-forward. No ref holds the binary.
+- 2026-10-07: **The fixes, tried in a scratch clone** (deleted after):
+  - `make release-check` passed with no tag (`v0.0.0-20261007131253-…`),
+    at `v0.1.0` (`v0.1.0`), and after it (`v0.1.1-0.20261007131355-…`).
+  - At `v0.1.0`, with this CHANGELOG, `make release` published to a
+    temporary `registry:3`: `0.1.0`, `0.1`, `latest` and three SBOMs. The
+    image reported `v0.1.0`, unmodified.
+  - `make release` refused no `v` tag, two `v` tags (`v0.1.0` and
+    `v0.1.0-rc.1`), and `RELEASE_REGISTRY='bad"host'`, each with its
+    message.
+- 2026-10-07: **Close checks**, on `690f460`:
+  - `make check` passes: vet, golangci-lint with 0 issues, the tests with
+    `-race`, govulncheck, gitleaks, Vale, the API ruleset's self-test,
+    project lint and `generate-check`.
+  - `make test-integration` passes against the local lab: NetBox 4.7.1 and
+    PowerDNS 5.1.4. Go reused the results of the identical run at
+    `876963f`, since no code it tests had changed.
+  - `make release-check` passes: snapshot `0.0.0-SNAPSHOT-690f460`, both
+    archives, the image, and the release tests.
+  - `make docs-links` passes, on 68 pages.
 
 ## Approved design
 
