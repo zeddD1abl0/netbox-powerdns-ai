@@ -2,7 +2,7 @@
 id: ITEM-0058
 title: Pin GoReleaser and build the archives and checksums
 type: feature # feature | bug | debt | task
-status: open # open | in-progress | blocked | done | wontfix
+status: in-progress # open | in-progress | blocked | done | wontfix
 milestone: M05
 requirements: [REQ-002, REQ-045]
 depends_on: []

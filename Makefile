@@ -7,6 +7,8 @@ SHELL := /bin/bash
 MAKEFLAGS += --no-print-directory
 
 ROOT := $(CURDIR)
+# A comma, which $(call …) would otherwise take as an argument separator.
+comma := ,
 
 # The image CI runs in, pinned by digest. `make project-lint` checks that both
 # forges' CI files use exactly this image (ADR-0016).
@@ -96,7 +98,7 @@ fmt: $(GOLANGCI_LINT) ## Format Go code with the configured formatters (gofmt, g
 # too; otherwise they'd skip those files.
 .PHONY: vet
 vet: ## Run go vet
-	$(call each_module,go vet -tags integration ./...)
+	$(call each_module,go vet -tags integration$(comma)release ./...)
 
 # The hook tests in tools/hooktest run the pinned jq and golangci-lint.
 TEST_TOOLS := $(JQ) $(GOLANGCI_LINT)
@@ -126,6 +128,16 @@ test-integration: lab-up $(TEST_TOOLS) ## Start the lab, then run the integratio
 .PHONY: build
 build: ## Build nbpdns as a static binary, bin/nbpdns
 	CGO_ENABLED=0 go build -trimpath -o bin/nbpdns ./cmd/nbpdns
+
+##@ Release
+
+# GoReleaser builds the release from .goreleaser.yaml (ADR-0030): archives
+# for linux/amd64 and linux/arm64, and checksums.txt, in dist/.
+.PHONY: release-check
+release-check: $(GORELEASER) ## Build the release as a snapshot, into dist/, publishing nothing, and test it
+	$(need_cgo)
+	$(GORELEASER) release --snapshot --clean
+	go test -race -count=1 -tags release ./internal/release/
 
 # The reference pages generated from the code (internal/cmd/gendocs). Never
 # edit them by hand.

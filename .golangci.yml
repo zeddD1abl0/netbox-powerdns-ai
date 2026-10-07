@@ -4,8 +4,8 @@ version: "2"
 
 run:
   timeout: 5m
-  # Lint the integration tests too, which carry this build tag.
-  build-tags: [integration]
+  # Lint the integration and release tests too, which carry these build tags.
+  build-tags: [integration, release]
 
 linters:
   # standard = errcheck, govet, ineffassign, staticcheck, unused.

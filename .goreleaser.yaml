@@ -1,0 +1,49 @@
+# GoReleaser builds nbpdns's releases (ADR-0030). `make release-check` runs
+# it as a snapshot, in every pipeline, and `make release` for a version tag.
+# Every file's time is the commit's, and its owner root, so that one commit
+# builds the same bytes on any machine. The version nbpdns reports comes from Go's build info, so no -X
+# flags are set: a build at tag v0.1.0 reports v0.1.0.
+version: 2
+
+project_name: nbpdns
+
+builds:
+  - id: nbpdns
+    main: ./cmd/nbpdns
+    binary: nbpdns
+    env:
+      - CGO_ENABLED=0
+    goos: [linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags: [-s -w]
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: nbpdns
+    ids: [nbpdns]
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    builds_info: &binary
+      owner: root
+      group: root
+      mode: 0755
+      mtime: "{{ .CommitDate }}"
+    files:
+      - src: LICENSE
+        info: &file
+          owner: root
+          group: root
+          mode: 0644
+          mtime: "{{ .CommitDate }}"
+      - src: README.md
+        info: *file
+      - src: CHANGELOG.md
+        info: *file
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+changelog:
+  disable: true
