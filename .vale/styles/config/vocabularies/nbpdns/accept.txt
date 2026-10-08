@@ -124,3 +124,6 @@ ogen
 nullable
 browsable
 jq
+[Ww]ebhook's
+CI's
+[Mm]iddleware

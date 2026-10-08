@@ -14,7 +14,7 @@ Bring existing PowerDNS zones under management by importing them into NetBox.
 
 ## Scope (provisional)
 
-- Import zones and records from PowerDNS into NetBox (the import part of Q-054)
+- Import zones and records from PowerDNS into NetBox (Q-057, the import part of Q-054)
 - Imported zones start with the `report` policy (ADR-0008)
 
 ## Design, non-goals and acceptance criteria

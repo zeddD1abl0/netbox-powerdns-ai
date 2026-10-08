@@ -48,5 +48,6 @@ from [`template.md`](template.md).
 | [0032](0032-staged-ci-pipelines-with-a-tag-only-release-stage.md) | Staged CI pipelines with a tag-only release stage | accepted |
 | [0033](0033-a-read-only-api-spec-first-generated-with-oapi-cod.md) | A read-only API, spec-first, generated with oapi-codegen | accepted |
 | [0034](0034-a-vendored-locked-down-scalar-viewer-at-api-docs.md) | A vendored, locked-down Scalar viewer at /api/docs | accepted |
+| [0035](0035-refresh-the-zones-that-netbox-s-webhooks-name.md) | Refresh the zones that NetBox's webhooks name | accepted |
 
 <!-- projctl:adr-index:end -->

@@ -314,3 +314,24 @@ proposed options, its label is quoted; the others are quoted in full.
 The user then approved M06's plan. The decisions are recorded in ADR-0033
 and ADR-0034, and as REQ-046 and REQ-047, answering Q-041. ITEM-0065 is
 closed as won't-fix.
+
+## Answers, 2026-10-08 (M07 design)
+
+These were given in the M07 design session. Each was chosen from proposed
+options; the label of the chosen option is quoted. Before the questions,
+the user suggested a fix for the integration job that the runner kept
+killing:
+
+> I think a fix for the integration test failing might be to make it run
+> separately from the unit tests
+
+| Question | Answer |
+|---|---|
+| Q-054 (the trigger part): what should a NetBox webhook make nbpdns refresh? | "Only the affected zones": the zones a burst names, after a quiet spell; a view's change refreshes everything; the scheduled full refresh stays. |
+| Q-037: how far should traceability go in M07? | "Request ID and user": in the zone refresh's trace, logs and status; the rest of the chain, and NetBox's change IDs, with M13. |
+| How should webhooks be tested, given the lab has no NetBox worker? | "Replay in CI, worker on demand": signed, recorded NetBox 4.7 payloads in CI; an optional worker profile in the lab for real end-to-end runs. |
+| Who sets up the webhook and event rule in NetBox? | "You, from nbpdns's docs": nbpdns keeps its read-only token. |
+
+The user then approved M07's plan. The decisions are recorded in ADR-0035,
+and as REQ-048, answering Q-037 and Q-054's trigger part; its import part
+is Q-057, for M15.

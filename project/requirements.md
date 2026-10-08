@@ -63,6 +63,7 @@ When a question is answered:
 | REQ-045 | nbpdns is released, on version tags, as static linux amd64 and arm64 binaries with SHA-256 checksums, and as a multi-arch, non-root, distroless container image with an SBOM, built the same way every time. | Q-025, [ADR-0030](../docs/adr/0030-release-with-goreleaser-and-ko-to-gitlab-on-versio.md), [ADR-0031](../docs/adr/0031-debian-images-for-ci-with-a-distroless-static-runt.md) |
 | REQ-046 | nbpdns serves a read-only API, documented by `api/openapi.yaml`, of each server group's drift, its zones and their changes, and the service's status. Unauthenticated until M10. | Q-041, [ADR-0033](../docs/adr/0033-a-read-only-api-spec-first-generated-with-oapi-cod.md), [ADR-0034](../docs/adr/0034-a-vendored-locked-down-scalar-viewer-at-api-docs.md) |
 | REQ-047 | The API serves each zone's DNS records as NetBox defines them, in nbpdns's normalized form, for IaC to read, for example to publish them through other providers. Records are written only in NetBox. | Q-041, [ADR-0033](../docs/adr/0033-a-read-only-api-spec-first-generated-with-oapi-cod.md) |
+| REQ-048 | A NetBox webhook, signed with a shared secret, makes nbpdns compare the zones it names within seconds. The scheduled full refresh remains the safety net. | Q-054, [ADR-0035](../docs/adr/0035-refresh-the-zones-that-netbox-s-webhooks-name.md) |
 
 ## Open questions
 
@@ -80,7 +81,7 @@ names the milestone that needs the answer, from the milestone list in
 | Q-014 | What validation runs before and after changes? | Pre-flight checks (CNAME at apex, dangling NS, TTL bounds, syntax). After apply, query every server for the SOA serial and sample records. | M14 |
 | Q-015 | Is multi-tenancy needed: are permissions scoped to zone, NetBox tenant or server group? | Global roles in v1, scoped by server group. Tenant scoping is a later ADR. | M11 |
 | Q-016 | What is the web UI's scope? | Settings, ops dashboard (sync status, drift, per-server health), approvals, audit viewer, users and roles. **No record editor**, since NetBox is the editor. | M12 |
-| Q-054 | The parts of Q-010 not yet answered: how is a sync triggered, and how are existing PowerDNS zones adopted into NetBox (brownfield import)? | A NetBox event-rule webhook plus a periodic full reconcile. An import tool for first adoption, with imported zones starting in report mode. | M07 (triggers), M15 (import) |
+| Q-057 | How are existing PowerDNS zones adopted into NetBox (brownfield import)? This is Q-054's import part. | An import tool for first adoption, with imported zones starting in report mode. | M15 |
 
 ### Architecture and deployment
 
@@ -108,7 +109,6 @@ names the milestone that needs the answer, from the milestone list in
 | Q-034 | What wire format? | Native versioned JSON first. OCSF and CEF mappings are ADR candidates. | M16 |
 | Q-035 | What audit coverage, retention and tamper evidence are needed, and what happens when the SIEM is down? | All auth, config, RBAC, token, plan, apply, drift and approval events. Hash-chained. Retention configurable. An outbox buffers events, with an alert on backlog. | M08 |
 | Q-036 | Which compliance frameworks apply (ISO 27001, SOC 2, PCI DSS, Essential Eight/ISM, NIS2)? | Needs an answer. It affects retention, crypto and MFA. | M08 |
-| Q-037 | How far does traceability go? | End to end: carry NetBox's changelog identity (user, `request_id`, ObjectChange ID) through sync → apply → each server → verification, so one trace links the NetBox edit to every PowerDNS write. | M07 |
 
 ### API, metrics and extensibility
 
@@ -170,3 +170,5 @@ names the milestone that needs the answer, from the milestone list in
 | Q-038 | Do "clearly defined metrics" cover this app only, or PowerDNS stats too? | This app's only: drift per server group and per drifted zone, refreshes, and requests to NetBox and PowerDNS, through `prometheus/client_golang`. PowerDNS's statistics stay on PowerDNS's own `/metrics`. Sync lag and plan size come with writes (M13), and serial lag on secondaries with M14. | 2026-10-07 | REQ-044, [ADR-0029](../docs/adr/0029-run-nbpdns-as-a-service-with-prometheus-metrics-an.md) |
 | Q-025 | What packaging is needed? | For M05: static linux amd64 and arm64 binaries with SHA-256 checksums, and a multi-arch distroless static non-root image with an SBOM, built by GoReleaser and ko, and published to GitLab on version tags. Signing comes with M17, as do the Helm chart, systemd unit, compose example and air-gap bundle. Linux only. | 2026-10-07 | REQ-045, [ADR-0030](../docs/adr/0030-release-with-goreleaser-and-ko-to-gitlab-on-versio.md), [ADR-0031](../docs/adr/0031-debian-images-for-ci-with-a-distroless-static-runt.md) |
 | Q-041 | What does IaC manage? With NetBox as the source of truth, DNS records go through NetBox's own Terraform provider. | nbpdns's own configuration (server groups, sync policies, sinks, roles, tokens and settings), plus reading DNS records through the API, for example for Terraform to read a zone's records and push them to other providers. Records are written only in NetBox. | 2026-10-08 | REQ-046, REQ-047, [ADR-0033](../docs/adr/0033-a-read-only-api-spec-first-generated-with-oapi-cod.md) |
+| Q-054 | The parts of Q-010 not yet answered: how is a sync triggered, and how are existing PowerDNS zones adopted into NetBox (brownfield import)? | The trigger: a NetBox event-rule webhook, signed, makes nbpdns compare only the zones it names, after a short quiet spell that gathers a burst; a view's change makes a full refresh; the scheduled full refresh stays as the safety net. The import part moved to Q-057. | 2026-10-08 | REQ-048, [ADR-0035](../docs/adr/0035-refresh-the-zones-that-netbox-s-webhooks-name.md) |
+| Q-037 | How far does traceability go? | From M07, NetBox's request ID and user, from each webhook, are in the zone refresh's trace, logs and status. The rest of the chain (apply, each server, verification), and NetBox's change IDs, come with writes in M13. | 2026-10-08 | [ADR-0035](../docs/adr/0035-refresh-the-zones-that-netbox-s-webhooks-name.md) |
