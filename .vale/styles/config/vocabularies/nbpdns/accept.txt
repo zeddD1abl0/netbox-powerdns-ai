@@ -123,3 +123,4 @@ ogen
 [Vv]alidators?
 nullable
 browsable
+jq

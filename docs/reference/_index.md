@@ -16,7 +16,7 @@ by hand:
 | [Command line](command-line.md) | the command-line definitions | M01 |
 | [Supported versions](supported-versions.md) | the supported NetBox and PowerDNS releases | M01, M02 |
 | [Metrics](metrics.md) | the metric declarations | M04 |
-| API reference | `api/openapi.yaml` | M06 |
+| [API](api.md) | `api/openapi.yaml` | M06 |
 | Audit events | the audit event registry | M08 |
 | Permissions | the permission registry | M11 |
 

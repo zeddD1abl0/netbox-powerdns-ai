@@ -24,7 +24,10 @@ All notable changes to this project are recorded here. The format follows
   pages, with `limit` and an opaque `cursor`, and absolute `self` and
   `next` links. Every error is an RFC 9457 problem. `/api/docs` is a
   browsable reference, Scalar's, built into nbpdns, whose
-  Content-Security-Policy lets it reach no other host. Each request takes, or is given, an
+  Content-Security-Policy lets it reach no other host.
+- Documentation: the API's reference, generated from its OpenAPI document,
+  a how-to guide on reading drift and DNS records through the API with curl
+  and jq, and an explanation of how the API is designed. Each request takes, or is given, an
   `X-Flow-ID`, which is its request ID in the logs, continues the client's
   W3C `traceparent`, and is counted in `nbpdns_api_requests_total` and
   `nbpdns_api_request_duration_seconds`. `server.public_url` sets the host

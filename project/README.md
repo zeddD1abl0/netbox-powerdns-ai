@@ -35,7 +35,7 @@
 | Item | Title | Type | Status | Waiting on |
 |---|---|---|---|---|
 | [ITEM-0070](items/ITEM-0070-dns-records-from-netbox-in-the-api.md) | DNS records from NetBox in the API | feature | in-progress | — |
-| [ITEM-0072](items/ITEM-0072-the-api-docs-and-changelog.md) | The API docs and CHANGELOG | task | open | ITEM-0070 |
+| [ITEM-0072](items/ITEM-0072-the-api-docs-and-changelog.md) | The API docs and CHANGELOG | task | in-progress | ITEM-0070 |
 | [ITEM-0064](items/ITEM-0064-publish-the-changelog-s-section-as-the-release-not.md) | Publish the CHANGELOG's section as the release notes | bug | done 2026-10-08 | — |
 | [ITEM-0066](items/ITEM-0066-the-openapi-pipeline.md) | The OpenAPI pipeline | feature | done 2026-10-08 | — |
 | [ITEM-0067](items/ITEM-0067-the-api-s-middleware.md) | The API's middleware | feature | done 2026-10-08 | — |

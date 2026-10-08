@@ -182,7 +182,7 @@ type Change struct {
 // Examples: changed
 type ChangeKind string
 
-// ChangePage One page of a zone's changes, with the links to it and to the next.
+// ChangePage One page of a zone's changes, with its links.
 type ChangePage struct {
 	// AsOf When the group was last read and compared.
 	//
@@ -299,7 +299,7 @@ type RRset struct {
 	Type string `json:"type"`
 }
 
-// RRsetPage One page of a zone's RRsets, with the links to it and to the next.
+// RRsetPage One page of a zone's RRsets, with its links.
 type RRsetPage struct {
 	// AsOf When NetBox was last read, which the RRsets are as of.
 	//
@@ -388,7 +388,7 @@ type RefreshCounts struct {
 
 // Schedule The refreshes' schedule, and how they went.
 type Schedule struct {
-	// IntervalSeconds The time from one refresh's start to the next's, `drift.interval`.
+	// IntervalSeconds The time from the start of one refresh to the start of the next, `drift.interval`.
 	//
 	// Examples: 300
 	IntervalSeconds float64 `json:"interval_seconds"`
@@ -473,7 +473,7 @@ type ServerGroup struct {
 // Examples: ok
 type ServerGroupStatus string
 
-// ServerGroupPage One page of the server groups, with the links to it and to the next.
+// ServerGroupPage One page of the server groups, with its links.
 type ServerGroupPage struct {
 	// Items The page's server groups.
 	//
@@ -498,7 +498,7 @@ type Side struct {
 	// Examples: 300
 	Ttl int64 `json:"ttl"`
 
-	// Values The RRset's values, normalized and sorted.
+	// Values The RRset's values, in normalized form, in sorted order.
 	//
 	// Examples: ["192.0.2.10"]
 	Values []string `json:"values"`
@@ -686,7 +686,7 @@ type ZoneDetail struct {
 	Zone string `json:"zone"`
 }
 
-// ZonePage One page of a server group's zones, with the links to it and to the next.
+// ZonePage One page of a server group's zones, with its links.
 type ZonePage struct {
 	// AsOf What the zones are as of, the group's `last_success`, or null if the group was never read.
 	//

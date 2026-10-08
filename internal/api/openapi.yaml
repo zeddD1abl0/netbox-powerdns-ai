@@ -569,7 +569,7 @@ components:
           type: number
           format: double
           minimum: 0
-          description: The time from one refresh's start to the next's, `drift.interval`.
+          description: The time from the start of one refresh to the start of the next, `drift.interval`.
           examples: [300]
         timeout_seconds:
           type: number
@@ -822,7 +822,7 @@ components:
           description: The next page's absolute URL, or null on the last page.
           examples: ["https://nbpdns.example.com/api/server-groups?cursor=eyJhIjoic2l0ZS1iIn0&limit=2"]
     ServerGroupPage:
-      description: One page of the server groups, with the links to it and to the next.
+      description: One page of the server groups, with its links.
       allOf:
         - $ref: "#/components/schemas/PageLinks"
         - type: object
@@ -919,7 +919,7 @@ components:
               description: When the group was last read and compared, its `last_success`.
               examples: ["2026-10-08T01:10:02Z"]
     ZonePage:
-      description: One page of a server group's zones, with the links to it and to the next.
+      description: One page of a server group's zones, with its links.
       allOf:
         - $ref: "#/components/schemas/PageLinks"
         - type: object
@@ -968,7 +968,7 @@ components:
           type: array
           items:
             type: string
-          description: The RRset's values, normalized and sorted.
+          description: The RRset's values, in normalized form, in sorted order.
           examples: [[192.0.2.10]]
     Change:
       type: object
@@ -998,7 +998,7 @@ components:
             - $ref: "#/components/schemas/Side"
             - type: "null"
     ChangePage:
-      description: One page of a zone's changes, with the links to it and to the next.
+      description: One page of a zone's changes, with its links.
       allOf:
         - $ref: "#/components/schemas/PageLinks"
         - type: object
@@ -1065,7 +1065,7 @@ components:
             - - value: 192.0.2.10
                 managed: false
     RRsetPage:
-      description: One page of a zone's RRsets, with the links to it and to the next.
+      description: One page of a zone's RRsets, with its links.
       allOf:
         - $ref: "#/components/schemas/PageLinks"
         - type: object
