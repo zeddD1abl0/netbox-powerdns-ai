@@ -2,12 +2,12 @@
 id: ITEM-0075
 title: Run the integration tests apart from the unit tests
 type: task # feature | bug | debt | task
-status: in-progress # open | in-progress | blocked | done | wontfix
+status: done # open | in-progress | blocked | done | wontfix
 milestone: M07
 requirements: [REQ-039]
 depends_on: []
 created: 2026-10-08
-closed:
+closed: 2026-10-09
 ---
 
 # ITEM-0075: Run the integration tests apart from the unit tests
@@ -25,7 +25,7 @@ from the unit tests, and only what it needs.
 
 - [x] `make test-integration` runs only the packages that have integration-tagged tests, found by their build tag.
 - [x] Both forges' `integration-test` jobs wait for `unit-test`, and `make project-lint` passes.
-- [ ] The first pipeline on the branch records both jobs' times, and whether the integration job was killed.
+- [x] The first pipeline on the branch records both jobs' times, and whether the integration job was killed.
 
 ## Notes
 
@@ -44,3 +44,17 @@ from the unit tests, and only what it needs.
   same peak per process, 1.27 GB. The gain on the runner, a cold build and
   no unit tests beside it, shows only in a pipeline: the third criterion
   waits for the user to push the branch.
+- 2026-10-09: The branch's first pipelines, on 0a78faa, passed without a
+  retry. GitLab pipeline 786: `unit-test` (job 4299) ran 22:49:47 to
+  23:00:04, 616.5 s, and `integration-test` (job 4300) started at
+  23:00:05, a second later, and passed in 1,409.9 s; nothing was killed.
+  Before, the two started together, and the integration job failed on its
+  first try in four of the last five pipelines (jobs 4229, 4253, 4276 and
+  4288), passing on retry in 1,413 to 1,430 s, when it ran alone. So
+  running it alone takes as long, and no longer fails; the narrower package
+  list saves little on the runner, where the lab's start dominates. The
+  pipeline took 51 m 52 s in all. GitHub run 37778553208 passed on its
+  first attempt: `unit-test` 12:42:53 to 12:46:30, `integration-test`
+  12:46:33 to 12:54:04.
+- 2026-10-09: Seen, not this item's: GitLab's `unit-test` has taken about
+  620 s since pipeline 782 (M06), against about 225 s before.

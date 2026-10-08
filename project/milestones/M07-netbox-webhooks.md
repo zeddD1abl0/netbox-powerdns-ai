@@ -124,6 +124,13 @@ Append-only and dated. Record what was run and what was seen.
   decoding, length check and constant-time compare, that the secret and
   the signature reach no log, span, status or error, and that event data
   can't add parameters to NetBox's or PowerDNS's requests.
+- 2026-10-09: The user pushed the branch at `0a78faa`, and reported its
+  pipeline passing without a retry. GitLab pipeline 786 passed, every job
+  first time: `unit-test` 616.5 s, then `integration-test`, which started a
+  second after it ended, 1,409.9 s; 51 m 52 s in all. GitHub Actions run
+  37778553208 passed on its first attempt, `integration-test` starting
+  after `unit-test`. Before ITEM-0075, the integration job failed on its
+  first try in four of the last five GitLab pipelines.
 
 ## Approved design
 
