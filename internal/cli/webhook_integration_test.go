@@ -177,7 +177,7 @@ func metric(t *testing.T, s *served, series string) float64 {
 }
 
 // TestServeWebhooks replays NetBox 4.7's webhooks, signed, against serve
-// on the lab (ADR-0035): a record's change refreshes its zone, and only its
+// on the lab (ADR-0036): a record's change refreshes its zone, and only its
 // zone, within seconds; a forged one changes nothing; and a view's change
 // makes a full refresh.
 func TestServeWebhooks(t *testing.T) {

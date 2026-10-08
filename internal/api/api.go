@@ -3,7 +3,7 @@
 // code into package gen, and the copy of it that the binary serves at
 // /api/openapi.yaml. The handlers map the service's last-known state onto
 // the generated types. It changes nothing, and it receives NetBox's signed
-// webhooks, which queue refreshes (ADR-0035). Every error is an RFC 9457
+// webhooks, which queue refreshes (ADR-0036). Every error is an RFC 9457
 // problem.
 package api
 

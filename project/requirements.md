@@ -63,7 +63,7 @@ When a question is answered:
 | REQ-045 | nbpdns is released, on version tags, as static linux amd64 and arm64 binaries with SHA-256 checksums, and as a multi-arch, non-root, distroless container image with an SBOM, built the same way every time. | Q-025, [ADR-0030](../docs/adr/0030-release-with-goreleaser-and-ko-to-gitlab-on-versio.md), [ADR-0031](../docs/adr/0031-debian-images-for-ci-with-a-distroless-static-runt.md) |
 | REQ-046 | nbpdns serves a read-only API, documented by `api/openapi.yaml`, of each server group's drift, its zones and their changes, and the service's status. Unauthenticated until M10. | Q-041, [ADR-0033](../docs/adr/0033-a-read-only-api-spec-first-generated-with-oapi-cod.md), [ADR-0034](../docs/adr/0034-a-vendored-locked-down-scalar-viewer-at-api-docs.md) |
 | REQ-047 | The API serves each zone's DNS records as NetBox defines them, in nbpdns's normalized form, for IaC to read, for example to publish them through other providers. Records are written only in NetBox. | Q-041, [ADR-0033](../docs/adr/0033-a-read-only-api-spec-first-generated-with-oapi-cod.md) |
-| REQ-048 | A NetBox webhook, signed with a shared secret, makes nbpdns compare the zones it names within seconds. The scheduled full refresh remains the safety net. | Q-054, [ADR-0035](../docs/adr/0035-refresh-the-zones-that-netbox-s-webhooks-name.md) |
+| REQ-048 | A NetBox webhook, signed with a shared secret, makes nbpdns compare the zones it names within seconds. The scheduled full refresh remains the safety net. | Q-054, [ADR-0035](../docs/adr/0035-refresh-the-zones-that-netbox-s-webhooks-name.md), restated by [ADR-0036](../docs/adr/0036-refresh-the-zones-that-netbox-s-webhooks-name-rest.md) |
 
 ## Open questions
 

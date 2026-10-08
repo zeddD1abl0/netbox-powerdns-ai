@@ -28,7 +28,7 @@ type DriftConfig struct {
 	// Timeout bounds a refresh.
 	Timeout time.Duration
 	// WebhookDelay is how long `nbpdns serve` waits for NetBox's webhooks
-	// to stop before it refreshes the zones they named (ADR-0035).
+	// to stop before it refreshes the zones they named (ADR-0036).
 	WebhookDelay time.Duration
 }
 
@@ -55,7 +55,7 @@ type NetBoxConfig struct {
 	Timeout     time.Duration
 	PageSize    int
 	Concurrency int
-	// WebhookSecret keys the signatures of NetBox's webhooks (ADR-0035).
+	// WebhookSecret keys the signatures of NetBox's webhooks (ADR-0036).
 	// If it's unset, `nbpdns serve` takes no webhooks.
 	WebhookSecret Secret
 }

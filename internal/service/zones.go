@@ -24,7 +24,7 @@ import (
 )
 
 // The bounds of the zone refreshes that NetBox's webhooks ask for
-// (ADR-0035).
+// (ADR-0036).
 const (
 	// maxWait is the longest that webhooks' zones wait for their refresh,
 	// from the first webhook, unless Options.maxWait sets another.
@@ -172,7 +172,7 @@ func (b *batch) attributes() []attribute.KeyValue {
 	return append(attrs, attribute.StringSlice("nbpdns.zones", b.names()))
 }
 
-// Notify queues the refresh that a NetBox event, e, asks for, r (ADR-0035),
+// Notify queues the refresh that a NetBox event, e, asks for, r (ADR-0036),
 // and reports whether it queued anything: not if r asks for nothing, or
 // names only zones, or a view, that no group serves. It implements
 // api.Notifier. ctx carries the webhook's span, which the refresh links

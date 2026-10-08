@@ -38,7 +38,7 @@ type Status struct {
 	Webhooks      Webhooks    `json:"webhooks"`
 }
 
-// Webhooks is the state of NetBox's webhooks (ADR-0035).
+// Webhooks is the state of NetBox's webhooks (ADR-0036).
 type Webhooks struct {
 	// Enabled is whether netbox.webhook_secret is set, so that
 	// /api/netbox-events takes NetBox's webhooks.

@@ -1,4 +1,4 @@
-// Package webhook reads NetBox's webhooks (ADR-0035). It checks each one's
+// Package webhook reads NetBox's webhooks (ADR-0036). It checks each one's
 // signature, and decodes its event into what nbpdns should refresh: the
 // zones that the event names, or everything.
 package webhook

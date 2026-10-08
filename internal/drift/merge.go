@@ -7,7 +7,7 @@ import (
 )
 
 // Merge returns a group's last report, old, with r, a zone refresh's report
-// of the group, merged in (ADR-0035). For each name r compared, its zone,
+// of the group, merged in (ADR-0036). For each name r compared, its zone,
 // whether unmanaged, its problems and its warnings are r's; a zone that
 // neither side has any more leaves the report. The counts are counted
 // again. Neither report is changed: the result's slices are its own, so a

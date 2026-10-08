@@ -30,7 +30,7 @@ const (
 // Outcomes are the values of the outcome label.
 var Outcomes = []string{OutcomeComplete, OutcomeIncomplete, OutcomeFailed}
 
-// The results of a NetBox webhook (ADR-0035).
+// The results of a NetBox webhook (ADR-0036).
 const (
 	// WebhookAccepted is an event that queued a refresh.
 	WebhookAccepted = "accepted"

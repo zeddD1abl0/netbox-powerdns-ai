@@ -1,9 +1,9 @@
 ---
 id: M07
 title: NetBox webhooks
-status: in-progress # planned | in-progress | done
+status: done # planned | in-progress | done
 started: 2026-10-08
-closed:
+closed: 2026-10-09
 ---
 
 # M07: NetBox webhooks
@@ -42,26 +42,26 @@ request ID and user. The scheduled full refresh still runs as the safety net.
 
 ## Acceptance criteria
 
-- [ ] ADR-0035 is accepted. REQ-048 exists, Q-037 and Q-054's trigger part
+- [x] ADR-0035 is accepted. REQ-048 exists, Q-037 and Q-054's trigger part
   are answered, and Q-057 holds the import part.
-- [ ] CI's integration job runs only the integration-tagged packages, and
+- [x] CI's integration job runs only the integration-tagged packages, and
   only after `unit-test`, on both forges, and `make project-lint` passes.
-- [ ] `POST /api/netbox-events` accepts only a valid signature, and answers
+- [x] `POST /api/netbox-events` accepts only a valid signature, and answers
   as the spec says. Its responses are checked against the spec.
-- [ ] Every captured NetBox event maps to the right zones, a view to a full
+- [x] Every captured NetBox event maps to the right zones, a view to a full
   refresh, and other types are ignored, as table tests show.
-- [ ] A burst of events makes one zone refresh after the quiet spell, or a
+- [x] A burst of events makes one zone refresh after the quiet spell, or a
   full refresh past 100 zones. Zone and scheduled refreshes never overlap.
-- [ ] A zone refresh updates that zone's drift, counts, metrics and records
+- [x] A zone refresh updates that zone's drift, counts, metrics and records
   in the API, and nothing else.
-- [ ] Its trace links to the webhook spans, and carries NetBox's request IDs
+- [x] Its trace links to the webhook spans, and carries NetBox's request IDs
   and users, as its logs do.
-- [ ] `/status` and `/api/status` show the webhooks section.
-- [ ] The replayed integration test passes in CI, and `make test-webhooks`
+- [x] `/status` and `/api/status` show the webhooks section.
+- [x] The replayed integration test passes in CI, and `make test-webhooks`
   passes locally, with real NetBox deliveries.
-- [ ] The docs above exist, the references are regenerated, and the
+- [x] The docs above exist, the references are regenerated, and the
   CHANGELOG is updated.
-- [ ] `/code-review high` and `/security-review` have run. The security
+- [x] `/code-review high` and `/security-review` have run. The security
   review runs because M07 adds an authenticated endpoint and a secret.
 - [ ] The manual verification is recorded. The pipelines pass, and the user
   has merged through an MR with a merge commit.
@@ -131,6 +131,12 @@ Append-only and dated. Record what was run and what was seen.
   37778553208 passed on its first attempt, `integration-test` starting
   after `unit-test`. Before ITEM-0075, the integration job failed on its
   first try in four of the last five GitLab pipelines.
+- 2026-10-09: The user accepted ADR-0036, which restates ADR-0035 as built
+  and supersedes it: a moved zone or record makes a full refresh, a view's
+  event needs a served view, a zone refresh doesn't move `last_success`,
+  Terraform manages only the event rule, and zones are listed by name
+  whatever its case, 20 names a request. The code, the explanations and
+  REQ-048 cite it. M07 is closed; its last criterion waits for the merge.
 
 ## Approved design
 

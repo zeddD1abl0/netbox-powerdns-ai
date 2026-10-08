@@ -14,7 +14,7 @@ import (
 )
 
 // TestWebhooksFromNetBox has the lab's NetBox send its own webhooks to
-// serve (ADR-0035), through the worker that the profile webhooks starts:
+// serve (ADR-0036), through the worker that the profile webhooks starts:
 // make test-webhooks. NetBox reaches serve on the Docker host, so serve
 // listens on every interface.
 func TestWebhooksFromNetBox(t *testing.T) {

@@ -12,7 +12,7 @@ how it refreshes the report, on a schedule and as NetBox's webhooks tell it
 of changes, what it keeps when something fails, what its health checks
 mean, and how its metrics are shaped.
 [ADR-0029](../adr/0029-run-nbpdns-as-a-service-with-prometheus-metrics-an.md)
-and [ADR-0035](../adr/0035-refresh-the-zones-that-netbox-s-webhooks-name.md)
+and [ADR-0036](../adr/0036-refresh-the-zones-that-netbox-s-webhooks-name-rest.md)
 record the decisions.
 
 ## A refresh, on a schedule

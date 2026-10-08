@@ -69,7 +69,7 @@ func newServeCmd(a *app) *cobra.Command {
 				Refresh: func(ctx context.Context, zones []drift.ZoneRef) (drift.Report, error) {
 					s.retryClients(ctx, clients)
 					// The API serves NetBox's records too (ADR-0033), and a
-					// webhook's refresh compares only its zones (ADR-0035).
+					// webhook's refresh compares only its zones (ADR-0036).
 					return s.compare(ctx, nbc, clients, drift.Options{ReadNetBox: true, Zones: zones})
 				},
 				Interval:     s.cfg.Drift.Interval,
@@ -115,7 +115,7 @@ func serve(ctx context.Context, s *session, svc *service.Service) error {
 	}
 	// The API (ADR-0033) is under /api, beside the service's own endpoints.
 	mux := http.NewServeMux()
-	// NetBox's webhooks queue the service's zone refreshes (ADR-0035).
+	// NetBox's webhooks queue the service's zone refreshes (ADR-0036).
 	mux.Handle("/api/", api.New(api.Options{
 		Source: svc, Log: s.log, Tracer: s.tracer, Metrics: s.metrics, PublicURL: s.cfg.Server.PublicURL,
 		WebhookSecret: s.cfg.NetBox.WebhookSecret, Events: svc,

@@ -61,7 +61,7 @@ type Options struct {
 	// Zone, if it isn't empty, is the one zone compared, as an absolute
 	// name.
 	Zone string
-	// Zones, if it isn't nil, makes Run a zone refresh (ADR-0035): each
+	// Zones, if it isn't nil, makes Run a zone refresh (ADR-0036): each
 	// group compares only the zones of Zones in its views, by name, in each
 	// of its views, as a full comparison would compare them. A group with
 	// none isn't compared, and isn't in the report. Unlike Zone, a zone

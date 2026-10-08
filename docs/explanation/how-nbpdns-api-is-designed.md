@@ -128,7 +128,7 @@ M10 adds tokens, and from then, the API requires them.
 
 One operation is the exception: `POST /api/netbox-events`, which receives
 NetBox's webhooks
-([ADR-0035](../adr/0035-refresh-the-zones-that-netbox-s-webhooks-name.md)).
+([ADR-0036](../adr/0036-refresh-the-zones-that-netbox-s-webhooks-name-rest.md)).
 Its security scheme in the spec is NetBox's signature, `X-Hook-Signature`,
 the HMAC-SHA512 of the body keyed by `netbox.webhook_secret`. The server
 checks it before it decodes the body, so a request that NetBox didn't sign

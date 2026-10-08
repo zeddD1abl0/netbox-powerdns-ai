@@ -12,7 +12,7 @@
 #   make lab-down  remove the lab and its data
 #
 # The profile webhooks adds NetBox's worker, which sends NetBox's webhooks
-# (ADR-0035): make lab-up LAB_PROFILES=webhooks, which make test-webhooks
+# (ADR-0036): make lab-up LAB_PROFILES=webhooks, which make test-webhooks
 # does. CI never starts it.
 #
 # NetBox 4.7 listens on port 8047 on the Docker host: localhost, or the host

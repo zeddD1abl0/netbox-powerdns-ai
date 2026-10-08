@@ -25,7 +25,7 @@ import (
 
 // A RefreshFunc reads NetBox and every group's primary, and compares them,
 // as `nbpdns drift` does: every zone, or, if zones isn't nil, only those, as
-// drift.Options.Zones does (ADR-0035). Its error means NetBox couldn't be
+// drift.Options.Zones does (ADR-0036). Its error means NetBox couldn't be
 // read.
 type RefreshFunc func(ctx context.Context, zones []drift.ZoneRef) (drift.Report, error)
 
@@ -150,7 +150,7 @@ func New(o Options) *Service {
 
 // Run refreshes at once, then every interval, from one refresh's start to
 // the next's, until ctx is canceled. In between, it refreshes the zones that
-// NetBox's webhooks name, once they're due (ADR-0035). Refreshes never
+// NetBox's webhooks name, once they're due (ADR-0036). Refreshes never
 // overlap: one that takes longer than the interval delays the next.
 func (s *Service) Run(ctx context.Context) {
 	next := s.o.now()

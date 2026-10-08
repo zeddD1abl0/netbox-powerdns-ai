@@ -15,7 +15,7 @@ import (
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/webhook"
 )
 
-// maxEventSize bounds a webhook's body (ADR-0035). NetBox's events for the
+// maxEventSize bounds a webhook's body (ADR-0036). NetBox's events for the
 // DNS plugin's objects are a few KiB.
 const maxEventSize = 1 << 20
 
@@ -29,7 +29,7 @@ type Notifier interface {
 }
 
 // verified is the generated server's middleware for the routes whose
-// operations need NetBox's signature (ADR-0035). Before the strict server
+// operations need NetBox's signature (ADR-0036). Before the strict server
 // decodes anything, it reads the body, up to maxEventSize, and checks its
 // signature against netbox.webhook_secret: a request that it refuses is
 // never decoded. Until the secret is set, those routes are off.

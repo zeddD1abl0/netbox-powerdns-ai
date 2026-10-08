@@ -1,6 +1,6 @@
 ---
 title: "0035: Refresh the zones that NetBox's webhooks name"
-status: accepted
+status: superseded by ADR-0036
 date: 2026-10-08
 decision-makers: [jordan]
 requirements: [REQ-044, REQ-046, REQ-048]

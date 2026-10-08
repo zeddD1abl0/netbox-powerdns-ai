@@ -138,7 +138,7 @@ test-integration: lab-up ## Start the lab, then run the integration tests (build
 	done; \
 	[ -n "$$found" ] || { echo "No package has integration tests: is the build tag still \"integration\"?"; exit 1; }
 
-# The end-to-end webhook test (ADR-0035) has the lab's NetBox send its own
+# The end-to-end webhook test (ADR-0036) has the lab's NetBox send its own
 # webhooks to nbpdns serve, through the worker of the profile webhooks. It
 # needs a local Docker host, which the worker reaches nbpdns on, so it's not
 # part of `make ci`; the integration tests replay NetBox's webhooks instead.
@@ -238,7 +238,7 @@ LAB_DIR := deploy/dev
 LAB_LOOPBACK := tcp://localhost tcp://localhost:% tcp://127.% tcp://[::1] tcp://[::1]:%
 LAB_BIND_ADDRESS := $(if $(filter-out $(LAB_LOOPBACK),$(filter tcp://%,$(DOCKER_HOST))),0.0.0.0,127.0.0.1)
 # Compose profiles to start with the lab, such as webhooks, which adds
-# NetBox's worker, which sends its webhooks (ADR-0035). CI starts none.
+# NetBox's worker, which sends its webhooks (ADR-0036). CI starts none.
 LAB_PROFILES ?=
 LAB_COMPOSE = LAB_BIND_ADDRESS=$(LAB_BIND_ADDRESS) $(DOCKER_COMPOSE) --file $(LAB_DIR)/compose.yaml $(foreach p,$(LAB_PROFILES),--profile $(p))
 
