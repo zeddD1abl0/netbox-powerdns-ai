@@ -253,6 +253,14 @@ func TestScheduledRefreshCoversTheZonesWaiting(t *testing.T) {
 	if events != 0 {
 		t.Errorf("%d events still waiting", events)
 	}
+	waitFor(t, func() bool {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		return s.st.lastWebhookRefresh != nil
+	})
+	if w := s.Status().Webhooks.LastRefresh; !w.Full || w.Reason != "the scheduled refresh came first" || w.Zones != nil {
+		t.Errorf("last webhook refresh %+v", w)
+	}
 }
 
 func TestRefreshesNeverOverlap(t *testing.T) {
@@ -450,4 +458,44 @@ func TestNotifyIsSafeWhileRefreshing(t *testing.T) {
 		})
 	}
 	wg.Wait()
+}
+
+func TestStatusShowsTheWebhooks(t *testing.T) {
+	text := func(s *Service) string {
+		var b strings.Builder
+		if err := writeStatus(&b, s.Status()); err != nil {
+			t.Fatal(err)
+		}
+		return b.String()
+	}
+	off, _, _ := testService(t, Options{Groups: served})
+	if w := off.Status().Webhooks; w.Enabled || w.LastEvent != nil || w.Pending.Zones == nil || w.LastRefresh != nil {
+		t.Errorf("webhooks off: %+v", w)
+	}
+	if !strings.Contains(text(off), "NetBox's webhooks are off; set netbox.webhook_secret") {
+		t.Errorf("status page:\n%s", text(off))
+	}
+
+	s, _, _ := testService(t, Options{Groups: served, Webhooks: true})
+	s.Notify(t.Context(), event("r1", "alice"), zonesOf("a.example."))
+	w := s.Status().Webhooks
+	if !w.Enabled || w.DelaySeconds != 3 || w.LastEvent == nil || w.LastEvent.Request != (Request{"r1", "alice"}) ||
+		w.Pending.Events != 1 || !slices.Equal(w.Pending.Zones, []string{"v/a.example."}) || w.Pending.Due == nil {
+		t.Errorf("webhooks %+v, last event %+v", w, w.LastEvent)
+	}
+	page := text(s)
+	for _, want := range []string{
+		"NetBox's webhooks, each zone refreshed once they stop for 3s:",
+		"netbox_dns.record updated, request r1 by alice",
+		"waiting:       v/a.example., due ",
+		"last refresh:  none yet",
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("no %q in the status page:\n%s", want, page)
+		}
+	}
+	s.noteWebhookRefresh(s.take(), false, time.Now(), time.Now(), metrics.OutcomeComplete, nil)
+	if page := text(s); !strings.Contains(page, "complete, of v/a.example.") || !strings.Contains(page, "waiting:       nothing") {
+		t.Errorf("status page:\n%s", page)
+	}
 }

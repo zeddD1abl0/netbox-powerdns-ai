@@ -188,5 +188,39 @@ func (s *server) GetStatus(_ context.Context, _ gen.GetStatusRequestObject) (gen
 		p := gen.OTLPProtocol(st.Tracing.Protocol)
 		out.Tracing.Endpoint, out.Tracing.Protocol = optional(st.Tracing.Endpoint), &p
 	}
+	out.Webhooks = webhooks(st.Webhooks)
 	return gen.GetStatus200JSONResponse{Body: out}, nil
+}
+
+// webhooks maps the webhooks' state onto the API's type.
+func webhooks(w service.Webhooks) gen.Webhooks {
+	out := gen.Webhooks{
+		Enabled: w.Enabled, DelaySeconds: w.DelaySeconds,
+		Pending: gen.PendingRefresh{Events: int64(w.Pending.Events), Zones: w.Pending.Zones, Full: w.Pending.Full, Due: w.Pending.Due},
+	}
+	if out.Pending.Zones == nil {
+		out.Pending.Zones = []string{}
+	}
+	if e := w.LastEvent; e != nil {
+		out.LastEvent = &gen.WebhookEvent{Received: e.Received, Event: e.Event, ObjectType: e.ObjectType, Request: changeRequest(e.Request)}
+	}
+	if r := w.LastRefresh; r != nil {
+		lr := &gen.WebhookRefresh{
+			Started: r.Started, Finished: r.Finished, Full: r.Full, Reason: optional(r.Reason),
+			Outcome: gen.WebhookRefreshOutcome(r.Outcome), Error: optional(r.Error), Events: int64(r.Events),
+			Requests: make([]gen.ChangeRequest, len(r.Requests)),
+		}
+		if r.Zones != nil {
+			lr.Zones = &r.Zones
+		}
+		for i, req := range r.Requests {
+			lr.Requests[i] = changeRequest(req)
+		}
+		out.LastRefresh = lr
+	}
+	return out
+}
+
+func changeRequest(r service.Request) gen.ChangeRequest {
+	return gen.ChangeRequest{Id: optional(r.ID), User: optional(r.User)}
 }

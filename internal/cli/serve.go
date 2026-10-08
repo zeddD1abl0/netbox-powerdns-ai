@@ -75,6 +75,7 @@ func newServeCmd(a *app) *cobra.Command {
 				Interval:     s.cfg.Drift.Interval,
 				Timeout:      s.cfg.Drift.Timeout,
 				WebhookDelay: s.cfg.Drift.WebhookDelay,
+				Webhooks:     s.cfg.NetBox.WebhookSecret.IsSet(),
 				Log:          s.log,
 				Tracer:       s.tracer,
 				Metrics:      s.metrics,

@@ -121,6 +121,27 @@ func (e ServerGroupStatus) Valid() bool {
 	}
 }
 
+// Defines values for WebhookRefreshOutcome.
+const (
+	WebhookRefreshOutcomeComplete   WebhookRefreshOutcome = "complete"
+	WebhookRefreshOutcomeFailed     WebhookRefreshOutcome = "failed"
+	WebhookRefreshOutcomeIncomplete WebhookRefreshOutcome = "incomplete"
+)
+
+// Valid indicates whether the value is a known member of the WebhookRefreshOutcome enum.
+func (e WebhookRefreshOutcome) Valid() bool {
+	switch e {
+	case WebhookRefreshOutcomeComplete:
+		return true
+	case WebhookRefreshOutcomeFailed:
+		return true
+	case WebhookRefreshOutcomeIncomplete:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ZoneState.
 const (
 	ZoneStateDrift            ZoneState = "drift"
@@ -207,6 +228,19 @@ type ChangePage struct {
 	Self string `json:"self"`
 }
 
+// ChangeRequest The NetBox request that made a change.
+type ChangeRequest struct {
+	// Id NetBox's ID for the request, or null if no request made the change.
+	//
+	// Examples: 3bd63b08-a526-45f3-a819-aa7c507dd31f
+	Id *string `json:"id"`
+
+	// User The user who made the request, or null.
+	//
+	// Examples: admin
+	User *string `json:"user"`
+}
+
 // DriftPolicy What nbpdns does about a zone's drift: `report` reports it, `enforce` reports it and, from M13, corrects it, and `ignore` doesn't compare the zone.
 //
 // Examples: report
@@ -279,6 +313,29 @@ type PageLinks struct {
 	//
 	// Examples: https://nbpdns.example.com/api/server-groups?limit=2
 	Self string `json:"self"`
+}
+
+// PendingRefresh What NetBox's webhooks queued, waiting for its refresh.
+type PendingRefresh struct {
+	// Due When the refresh is due, unless the scheduled one comes first, or null if nothing waits.
+	//
+	// Examples: 2026-10-08T01:12:01.2Z
+	Due *time.Time `json:"due"`
+
+	// Events The webhooks whose refresh waits.
+	//
+	// Examples: 2
+	Events int64 `json:"events"`
+
+	// Full Whether a full refresh waits: for a view's change, a zone or a record that moved, or more than 100 zones.
+	//
+	// Examples: false
+	Full bool `json:"full"`
+
+	// Zones The zones waiting, each as `view/name`, unless a full refresh waits.
+	//
+	// Examples: ["_default_/example.org."]
+	Zones []string `json:"zones"`
 }
 
 // Problem An error, as RFC 9457 describes it.
@@ -579,6 +636,9 @@ type Status struct {
 	//
 	// Examples: v0.2.0
 	Version string `json:"version"`
+
+	// Webhooks The state of NetBox's webhooks, which refresh the zones they name.
+	Webhooks Webhooks `json:"webhooks"`
 }
 
 // Tracing Where the service's spans are exported.
@@ -595,6 +655,102 @@ type Tracing struct {
 
 	// Protocol The OTLP protocol, `otlp.protocol`, or null.
 	Protocol *OTLPProtocol `json:"protocol"`
+}
+
+// WebhookEvent An event that a NetBox webhook brought.
+type WebhookEvent struct {
+	// Event What the event said happened to the object, `created`, `updated` or `deleted`.
+	//
+	// Examples: updated
+	Event string `json:"event"`
+
+	// ObjectType The object's type, such as `netbox_dns.record`.
+	//
+	// Examples: netbox_dns.record
+	ObjectType string `json:"object_type"`
+
+	// Received When it came.
+	//
+	// Examples: 2026-10-08T01:11:58.2Z
+	Received time.Time `json:"received"`
+
+	// Request The NetBox request that made a change.
+	Request ChangeRequest `json:"request"`
+}
+
+// WebhookRefresh A refresh that NetBox's webhooks asked for, or that covered the zones they named, which finished.
+type WebhookRefresh struct {
+	// Error Why it failed, or null.
+	//
+	// Examples: null
+	Error *string `json:"error"`
+
+	// Events The webhooks it served.
+	//
+	// Examples: 3
+	Events int64 `json:"events"`
+
+	// Finished When it finished.
+	//
+	// Examples: 2026-10-08T01:12:01.6Z
+	Finished time.Time `json:"finished"`
+
+	// Full Whether it was a full refresh.
+	//
+	// Examples: false
+	Full bool `json:"full"`
+
+	// Outcome `complete` if NetBox and every group it compared were read, `incomplete` if a group's primary couldn't be, and `failed` if NetBox couldn't be, or it ran out of time.
+	//
+	// Examples: complete
+	Outcome WebhookRefreshOutcome `json:"outcome"`
+
+	// Reason Why it was a full refresh, such as `a view was updated`, or null.
+	//
+	// Examples: null
+	Reason *string `json:"reason"`
+
+	// Requests The NetBox requests whose changes it refreshed, up to 128.
+	//
+	// Examples: [{"id":"3bd63b08-a526-45f3-a819-aa7c507dd31f","user":"admin"}]
+	Requests []ChangeRequest `json:"requests"`
+
+	// Started When it started.
+	//
+	// Examples: 2026-10-08T01:12:01.2Z
+	Started time.Time `json:"started"`
+
+	// Zones The zones it refreshed, each as `view/name`, or null for a full refresh.
+	//
+	// Examples: ["_default_/example.com."]
+	Zones *[]string `json:"zones"`
+}
+
+// WebhookRefreshOutcome `complete` if NetBox and every group it compared were read, `incomplete` if a group's primary couldn't be, and `failed` if NetBox couldn't be, or it ran out of time.
+//
+// Examples: complete
+type WebhookRefreshOutcome string
+
+// Webhooks The state of NetBox's webhooks, which refresh the zones they name.
+type Webhooks struct {
+	// DelaySeconds How long the zones that webhooks name wait for the webhooks to stop coming, `drift.webhook_delay`.
+	//
+	// Examples: 3
+	DelaySeconds float64 `json:"delay_seconds"`
+
+	// Enabled Whether `netbox.webhook_secret` is set, so that `/api/netbox-events` takes NetBox's webhooks.
+	//
+	// Examples: true
+	Enabled bool `json:"enabled"`
+
+	// LastEvent The last event that a signed webhook brought, or null before the first.
+	LastEvent *WebhookEvent `json:"last_event"`
+
+	// LastRefresh The last refresh that webhooks asked for, or that covered the zones they named, or null.
+	LastRefresh *WebhookRefresh `json:"last_refresh"`
+
+	// Pending What NetBox's webhooks queued, waiting for its refresh.
+	Pending PendingRefresh `json:"pending"`
 }
 
 // Zone A zone of a server group, as of the group's last successful read.

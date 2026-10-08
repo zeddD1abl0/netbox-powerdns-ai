@@ -218,6 +218,7 @@ The nbpdns service's state.
 | `schedule` | [`Schedule`](#schedule) | The refreshes' schedule, and how they went. |
 | `netbox` | [`NetBoxState`](#netboxstate) | NetBox's state, as of the last refresh. |
 | `tracing` | [`Tracing`](#tracing) | Where the service's spans are exported. |
+| `webhooks` | [`Webhooks`](#webhooks) | The state of NetBox's webhooks, which refresh the zones they name. |
 
 ### `Schedule`
 
@@ -273,6 +274,65 @@ Where the service's spans are exported.
 | `exported` | `boolean` | Whether spans are exported, which they are when `otlp.endpoint` is set. |
 | `endpoint` | `string`, or null | The OTLP collector's endpoint, `otlp.endpoint`, or null. |
 | `protocol` | [`OTLPProtocol`](#otlpprotocol), or null | The OTLP protocol, `otlp.protocol`, or null. |
+
+### `Webhooks`
+
+The state of NetBox's webhooks, which refresh the zones they name.
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `boolean` | Whether `netbox.webhook_secret` is set, so that `/api/netbox-events` takes NetBox's webhooks. |
+| `delay_seconds` | `number` (`double`) | How long the zones that webhooks name wait for the webhooks to stop coming, `drift.webhook_delay`. |
+| `last_event` | [`WebhookEvent`](#webhookevent), or null | The last event that a signed webhook brought, or null before the first. |
+| `pending` | [`PendingRefresh`](#pendingrefresh) | What NetBox's webhooks queued, waiting for its refresh. |
+| `last_refresh` | [`WebhookRefresh`](#webhookrefresh), or null | The last refresh that webhooks asked for, or that covered the zones they named, or null. |
+
+### `WebhookEvent`
+
+An event that a NetBox webhook brought.
+
+| Field | Type | Description |
+|---|---|---|
+| `received` | `string` (`date-time`) | When it came. |
+| `event` | `string` | What the event said happened to the object, `created`, `updated` or `deleted`. |
+| `object_type` | `string` | The object's type, such as `netbox_dns.record`. |
+| `request` | [`ChangeRequest`](#changerequest) | The NetBox request that made a change. |
+
+### `ChangeRequest`
+
+The NetBox request that made a change.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string`, or null | NetBox's ID for the request, or null if no request made the change. |
+| `user` | `string`, or null | The user who made the request, or null. |
+
+### `PendingRefresh`
+
+What NetBox's webhooks queued, waiting for its refresh.
+
+| Field | Type | Description |
+|---|---|---|
+| `events` | `integer` (`int64`) | The webhooks whose refresh waits. |
+| `zones` | array of `string` | The zones waiting, each as `view/name`, unless a full refresh waits. |
+| `full` | `boolean` | Whether a full refresh waits: for a view's change, a zone or a record that moved, or more than 100 zones. |
+| `due` | `string` (`date-time`), or null | When the refresh is due, unless the scheduled one comes first, or null if nothing waits. |
+
+### `WebhookRefresh`
+
+A refresh that NetBox's webhooks asked for, or that covered the zones they named, which finished.
+
+| Field | Type | Description |
+|---|---|---|
+| `started` | `string` (`date-time`) | When it started. |
+| `finished` | `string` (`date-time`) | When it finished. |
+| `zones` | array of `string`, or null | The zones it refreshed, each as `view/name`, or null for a full refresh. |
+| `full` | `boolean` | Whether it was a full refresh. |
+| `reason` | `string`, or null | Why it was a full refresh, such as `a view was updated`, or null. |
+| `outcome` | `complete`, `incomplete`, or `failed` | `complete` if NetBox and every group it compared were read, `incomplete` if a group's primary couldn't be, and `failed` if NetBox couldn't be, or it ran out of time. |
+| `error` | `string`, or null | Why it failed, or null. |
+| `events` | `integer` (`int64`) | The webhooks it served. |
+| `requests` | array of [`ChangeRequest`](#changerequest) | The NetBox requests whose changes it refreshed, up to 128. |
 
 ### `OTLPProtocol`
 

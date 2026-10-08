@@ -93,6 +93,33 @@ paths:
                   exported: false
                   endpoint: null
                   protocol: null
+                webhooks:
+                  enabled: true
+                  delay_seconds: 3
+                  last_event:
+                    received: "2026-10-08T01:11:58.2Z"
+                    event: updated
+                    object_type: netbox_dns.record
+                    request:
+                      id: 3bd63b08-a526-45f3-a819-aa7c507dd31f
+                      user: admin
+                  pending:
+                    events: 0
+                    zones: []
+                    full: false
+                    due: null
+                  last_refresh:
+                    started: "2026-10-08T01:12:01.2Z"
+                    finished: "2026-10-08T01:12:01.6Z"
+                    zones: [_default_/example.com.]
+                    full: false
+                    reason: null
+                    outcome: complete
+                    error: null
+                    events: 3
+                    requests:
+                      - id: 3bd63b08-a526-45f3-a819-aa7c507dd31f
+                        user: admin
         default:
           $ref: "#/components/responses/Problem"
   /server-groups:
@@ -678,7 +705,7 @@ components:
     Status:
       type: object
       description: The nbpdns service's state.
-      required: [version, revision, started, uptime_seconds, ready, live, schedule, netbox, tracing]
+      required: [version, revision, started, uptime_seconds, ready, live, schedule, netbox, tracing, webhooks]
       properties:
         version:
           type: string
@@ -717,6 +744,8 @@ components:
           $ref: "#/components/schemas/NetBoxState"
         tracing:
           $ref: "#/components/schemas/Tracing"
+        webhooks:
+          $ref: "#/components/schemas/Webhooks"
     Schedule:
       type: object
       description: The refreshes' schedule, and how they went.
@@ -845,6 +874,157 @@ components:
           oneOf:
             - $ref: "#/components/schemas/OTLPProtocol"
             - type: "null"
+    Webhooks:
+      type: object
+      description: The state of NetBox's webhooks, which refresh the zones they name.
+      required: [enabled, delay_seconds, last_event, pending, last_refresh]
+      properties:
+        enabled:
+          type: boolean
+          description: >-
+            Whether `netbox.webhook_secret` is set, so that
+            `/api/netbox-events` takes NetBox's webhooks.
+          examples: [true]
+        delay_seconds:
+          type: number
+          format: double
+          minimum: 0
+          description: >-
+            How long the zones that webhooks name wait for the webhooks to
+            stop coming, `drift.webhook_delay`.
+          examples: [3]
+        last_event:
+          description: The last event that a signed webhook brought, or null before the first.
+          oneOf:
+            - $ref: "#/components/schemas/WebhookEvent"
+            - type: "null"
+        pending:
+          $ref: "#/components/schemas/PendingRefresh"
+        last_refresh:
+          description: >-
+            The last refresh that webhooks asked for, or that covered the
+            zones they named, or null.
+          oneOf:
+            - $ref: "#/components/schemas/WebhookRefresh"
+            - type: "null"
+    WebhookEvent:
+      type: object
+      description: An event that a NetBox webhook brought.
+      required: [received, event, object_type, request]
+      properties:
+        received:
+          type: string
+          format: date-time
+          description: When it came.
+          examples: ["2026-10-08T01:11:58.2Z"]
+        event:
+          type: string
+          description: What the event said happened to the object, `created`, `updated` or `deleted`.
+          examples: [updated]
+        object_type:
+          type: string
+          description: The object's type, such as `netbox_dns.record`.
+          examples: [netbox_dns.record]
+        request:
+          $ref: "#/components/schemas/ChangeRequest"
+    ChangeRequest:
+      type: object
+      description: The NetBox request that made a change.
+      required: [id, user]
+      properties:
+        id:
+          type: [string, "null"]
+          description: NetBox's ID for the request, or null if no request made the change.
+          examples: [3bd63b08-a526-45f3-a819-aa7c507dd31f]
+        user:
+          type: [string, "null"]
+          description: The user who made the request, or null.
+          examples: [admin]
+    PendingRefresh:
+      type: object
+      description: What NetBox's webhooks queued, waiting for its refresh.
+      required: [events, zones, full, due]
+      properties:
+        events:
+          type: integer
+          format: int64
+          minimum: 0
+          description: The webhooks whose refresh waits.
+          examples: [2]
+        zones:
+          type: array
+          items:
+            type: string
+          description: The zones waiting, each as `view/name`, unless a full refresh waits.
+          examples: [[_default_/example.org.]]
+        full:
+          type: boolean
+          description: >-
+            Whether a full refresh waits: for a view's change, a zone or a
+            record that moved, or more than 100 zones.
+          examples: [false]
+        due:
+          type: [string, "null"]
+          format: date-time
+          description: >-
+            When the refresh is due, unless the scheduled one comes first,
+            or null if nothing waits.
+          examples: ["2026-10-08T01:12:01.2Z"]
+    WebhookRefresh:
+      type: object
+      description: A refresh that NetBox's webhooks asked for, or that covered the zones they named, which finished.
+      required: [started, finished, zones, full, reason, outcome, error, events, requests]
+      properties:
+        started:
+          type: string
+          format: date-time
+          description: When it started.
+          examples: ["2026-10-08T01:12:01.2Z"]
+        finished:
+          type: string
+          format: date-time
+          description: When it finished.
+          examples: ["2026-10-08T01:12:01.6Z"]
+        zones:
+          type: [array, "null"]
+          items:
+            type: string
+          description: The zones it refreshed, each as `view/name`, or null for a full refresh.
+          examples: [[_default_/example.com.]]
+        full:
+          type: boolean
+          description: Whether it was a full refresh.
+          examples: [false]
+        reason:
+          type: [string, "null"]
+          description: Why it was a full refresh, such as `a view was updated`, or null.
+          examples: [null]
+        outcome:
+          type: string
+          enum: [complete, incomplete, failed]
+          description: >-
+            `complete` if NetBox and every group it compared were read,
+            `incomplete` if a group's primary couldn't be, and `failed` if
+            NetBox couldn't be, or it ran out of time.
+          examples: [complete]
+        error:
+          type: [string, "null"]
+          description: Why it failed, or null.
+          examples: [null]
+        events:
+          type: integer
+          format: int64
+          minimum: 0
+          description: The webhooks it served.
+          examples: [3]
+        requests:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChangeRequest"
+          description: The NetBox requests whose changes it refreshed, up to 128.
+          examples:
+            - - id: 3bd63b08-a526-45f3-a819-aa7c507dd31f
+                user: admin
     OTLPProtocol:
       type: string
       description: An OTLP protocol.

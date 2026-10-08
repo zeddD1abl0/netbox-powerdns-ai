@@ -45,7 +45,9 @@ All notable changes to this project are recorded here. The format follows
   request IDs and users, which its log lines carry too. New metrics:
   `nbpdns_netbox_webhooks_total`, `nbpdns_drift_zone_refreshes_total`,
   `nbpdns_drift_zone_refresh_duration_seconds` and
-  `nbpdns_drift_pending_zones`. The API's version is 1.1.0.
+  `nbpdns_drift_pending_zones`. `/status` and `/api/status` gain a
+  `webhooks` section: whether they're on, the last event, what waits, and
+  the last refresh they asked for. The API's version is 1.1.0.
 
 ### Changed
 

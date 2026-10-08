@@ -125,6 +125,41 @@ be read:
     "exported": true,
     "endpoint": "https://otel.example.com:4318",
     "protocol": "http/protobuf"
+  },
+  "webhooks": {
+    "enabled": true,
+    "delay_seconds": 3,
+    "last_event": {
+      "received": "2026-10-07T01:59:58.2Z",
+      "event": "updated",
+      "object_type": "netbox_dns.record",
+      "request": {
+        "id": "3bd63b08-a526-45f3-a819-aa7c507dd31f",
+        "user": "admin"
+      }
+    },
+    "pending": {
+      "events": 2,
+      "zones": ["_default_/example.org."],
+      "full": false,
+      "due": "2026-10-07T02:00:01.2Z"
+    },
+    "last_refresh": {
+      "started": "2026-10-07T01:58:03Z",
+      "finished": "2026-10-07T01:58:03.4Z",
+      "zones": ["_default_/example.com."],
+      "full": false,
+      "reason": "",
+      "outcome": "complete",
+      "error": "",
+      "events": 3,
+      "requests": [
+        {
+          "id": "25ef5d4e-f592-47ff-8d3a-9f10bb3d3e17",
+          "user": "admin"
+        }
+      ]
+    }
   }
 }
 ```
@@ -173,3 +208,26 @@ be read:
 | `tracing.exported` | Boolean | Whether spans are exported, that is, whether `otlp.endpoint` is set. |
 | `tracing.endpoint` | string | `otlp.endpoint`, or empty. |
 | `tracing.protocol` | string | `otlp.protocol`. |
+| `webhooks.enabled` | Boolean | Whether `netbox.webhook_secret` is set, so that `/api/netbox-events` takes NetBox's webhooks. |
+| `webhooks.delay_seconds` | number | `drift.webhook_delay`: how long the zones that webhooks name wait for the webhooks to stop coming. |
+| `webhooks.last_event` | object or null | The last event that a signed webhook brought, or `null` before the first. |
+| `webhooks.last_event.received` | time | When it came. |
+| `webhooks.last_event.event` | string | What happened to the object: `created`, `updated`, or `deleted`. |
+| `webhooks.last_event.object_type` | string | The object's type, such as `netbox_dns.record`. |
+| `webhooks.last_event.request.id` | string | NetBox's ID for the request that made the change, or empty if no request did. |
+| `webhooks.last_event.request.user` | string | The user who made the request, or empty. |
+| `webhooks.pending.events` | integer | The webhooks whose refresh waits, or 0. |
+| `webhooks.pending.zones` | array | The zones waiting, each as `view/name`, unless a full refresh waits. |
+| `webhooks.pending.full` | Boolean | Whether a full refresh waits: for a view's change, a zone or a record that moved, or more than 100 zones. |
+| `webhooks.pending.due` | time or null | When the refresh is due, unless the scheduled one comes first: `drift.webhook_delay` after the last webhook, or 30 seconds after the first, whichever is sooner. `null` if nothing waits. |
+| `webhooks.last_refresh` | object or null | The last refresh that webhooks asked for, or that covered the zones they named, or `null`. |
+| `webhooks.last_refresh.started` | time | When it started. |
+| `webhooks.last_refresh.finished` | time | When it finished. |
+| `webhooks.last_refresh.zones` | array or null | The zones it refreshed, each as `view/name`, or `null` for a full refresh. |
+| `webhooks.last_refresh.full` | Boolean | Whether it was a full refresh. |
+| `webhooks.last_refresh.reason` | string | Why it was full, such as `a view was updated`, or empty. |
+| `webhooks.last_refresh.outcome` | string | `complete`, `incomplete`, or `failed`, as for `schedule.last_refresh.outcome`. |
+| `webhooks.last_refresh.error` | string | Why it failed, or empty. |
+| `webhooks.last_refresh.events` | integer | The webhooks it served. |
+| `webhooks.last_refresh.requests[].id` | string | The ID of each NetBox request whose changes it refreshed, up to 128. |
+| `webhooks.last_refresh.requests[].user` | string | The user who made the request. |

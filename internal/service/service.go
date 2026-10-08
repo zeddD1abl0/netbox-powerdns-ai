@@ -39,9 +39,11 @@ type Options struct {
 	// WebhookDelay is how long the zones that NetBox's webhooks name wait
 	// for the webhooks to stop: drift.webhook_delay. Zero is 3 seconds.
 	WebhookDelay time.Duration
-	Log          *slog.Logger
-	Tracer       trace.Tracer
-	Metrics      *metrics.Metrics
+	// Webhooks says whether the API takes NetBox's webhooks, for /status.
+	Webhooks bool
+	Log      *slog.Logger
+	Tracer   trace.Tracer
+	Metrics  *metrics.Metrics
 
 	// What /status and the API show besides the refreshes: the build,
 	// NetBox's URL, each group, in the configuration's order, and where
@@ -245,7 +247,7 @@ func (s *Service) refresh(ctx context.Context, start time.Time, b batch) {
 	end := s.o.now()
 	outcome := s.record(rctx, log, r, err, start, end)
 	if b.events > 0 {
-		s.noteWebhookRefresh(b, start, end, outcome, err)
+		s.noteWebhookRefresh(b, true, start, end, outcome, err)
 	}
 }
 

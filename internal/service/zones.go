@@ -88,12 +88,16 @@ type WebhookRefresh struct {
 }
 
 // noteWebhookRefresh keeps b's refresh, which finished, as the last one
-// that webhooks asked for.
-func (s *Service) noteWebhookRefresh(b batch, start, end time.Time, outcome string, err error) {
-	w := &WebhookRefresh{Started: start.UTC(), Finished: end.UTC(), Full: b.full, Reason: b.reason,
+// that webhooks asked for. full marks a full refresh, which b may not have
+// asked for: a scheduled one that covered b's zones.
+func (s *Service) noteWebhookRefresh(b batch, full bool, start, end time.Time, outcome string, err error) {
+	w := &WebhookRefresh{Started: start.UTC(), Finished: end.UTC(), Full: full, Reason: b.reason,
 		Outcome: outcome, Events: b.events, Requests: slices.Clone(b.requests)}
-	if !b.full {
+	switch {
+	case !full:
 		w.Zones = b.names()
+	case !b.full:
+		w.Reason = "the scheduled refresh came first"
 	}
 	if err != nil {
 		w.Error = err.Error()
@@ -260,7 +264,7 @@ func (s *Service) refreshZones(ctx context.Context, start time.Time, b batch) {
 	}
 	end := s.o.now()
 	outcome := s.recordZones(rctx, log, r, err, start, end)
-	s.noteWebhookRefresh(b, start, end, outcome, err)
+	s.noteWebhookRefresh(b, false, start, end, outcome, err)
 }
 
 // recordZones keeps what a zone refresh found, merged into the last-known
