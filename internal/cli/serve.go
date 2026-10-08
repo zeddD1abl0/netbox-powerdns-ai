@@ -59,9 +59,9 @@ func newServeCmd(a *app) *cobra.Command {
 				}
 			}
 			nbc := &netboxConn{c: nb}
-			primaries := make([]service.Primary, len(groups))
+			primaries := make([]service.Group, len(groups))
 			for i, g := range groups {
-				primaries[i] = service.Primary{Group: g.Name, URL: g.Primary.URL}
+				primaries[i] = service.Group{Name: g.Name, URL: g.Primary.URL, Views: g.Views, DriftPolicy: g.DriftPolicy}
 			}
 			svc := service.New(service.Options{
 				Refresh: func(ctx context.Context) (drift.Report, error) {

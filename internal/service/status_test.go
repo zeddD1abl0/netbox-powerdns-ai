@@ -109,7 +109,7 @@ func TestStatus(t *testing.T) {
 	s, _, _ := testService(t, Options{
 		Version:   version.Info{Version: "v1.2.3", Commit: "0123abc"},
 		NetBoxURL: "https://netbox.example.com",
-		Groups:    []Primary{{"site-a", "https://pdns-a.example.com"}, {"site-b", "https://pdns-b.example.com"}},
+		Groups:    []Group{{Name: "site-a", URL: "https://pdns-a.example.com"}, {Name: "site-b", URL: "https://pdns-b.example.com"}},
 		OTLP:      OTLP{Endpoint: "https://otel.example.com:4318", Protocol: "http/protobuf"},
 		Refresh: func(context.Context) (drift.Report, error) {
 			refreshed = true

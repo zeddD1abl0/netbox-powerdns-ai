@@ -149,25 +149,60 @@ func (s *Service) Status() Status {
 	if !st.next.IsZero() && !st.lastStart.After(st.lastEnd) {
 		out.Schedule.NextRefresh = utc(st.next)
 	}
-	for _, p := range s.o.Groups {
-		gi := GroupInfo{Name: p.Group, URL: p.URL, Status: statusUnknown, DriftedZones: []DriftedZone{}}
-		if gs := st.groups[p.Group]; gs != nil {
-			gi.Status, gi.Error = drift.StatusFailed, gs.lastError
-			if gs.up {
-				gi.Status = drift.StatusOK
-			}
-			if !gs.lastSuccess.IsZero() {
-				gi.LastSuccess = utc(gs.lastSuccess)
-				r := gs.report
-				gi.Counts, gi.Problems, gi.Warnings = r.Counts, len(r.Problems), len(r.Warnings)
-				for _, z := range r.Zones {
-					if drift.IsDrifted(z.State) {
-						gi.DriftedZones = append(gi.DriftedZones, DriftedZone{Zone: z.Zone, State: z.State, Changes: len(z.Changes)})
-					}
-				}
+	for _, g := range s.o.Groups {
+		out.Groups = append(out.Groups, groupInfo(g, st.groups[g.Name]))
+	}
+	return out
+}
+
+// groupInfo returns g's info, from gs, its state, which is nil before any
+// refresh tried it.
+func groupInfo(g Group, gs *groupState) GroupInfo {
+	gi := GroupInfo{Name: g.Name, URL: g.URL, Status: statusUnknown, DriftedZones: []DriftedZone{}}
+	if gs == nil {
+		return gi
+	}
+	gi.Status, gi.Error = drift.StatusFailed, gs.lastError
+	if gs.up {
+		gi.Status = drift.StatusOK
+	}
+	if !gs.lastSuccess.IsZero() {
+		gi.LastSuccess = utc(gs.lastSuccess)
+		r := gs.report
+		gi.Counts, gi.Problems, gi.Warnings = r.Counts, len(r.Problems), len(r.Warnings)
+		for _, z := range r.Zones {
+			if drift.IsDrifted(z.State) {
+				gi.DriftedZones = append(gi.DriftedZones, DriftedZone{Zone: z.Zone, State: z.State, Changes: len(z.Changes)})
 			}
 		}
-		out.Groups = append(out.Groups, gi)
+	}
+	return gi
+}
+
+// A GroupView is a server group's configuration and last-known state, for
+// the API.
+type GroupView struct {
+	Group
+	Info GroupInfo
+	// Report is the group's last successful comparison, or nil if it has
+	// none. A kept report is never changed, only replaced by the next, so
+	// it's safe to read without the service's lock.
+	Report *drift.GroupReport
+}
+
+// Groups returns each group's configuration and last-known state, in the
+// configuration's order.
+func (s *Service) Groups() []GroupView {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]GroupView, len(s.o.Groups))
+	for i, g := range s.o.Groups {
+		gs := s.st.groups[g.Name]
+		out[i] = GroupView{Group: g, Info: groupInfo(g, gs)}
+		if gs != nil && !gs.lastSuccess.IsZero() {
+			r := gs.report
+			out[i].Report = &r
+		}
 	}
 	return out
 }

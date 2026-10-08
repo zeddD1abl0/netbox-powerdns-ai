@@ -31,6 +31,11 @@ security:
 tags:
   - name: service
     description: The nbpdns service itself.
+  - name: server-groups
+    description: >-
+      PowerDNS server groups: each is a primary, the servers that follow it,
+      and the NetBox views whose zones they serve. A group's name is its
+      stable ID.
 paths:
   /status:
     get:
@@ -86,6 +91,92 @@ paths:
                   protocol: null
         default:
           $ref: "#/components/responses/Problem"
+  /server-groups:
+    get:
+      operationId: listServerGroups
+      summary: List the server groups
+      description: >-
+        Returns a page of the server groups, in the configuration's order,
+        each with its last-known state.
+      tags: [server-groups]
+      parameters:
+        - $ref: "#/components/parameters/FlowID"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of server groups.
+          headers:
+            X-Flow-ID:
+              $ref: "#/components/headers/FlowID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerGroupPage"
+              example:
+                self: https://nbpdns.example.com/api/server-groups?limit=1
+                next: https://nbpdns.example.com/api/server-groups?cursor=eyJhIjoic2l0ZS1hIn0&limit=1
+                items:
+                  - name: site-a
+                    primary_url: https://pdns-a.example.com:8443
+                    views: [_default_, internal]
+                    drift_policy: report
+                    status: ok
+                    error: null
+                    last_success: "2026-10-08T01:10:02Z"
+                    counts:
+                      in_sync: 980
+                      drift: 15
+                      missing: 5
+                      inactive_in_netbox: 0
+                      ignored: 1
+                      unmanaged: 2
+                    problem_count: 0
+                    warning_count: 0
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        default:
+          $ref: "#/components/responses/Problem"
+  /server-groups/{group}:
+    get:
+      operationId: getServerGroup
+      summary: Get a server group
+      description: Returns one server group, with its last-known state.
+      tags: [server-groups]
+      parameters:
+        - $ref: "#/components/parameters/FlowID"
+        - $ref: "#/components/parameters/Group"
+      responses:
+        "200":
+          description: The server group.
+          headers:
+            X-Flow-ID:
+              $ref: "#/components/headers/FlowID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerGroup"
+              example:
+                name: site-a
+                primary_url: https://pdns-a.example.com:8443
+                views: [_default_, internal]
+                drift_policy: report
+                status: ok
+                error: null
+                last_success: "2026-10-08T01:10:02Z"
+                counts:
+                  in_sync: 980
+                  drift: 15
+                  missing: 5
+                  inactive_in_netbox: 0
+                  ignored: 1
+                  unmanaged: 2
+                problem_count: 0
+                warning_count: 0
+        "404":
+          $ref: "#/components/responses/NotFound"
+        default:
+          $ref: "#/components/responses/Problem"
 components:
   parameters:
     FlowID:
@@ -100,12 +191,70 @@ components:
         minLength: 1
         maxLength: 128
         pattern: "^[A-Za-z0-9._:+/=-]+$"
+    Limit:
+      name: limit
+      in: query
+      description: The most items the page may have.
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 1000
+        default: 100
+    Cursor:
+      name: cursor
+      in: query
+      description: >-
+        Where the page starts: a previous page's `next` link carries it.
+        It's opaque, and only good with the same filters as the page that
+        gave it.
+      schema:
+        type: string
+        maxLength: 1024
+    Group:
+      name: group
+      in: path
+      required: true
+      description: The server group's name.
+      schema:
+        type: string
+        pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"
   headers:
     FlowID:
       description: The request's flow ID, as sent, or as nbpdns made it.
       schema:
         type: string
   responses:
+    BadRequest:
+      description: A parameter is invalid, such as a limit out of range, or a cursor that this API didn't give.
+      headers:
+        X-Flow-ID:
+          $ref: "#/components/headers/FlowID"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: about:blank
+            title: Bad Request
+            status: 400
+            detail: The limit must be from 1 to 1000.
+            instance: /api/server-groups
+    NotFound:
+      description: No such resource.
+      headers:
+        X-Flow-ID:
+          $ref: "#/components/headers/FlowID"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: about:blank
+            title: Not Found
+            status: 404
+            detail: No server group is named site-z.
+            instance: /api/server-groups/site-z
     Problem:
       description: Any other error.
       headers:
@@ -335,3 +484,147 @@ components:
       description: An OTLP protocol.
       enum: [http/protobuf, grpc]
       examples: [http/protobuf]
+    DriftPolicy:
+      type: string
+      description: >-
+        What nbpdns does about a zone's drift: `report` reports it, `enforce`
+        reports it and, from M13, corrects it, and `ignore` doesn't compare
+        the zone.
+      enum: [enforce, report, ignore]
+      examples: [report]
+    ServerGroup:
+      type: object
+      description: >-
+        A PowerDNS server group, with its last-known state. The counts are
+        as of `last_success`.
+      required: [name, primary_url, views, drift_policy, status, error, last_success, counts, problem_count, warning_count]
+      properties:
+        name:
+          type: string
+          description: The group's name, its stable ID.
+          examples: [site-a]
+        primary_url:
+          type: string
+          format: uri
+          description: The URL of the group's primary's PowerDNS API.
+          examples: [https://pdns-a.example.com:8443]
+        views:
+          type: array
+          items:
+            type: string
+          description: The NetBox views whose zones the group serves.
+          examples: [[_default_, internal]]
+        drift_policy:
+          $ref: "#/components/schemas/DriftPolicy"
+        status:
+          type: string
+          enum: [ok, failed, unknown]
+          description: >-
+            `ok` if the last refresh that tried the group's primary read
+            it, `failed` if it couldn't, and `unknown` before any did.
+          examples: [ok]
+        error:
+          type: [string, "null"]
+          description: Why the primary couldn't be read, or null.
+          examples: [null]
+        last_success:
+          type: [string, "null"]
+          format: date-time
+          description: When the group was last read and compared, or null if it never was.
+          examples: ["2026-10-08T01:10:02Z"]
+        counts:
+          description: The group's zones by state, as of `last_success`, or null if it was never read.
+          examples:
+            - {in_sync: 980, drift: 15, missing: 5, inactive_in_netbox: 0, ignored: 1, unmanaged: 2}
+          oneOf:
+            - $ref: "#/components/schemas/ZoneCounts"
+            - type: "null"
+        problem_count:
+          type: [integer, "null"]
+          format: int64
+          minimum: 0
+          description: >-
+            How many problems normalization worked around in either side's
+            data, as of `last_success`, or null. `nbpdns drift` lists them.
+          examples: [0]
+        warning_count:
+          type: [integer, "null"]
+          format: int64
+          minimum: 0
+          description: >-
+            How many problems with the configuration or NetBox's data the
+            comparison worked around, as of `last_success`, or null.
+            `nbpdns drift` lists them.
+          examples: [0]
+    ZoneCounts:
+      type: object
+      description: A server group's zones, by state.
+      required: [in_sync, drift, missing, inactive_in_netbox, ignored, unmanaged]
+      properties:
+        in_sync:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Zones that the primary serves as NetBox says.
+          examples: [980]
+        drift:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Zones whose RRsets differ.
+          examples: [15]
+        missing:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Active NetBox zones that the primary doesn't serve.
+          examples: [5]
+        inactive_in_netbox:
+          type: integer
+          format: int64
+          minimum: 0
+          description: NetBox zones that aren't active, which the primary still serves.
+          examples: [0]
+        ignored:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Zones whose drift policy is `ignore`, which aren't compared.
+          examples: [1]
+        unmanaged:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Zones on the primary that NetBox doesn't assign to the group. They aren't drift.
+          examples: [2]
+    ServerGroupPage:
+      type: object
+      description: One page of the server groups, with the links to it and to the next.
+      required: [self, next, items]
+      properties:
+        self:
+          type: string
+          format: uri
+          description: This page's absolute URL.
+          examples: ["https://nbpdns.example.com/api/server-groups?limit=2"]
+        next:
+          type: [string, "null"]
+          format: uri
+          description: The next page's absolute URL, or null on the last page.
+          examples: ["https://nbpdns.example.com/api/server-groups?cursor=eyJhIjoic2l0ZS1iIn0&limit=2"]
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServerGroup"
+          description: The page's server groups.
+          examples:
+            - - name: site-a
+                primary_url: https://pdns-a.example.com:8443
+                views: [_default_]
+                drift_policy: report
+                status: unknown
+                error: null
+                last_success: null
+                counts: null
+                problem_count: null
+                warning_count: null

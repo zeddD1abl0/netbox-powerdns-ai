@@ -34,6 +34,7 @@ func Spec() []byte { return spec }
 // A Source is the state the API serves: the service's.
 type Source interface {
 	Status() service.Status
+	Groups() []service.GroupView
 }
 
 // Options configure the API.
@@ -66,7 +67,7 @@ func New(o Options) http.Handler {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET "+base+"/openapi.yaml", serveSpec)
-	strict := gen.NewStrictHandlerWithOptions(&server{o: o}, nil, gen.StrictHTTPServerOptions{
+	strict := gen.NewStrictHandlerWithOptions(&server{o: o}, []gen.StrictMiddlewareFunc{withRequest}, gen.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc:  badRequest,
 		ResponseErrorHandlerFunc: o.failed,
 	})

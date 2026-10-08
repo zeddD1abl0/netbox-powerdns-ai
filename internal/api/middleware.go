@@ -103,7 +103,8 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if pattern == "" {
 		unmatched(sw, r, next)
 	} else {
-		next.ServeHTTP(sw, r)
+		// Through the mux, not next itself, which sets the path's values.
+		h.mux.ServeHTTP(sw, r)
 	}
 
 	code := sw.status()

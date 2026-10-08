@@ -9,12 +9,34 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/oapi-codegen/runtime"
 )
+
+// Defines values for DriftPolicy.
+const (
+	DriftPolicyEnforce DriftPolicy = "enforce"
+	DriftPolicyIgnore  DriftPolicy = "ignore"
+	DriftPolicyReport  DriftPolicy = "report"
+)
+
+// Valid indicates whether the value is a known member of the DriftPolicy enum.
+func (e DriftPolicy) Valid() bool {
+	switch e {
+	case DriftPolicyEnforce:
+		return true
+	case DriftPolicyIgnore:
+		return true
+	case DriftPolicyReport:
+		return true
+	default:
+		return false
+	}
+}
 
 // Defines values for OTLPProtocol.
 const (
@@ -54,6 +76,32 @@ func (e RefreshOutcome) Valid() bool {
 		return false
 	}
 }
+
+// Defines values for ServerGroupStatus.
+const (
+	ServerGroupStatusFailed  ServerGroupStatus = "failed"
+	ServerGroupStatusOk      ServerGroupStatus = "ok"
+	ServerGroupStatusUnknown ServerGroupStatus = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the ServerGroupStatus enum.
+func (e ServerGroupStatus) Valid() bool {
+	switch e {
+	case ServerGroupStatusFailed:
+		return true
+	case ServerGroupStatusOk:
+		return true
+	case ServerGroupStatusUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// DriftPolicy What nbpdns does about a zone's drift: `report` reports it, `enforce` reports it and, from M13, corrects it, and `ignore` doesn't compare the zone.
+//
+// Examples: report
+type DriftPolicy string
 
 // NetBoxState NetBox's state, as of the last refresh.
 type NetBoxState struct {
@@ -188,6 +236,82 @@ type Schedule struct {
 	TimeoutSeconds float64 `json:"timeout_seconds"`
 }
 
+// ServerGroup A PowerDNS server group, with its last-known state. The counts are as of `last_success`.
+type ServerGroup struct {
+	// Counts The group's zones by state, as of `last_success`, or null if it was never read.
+	//
+	// Examples: {"drift":15,"ignored":1,"in_sync":980,"inactive_in_netbox":0,"missing":5,"unmanaged":2}
+	Counts *ZoneCounts `json:"counts"`
+
+	// DriftPolicy What nbpdns does about a zone's drift: `report` reports it, `enforce` reports it and, from M13, corrects it, and `ignore` doesn't compare the zone.
+	//
+	// Examples: report
+	DriftPolicy DriftPolicy `json:"drift_policy"`
+
+	// Error Why the primary couldn't be read, or null.
+	//
+	// Examples: null
+	Error *string `json:"error"`
+
+	// LastSuccess When the group was last read and compared, or null if it never was.
+	//
+	// Examples: 2026-10-08T01:10:02Z
+	LastSuccess *time.Time `json:"last_success"`
+
+	// Name The group's name, its stable ID.
+	//
+	// Examples: site-a
+	Name string `json:"name"`
+
+	// PrimaryUrl The URL of the group's primary's PowerDNS API.
+	//
+	// Examples: https://pdns-a.example.com:8443
+	PrimaryUrl string `json:"primary_url"`
+
+	// ProblemCount How many problems normalization worked around in either side's data, as of `last_success`, or null. `nbpdns drift` lists them.
+	//
+	// Examples: 0
+	ProblemCount *int64 `json:"problem_count"`
+
+	// Status `ok` if the last refresh that tried the group's primary read it, `failed` if it couldn't, and `unknown` before any did.
+	//
+	// Examples: ok
+	Status ServerGroupStatus `json:"status"`
+
+	// Views The NetBox views whose zones the group serves.
+	//
+	// Examples: ["_default_","internal"]
+	Views []string `json:"views"`
+
+	// WarningCount How many problems with the configuration or NetBox's data the comparison worked around, as of `last_success`, or null. `nbpdns drift` lists them.
+	//
+	// Examples: 0
+	WarningCount *int64 `json:"warning_count"`
+}
+
+// ServerGroupStatus `ok` if the last refresh that tried the group's primary read it, `failed` if it couldn't, and `unknown` before any did.
+//
+// Examples: ok
+type ServerGroupStatus string
+
+// ServerGroupPage One page of the server groups, with the links to it and to the next.
+type ServerGroupPage struct {
+	// Items The page's server groups.
+	//
+	// Examples: [{"counts":null,"drift_policy":"report","error":null,"last_success":null,"name":"site-a","primary_url":"https://pdns-a.example.com:8443","problem_count":null,"status":"unknown","views":["_default_"],"warning_count":null}]
+	Items []ServerGroup `json:"items"`
+
+	// Next The next page's absolute URL, or null on the last page.
+	//
+	// Examples: https://nbpdns.example.com/api/server-groups?cursor=eyJhIjoic2l0ZS1iIn0&limit=2
+	Next *string `json:"next"`
+
+	// Self This page's absolute URL.
+	//
+	// Examples: https://nbpdns.example.com/api/server-groups?limit=2
+	Self string `json:"self"`
+}
+
 // Status The nbpdns service's state.
 type Status struct {
 	// Live Whether a refresh has started within `drift.interval` + `drift.timeout` + 1 minute, as `/livez` reports.
@@ -246,8 +370,78 @@ type Tracing struct {
 	Protocol *OTLPProtocol `json:"protocol"`
 }
 
+// ZoneCounts A server group's zones, by state.
+type ZoneCounts struct {
+	// Drift Zones whose RRsets differ.
+	//
+	// Examples: 15
+	Drift int64 `json:"drift"`
+
+	// Ignored Zones whose drift policy is `ignore`, which aren't compared.
+	//
+	// Examples: 1
+	Ignored int64 `json:"ignored"`
+
+	// InSync Zones that the primary serves as NetBox says.
+	//
+	// Examples: 980
+	InSync int64 `json:"in_sync"`
+
+	// InactiveInNetbox NetBox zones that aren't active, which the primary still serves.
+	//
+	// Examples: 0
+	InactiveInNetbox int64 `json:"inactive_in_netbox"`
+
+	// Missing Active NetBox zones that the primary doesn't serve.
+	//
+	// Examples: 5
+	Missing int64 `json:"missing"`
+
+	// Unmanaged Zones on the primary that NetBox doesn't assign to the group. They aren't drift.
+	//
+	// Examples: 2
+	Unmanaged int64 `json:"unmanaged"`
+}
+
+// Cursor defines model for Cursor.
+type Cursor = string
+
 // FlowID defines model for FlowID.
 type FlowID = string
+
+// Group defines model for Group.
+type Group = string
+
+// Limit defines model for Limit.
+type Limit = int32
+
+// BadRequest An error, as RFC 9457 describes it.
+//
+// Examples: {"detail":"No server group is named site-z.","instance":"/api/server-groups/site-z","status":404,"title":"Not Found","type":"about:blank"}
+type BadRequest = Problem
+
+// NotFound An error, as RFC 9457 describes it.
+//
+// Examples: {"detail":"No server group is named site-z.","instance":"/api/server-groups/site-z","status":404,"title":"Not Found","type":"about:blank"}
+type NotFound = Problem
+
+// ListServerGroupsParams defines parameters for ListServerGroups.
+type ListServerGroupsParams struct {
+	// Limit The most items the page may have.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Where the page starts: a previous page's `next` link carries it. It's opaque, and only good with the same filters as the page that gave it.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// XFlowID The request's flow ID, to follow it through the logs. A request without a valid one is given one. Either way, the response returns it, and it's the request's `request_id` in nbpdns's logs.
+	XFlowID *FlowID `json:"X-Flow-ID,omitempty"`
+}
+
+// GetServerGroupParams defines parameters for GetServerGroup.
+type GetServerGroupParams struct {
+	// XFlowID The request's flow ID, to follow it through the logs. A request without a valid one is given one. Either way, the response returns it, and it's the request's `request_id` in nbpdns's logs.
+	XFlowID *FlowID `json:"X-Flow-ID,omitempty"`
+}
 
 // GetStatusParams defines parameters for GetStatus.
 type GetStatusParams struct {
@@ -257,6 +451,12 @@ type GetStatusParams struct {
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// ListServerGroups List the server groups
+	// (GET /server-groups)
+	ListServerGroups(w http.ResponseWriter, r *http.Request, params ListServerGroupsParams)
+	// GetServerGroup Get a server group
+	// (GET /server-groups/{group})
+	GetServerGroup(w http.ResponseWriter, r *http.Request, group Group, params GetServerGroupParams)
 	// GetStatus Get the service's status
 	// (GET /status)
 	GetStatus(w http.ResponseWriter, r *http.Request, params GetStatusParams)
@@ -270,6 +470,123 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListServerGroups operation middleware
+func (siw *ServerInterfaceWrapper) ListServerGroups(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListServerGroupsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Flow-ID" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Flow-ID")]; found {
+		var XFlowID FlowID
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Flow-ID", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Flow-ID", valueList[0], &XFlowID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Flow-ID", Err: err})
+			return
+		}
+
+		params.XFlowID = &XFlowID
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListServerGroups(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetServerGroup operation middleware
+func (siw *ServerInterfaceWrapper) GetServerGroup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "group" -------------
+	var group Group
+
+	err = runtime.BindStyledParameterWithOptions("simple", "group", r.PathValue("group"), &group, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "group", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetServerGroupParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Flow-ID" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Flow-ID")]; found {
+		var XFlowID FlowID
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Flow-ID", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Flow-ID", valueList[0], &XFlowID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Flow-ID", Err: err})
+			return
+		}
+
+		params.XFlowID = &XFlowID
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetServerGroup(w, r, group, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // GetStatus operation middleware
 func (siw *ServerInterfaceWrapper) GetStatus(w http.ResponseWriter, r *http.Request) {
@@ -433,8 +750,28 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/status", wrapper.GetStatus)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/server-groups", wrapper.ListServerGroups)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/server-groups/{group}", wrapper.GetServerGroup)
 
 	return m
+}
+
+type BadRequestResponseHeaders struct {
+	XFlowID *string
+}
+type BadRequestApplicationProblemPlusJSONResponse struct {
+	Body Problem
+
+	Headers BadRequestResponseHeaders
+}
+
+type NotFoundResponseHeaders struct {
+	XFlowID *string
+}
+type NotFoundApplicationProblemPlusJSONResponse struct {
+	Body Problem
+
+	Headers NotFoundResponseHeaders
 }
 
 type ProblemResponseHeaders struct {
@@ -444,6 +781,151 @@ type ProblemApplicationProblemPlusJSONResponse struct {
 	Body Problem
 
 	Headers ProblemResponseHeaders
+}
+
+type ListServerGroupsRequestObject struct {
+	Params ListServerGroupsParams
+}
+
+type ListServerGroupsResponseObject interface {
+	VisitListServerGroupsResponse(w http.ResponseWriter) error
+}
+
+type ListServerGroups200ResponseHeaders struct {
+	XFlowID *string
+}
+
+type ListServerGroups200JSONResponse struct {
+	Body    ServerGroupPage
+	Headers ListServerGroups200ResponseHeaders
+}
+
+func (response ListServerGroups200JSONResponse) VisitListServerGroupsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListServerGroups400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListServerGroups400ApplicationProblemPlusJSONResponse) VisitListServerGroupsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListServerGroupsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	Headers    ProblemResponseHeaders
+	StatusCode int
+}
+
+func (response ListServerGroupsdefaultApplicationProblemPlusJSONResponse) VisitListServerGroupsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetServerGroupRequestObject struct {
+	Group  Group `json:"group"`
+	Params GetServerGroupParams
+}
+
+type GetServerGroupResponseObject interface {
+	VisitGetServerGroupResponse(w http.ResponseWriter) error
+}
+
+type GetServerGroup200ResponseHeaders struct {
+	XFlowID *string
+}
+
+type GetServerGroup200JSONResponse struct {
+	Body    ServerGroup
+	Headers GetServerGroup200ResponseHeaders
+}
+
+func (response GetServerGroup200JSONResponse) VisitGetServerGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetServerGroup404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetServerGroup404ApplicationProblemPlusJSONResponse) VisitGetServerGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetServerGroupdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	Headers    ProblemResponseHeaders
+	StatusCode int
+}
+
+func (response GetServerGroupdefaultApplicationProblemPlusJSONResponse) VisitGetServerGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
 }
 
 type GetStatusRequestObject struct {
@@ -501,6 +983,12 @@ func (response GetStatusdefaultApplicationProblemPlusJSONResponse) VisitGetStatu
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// ListServerGroups List the server groups
+	// (GET /server-groups)
+	ListServerGroups(ctx context.Context, request ListServerGroupsRequestObject) (ListServerGroupsResponseObject, error)
+	// GetServerGroup Get a server group
+	// (GET /server-groups/{group})
+	GetServerGroup(ctx context.Context, request GetServerGroupRequestObject) (GetServerGroupResponseObject, error)
 	// GetStatus Get the service's status
 	// (GET /status)
 	GetStatus(ctx context.Context, request GetStatusRequestObject) (GetStatusResponseObject, error)
@@ -543,6 +1031,59 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// ListServerGroups operation middleware
+func (sh *strictHandler) ListServerGroups(w http.ResponseWriter, r *http.Request, params ListServerGroupsParams) {
+	var request ListServerGroupsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListServerGroups(ctx, request.(ListServerGroupsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListServerGroups")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListServerGroupsResponseObject); ok {
+		if err := validResponse.VisitListServerGroupsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetServerGroup operation middleware
+func (sh *strictHandler) GetServerGroup(w http.ResponseWriter, r *http.Request, group Group, params GetServerGroupParams) {
+	var request GetServerGroupRequestObject
+
+	request.Group = group
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetServerGroup(ctx, request.(GetServerGroupRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetServerGroup")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetServerGroupResponseObject); ok {
+		if err := validResponse.VisitGetServerGroupResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // GetStatus operation middleware

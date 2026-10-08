@@ -215,6 +215,10 @@ func TestServeWithoutNetBox(t *testing.T) {
 		!strings.Contains(page, `"outcome":"failed"`) || strings.Contains(page, "s3cret") {
 		t.Errorf("/api/status: %d, without NetBox down or with a secret:\n%s", code, page)
 	}
+	// No refresh read a group, so their state is unknown.
+	if code, page := s.api("/api/server-groups"); code != http.StatusOK || strings.Count(page, `"status":"unknown"`) != 2 {
+		t.Errorf("/api/server-groups: %d:\n%s", code, page)
+	}
 	if code := s.stop(); code != exitOK {
 		t.Errorf("exit %d, want 0:\n%s", code, s.stderr)
 	}

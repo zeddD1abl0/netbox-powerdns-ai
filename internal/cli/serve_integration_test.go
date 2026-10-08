@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/drift"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/lab"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/service"
 )
@@ -91,6 +92,26 @@ func TestServe(t *testing.T) {
 	if code, page := s.api("/api/status"); code != http.StatusOK || !strings.Contains(page, `"up":true`) ||
 		!strings.Contains(page, `"outcome":"incomplete"`) {
 		t.Errorf("/api/status: %d:\n%s", code, page)
+	}
+	// The API's groups: lab-a compared, down failed.
+	code, page = s.api("/api/server-groups")
+	var groups struct {
+		Items []struct {
+			Name, Status string
+			Counts       *drift.Counts
+		}
+	}
+	if err := json.Unmarshal([]byte(page), &groups); err != nil || code != http.StatusOK || len(groups.Items) != 2 {
+		t.Fatalf("/api/server-groups: %d, %v:\n%s", code, err, page)
+	}
+	if g := groups.Items[0]; g.Name != "lab-a" || g.Status != "ok" || g.Counts == nil || g.Counts.Drift != 1 || g.Counts.Missing != 1 {
+		t.Errorf("lab-a in the API: %+v", g)
+	}
+	if g := groups.Items[1]; g.Name != "down" || g.Status != "failed" || g.Counts != nil {
+		t.Errorf("down in the API: %+v", g)
+	}
+	if code, _ := s.api("/api/server-groups/down"); code != http.StatusOK {
+		t.Errorf("/api/server-groups/down: %d", code)
 	}
 	if code := s.stop(); code != exitOK {
 		t.Errorf("exit %d, want 0:\n%s", code, s.stderr)

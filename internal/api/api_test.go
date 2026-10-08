@@ -40,9 +40,14 @@ func TestMain(m *testing.M) {
 }
 
 // fakeSource serves fixed state.
-type fakeSource struct{ status service.Status }
+type fakeSource struct {
+	status service.Status
+	groups []service.GroupView
+}
 
 func (f fakeSource) Status() service.Status { return f.status }
+
+func (f fakeSource) Groups() []service.GroupView { return f.groups }
 
 // A reply is a response's status code, header and body.
 type reply struct {
@@ -53,13 +58,10 @@ type reply struct {
 
 // get sends a request to the API over src, checks the response against the
 // OpenAPI document, and returns it.
-func get(t *testing.T, src Source, method, target string, header http.Header) reply {
+func get(t *testing.T, src Source, method, target string) reply {
 	t.Helper()
 	h := New(Options{Source: src, Log: slog.New(slog.DiscardHandler)})
 	req := httptest.NewRequestWithContext(t.Context(), method, target, nil)
-	for k, v := range header {
-		req.Header[k] = v
-	}
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	resp := rec.Result()
@@ -123,7 +125,7 @@ func TestStatus(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := get(t, fakeSource{tt.status}, http.MethodGet, "/api/status", nil)
+			r := get(t, fakeSource{status: tt.status}, http.MethodGet, "/api/status")
 			if r.code != http.StatusOK || r.header.Get("Content-Type") != "application/json" {
 				t.Fatalf("%d %s: %s", r.code, r.header.Get("Content-Type"), r.body)
 			}
@@ -153,7 +155,7 @@ func compact(t *testing.T, body []byte) string {
 
 func TestSpec(t *testing.T) {
 	for _, method := range []string{http.MethodGet, http.MethodHead} {
-		r := get(t, fakeSource{}, method, "/api/openapi.yaml", nil)
+		r := get(t, fakeSource{}, method, "/api/openapi.yaml")
 		if r.code != http.StatusOK || r.header.Get("Content-Type") != "application/yaml" {
 			t.Fatalf("%s: %d %s", method, r.code, r.header.Get("Content-Type"))
 		}
@@ -168,7 +170,7 @@ func TestSpec(t *testing.T) {
 
 func TestNoStore(t *testing.T) {
 	for _, path := range []string{"/api/status", "/api/openapi.yaml"} {
-		if r := get(t, fakeSource{}, http.MethodGet, path, nil); r.header.Get("Cache-Control") != "no-store" {
+		if r := get(t, fakeSource{}, http.MethodGet, path); r.header.Get("Cache-Control") != "no-store" {
 			t.Errorf("%s: Cache-Control %q", path, r.header.Get("Cache-Control"))
 		}
 	}

@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -161,7 +162,7 @@ func TestTimeout(t *testing.T) {
 	// A good refresh, then two that run out of time: one while NetBox is
 	// read, one while a group is. Neither blames them.
 	var n atomic.Int32
-	s, logs, _ := testService(t, Options{Timeout: 20 * time.Millisecond, Groups: []Primary{{"a", "https://a"}},
+	s, logs, _ := testService(t, Options{Timeout: 20 * time.Millisecond, Groups: []Group{{Name: "a", URL: "https://a"}},
 		Refresh: func(ctx context.Context) (drift.Report, error) {
 			switch n.Add(1) {
 			case 1:
@@ -333,5 +334,31 @@ func TestEachRefreshIsATrace(t *testing.T) {
 	}
 	if len(ids) != 2 {
 		t.Errorf("the refreshes' log lines carry %d request and trace IDs, want 2:\n%s", len(ids), logs)
+	}
+}
+
+func TestGroups(t *testing.T) {
+	groups := []Group{
+		{Name: "site-a", URL: "https://a", Views: []string{"_default_"}, DriftPolicy: "report"},
+		{Name: "site-b", URL: "https://b", Views: []string{"internal"}, DriftPolicy: "enforce"},
+	}
+	s, _, _ := testService(t, Options{Groups: groups})
+	// Before any refresh: the configuration, and nothing known.
+	for i, g := range s.Groups() {
+		if !reflect.DeepEqual(g.Group, groups[i]) || g.Info.Status != statusUnknown || g.Report != nil || g.Info.LastSuccess != nil {
+			t.Errorf("before a refresh, %+v", g)
+		}
+	}
+	t0 := time.Now()
+	s.record(t.Context(), report(group("site-a", drift.StateDrift), group("site-b", drift.StateInSync)), nil, t0, t0)
+	// site-b's primary fails: it keeps its report, and says it failed.
+	s.record(t.Context(), report(group("site-a", drift.StateInSync), failedGroup("site-b")), nil, t0, t0)
+	got := s.Groups()
+	a, b := got[0], got[1]
+	if a.Report == nil || a.Report.Counts.InSync != 1 || a.Info.Status != drift.StatusOK {
+		t.Errorf("site-a: %+v", a)
+	}
+	if b.Report == nil || b.Report.Counts.InSync != 1 || b.Info.Status != drift.StatusFailed || b.Info.Error == "" || b.Info.LastSuccess == nil {
+		t.Errorf("site-b: %+v", b)
 	}
 }
