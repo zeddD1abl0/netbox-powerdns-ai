@@ -14,7 +14,7 @@
 | [M03](milestones/M03-drift-report.md) | Drift report | done | 7 of 7 |
 | [M04](milestones/M04-service.md) | Service | done | 10 of 10 |
 | [M05](milestones/M05-packaging.md) | Packaging | done | 5 of 5 |
-| [M06](milestones/M06-rest-api.md) | REST API | planned | 1 of 1 |
+| [M06](milestones/M06-rest-api.md) | REST API | planned | 1 of 2 |
 | [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | planned | — |
 | [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | planned | — |
 | [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | planned | — |
@@ -35,6 +35,7 @@
 |---|---|---|---|---|
 | [ITEM-0040](items/ITEM-0040-write-record-values-to-powerdns-in-its-own-text-fo.md) | Write record values to PowerDNS in its own text form | task | open | — |
 | [ITEM-0062](items/ITEM-0062-keep-the-image-s-latest-tag-on-the-newest-release.md) | Keep the image's latest tag on the newest release | debt | open | — |
+| [ITEM-0065](items/ITEM-0065-start-the-integration-lab-reliably-on-gitlab-s-run.md) | Start the integration lab reliably on GitLab's runner | bug | open | — |
 
 ## Open questions
 

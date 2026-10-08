@@ -45,11 +45,12 @@ release without publishing it.
   architecture, and report the build's version. The image runs as 65532,
   read-only, with no shell, and has its labels.
 - [x] The same commit builds byte-identical archives twice.
-- [ ] `make release` refuses to run off a version tag, or without a CHANGELOG
+- [x] `make release` refuses to run off a version tag, or without a CHANGELOG
   section, and publishes the image, with its SBOM, and a GitLab release with
   the archives. Shown by the dry runs below for all but GitLab's release
   step, which needs a tag pipeline's job token, and runs first at `v0.1.0`
-  (ITEM-0060, ITEM-0063).
+  (ITEM-0060, ITEM-0063). At `v0.1.0` it published both, but the release's
+  notes were empty, fixed for later releases in ITEM-0064.
 - [x] `projctl` allows only the tag-only `release` job, which tests show.
   Both forges' CI files pass `make project-lint`, and `release-check` runs
   on both. The tests and the lint pass (ITEM-0060, ITEM-0063: the job must
@@ -60,9 +61,10 @@ release without publishing it.
 - [x] `/code-review high` has run. `/security-review` runs, since M05 adds
   publishing credentials to CI. Fixed in ITEM-0063, or recorded in
   ITEM-0062 (see below).
-- [ ] The manual verification is recorded. The pipelines pass, and the user
+- [x] The manual verification is recorded. The pipelines pass, and the user
   has merged through an MR with a merge commit, then tagged `v0.1.0`, whose
-  pipeline published the release.
+  pipeline published the release. Merge commit `ec048d8`; `v0.1.0`'s
+  pipeline 780 published it, checked below.
 
 ## Decided after approval
 
@@ -222,6 +224,42 @@ Append-only and dated. Record what was run and what was seen.
   mirror carried it to GitHub, where Actions run 37700007944 on `ec048d8`
   passed. `v0.1.0` isn't tagged yet; its release is recorded here when it
   is.
+- 2026-10-08: **v0.1.0 released.** The user tagged `v0.1.0` on `ec048d8`.
+  Checked with a read-only project access token (Reporter; `read_api`,
+  `read_repository`, `read_registry`), kept outside the repository, and
+  never printed:
+  - **Pipeline 780** passed every job. The first `integration-test`, 4229,
+    failed before any test ran: the lab's NetBox wasn't healthy within
+    `lab-up`'s 20 minutes. Its retry, 4236, passed (ITEM-0065). The
+    `release` job, 4235, ran only after every other job had passed. Its
+    log shows the image pushed, and "release created". GoReleaser's
+    preflight warned that the job token can't read release permissions
+    (404), and carried on, as expected.
+  - **The release, `v0.1.0`,** links `nbpdns_0.1.0_linux_amd64.tar.gz`,
+    `nbpdns_0.1.0_linux_arm64.tar.gz` and `checksums.txt`, stored in the
+    generic package `nbpdns` 0.1.0. Downloaded, both archives pass
+    `sha256sum --check`.
+    - The amd64 binary reports `v0.1.0`, commit `ec048d8`,
+      `modified false`.
+    - The arm64 binary is an AArch64 ELF.
+    - Each archive holds its four files, owned by root, at the commit's
+      time.
+  - **Its notes were empty:** the description is a single newline.
+    `changelog.disable: true` made GoReleaser drop the `--release-notes`
+    file. That's fixed for later releases in ITEM-0064. v0.1.0's notes
+    need filling in by hand, in GitLab, which the read-only token can't
+    do.
+  - **Reproducible:** rebuilding `v0.1.0` here, from a clean clone at the
+    tag with the pinned GoReleaser, publishing nothing, gave a
+    `checksums.txt` identical to the published one.
+  - **The image**, `git.itctsv.com:5050/itctsv/netbox-powerdns-ai`:
+    - `0.1.0`, `0.1` and `latest` are one OCI index,
+      `sha256:78b35410…`, for linux/amd64 and linux/arm64/v8, with three
+      SBOMs;
+    - it's user `65532:65532`, with entrypoint `/ko-app/nbpdns`, and
+      labelled version `0.1.0` and revision `ec048d8…`;
+    - pulled and run read-only, with no network, it reported `v0.1.0`,
+      `modified false`.
 
 ## Approved design
 
