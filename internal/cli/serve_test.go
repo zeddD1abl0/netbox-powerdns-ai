@@ -18,6 +18,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/api"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/api/contract"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/config"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/tracing"
 )
@@ -96,6 +98,31 @@ func (s *served) get(path string) (int, string) {
 		s.t.Fatalf("GET %s: %v", path, err)
 	}
 	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		s.t.Fatal(err)
+	}
+	return resp.StatusCode, string(b)
+}
+
+// api fetches path from the API, checks the response against the API's
+// OpenAPI document, and returns its status and body.
+func (s *served) api(path string) (int, string) {
+	s.t.Helper()
+	checker, err := contract.New(api.Spec(), "/api")
+	if err != nil {
+		s.t.Fatal(err)
+	}
+	req, err := http.NewRequestWithContext(s.t.Context(), http.MethodGet, "http://"+s.addr+path, http.NoBody)
+	if err != nil {
+		s.t.Fatal(err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		s.t.Fatalf("GET %s: %v", path, err)
+	}
+	defer resp.Body.Close()
+	checker.Check(s.t, req, resp)
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		s.t.Fatal(err)
@@ -183,6 +210,10 @@ func TestServeWithoutNetBox(t *testing.T) {
 		if code != http.StatusOK || !strings.Contains(page, "127.0.0.1:1") || strings.Contains(page, "s3cret") {
 			t.Errorf("%s: %d, without the URLs or with a secret:\n%s", path, code, page)
 		}
+	}
+	if code, page := s.api("/api/status"); code != http.StatusOK || !strings.Contains(page, `"up":false`) ||
+		!strings.Contains(page, `"outcome":"failed"`) || strings.Contains(page, "s3cret") {
+		t.Errorf("/api/status: %d, without NetBox down or with a secret:\n%s", code, page)
 	}
 	if code := s.stop(); code != exitOK {
 		t.Errorf("exit %d, want 0:\n%s", code, s.stderr)

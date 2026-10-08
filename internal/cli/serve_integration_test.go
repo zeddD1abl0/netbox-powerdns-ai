@@ -87,6 +87,11 @@ func TestServe(t *testing.T) {
 	if _, text := s.get("/status"); !strings.Contains(text, f.Drift) || !strings.Contains(text, f.Parked) {
 		t.Errorf("the status page lacks the drifted zones:\n%s", text)
 	}
+	// The API's status, checked against its OpenAPI document.
+	if code, page := s.api("/api/status"); code != http.StatusOK || !strings.Contains(page, `"up":true`) ||
+		!strings.Contains(page, `"outcome":"incomplete"`) {
+		t.Errorf("/api/status: %d:\n%s", code, page)
+	}
 	if code := s.stop(); code != exitOK {
 		t.Errorf("exit %d, want 0:\n%s", code, s.stderr)
 	}

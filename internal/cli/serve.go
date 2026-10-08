@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/api"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/drift"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/logging"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/metrics"
@@ -106,8 +107,12 @@ func serve(ctx context.Context, s *session, svc *service.Service) error {
 	if err != nil {
 		return fmt.Errorf("server.listen: %w", err)
 	}
+	// The API (ADR-0033) is under /api, beside the service's own endpoints.
+	mux := http.NewServeMux()
+	mux.Handle("/api/", api.New(api.Options{Source: svc, Log: s.log}))
+	mux.Handle("/", svc.Handler())
 	srv := &http.Server{
-		Handler:           svc.Handler(),
+		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      30 * time.Second,

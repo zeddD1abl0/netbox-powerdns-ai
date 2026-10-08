@@ -6,6 +6,14 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- An API, at `/api` on `server.listen`, described by its OpenAPI 3.1
+  document, `api/openapi.yaml`, which the service serves at
+  `/api/openapi.yaml`. `/api/status` gives the service's state. The API
+  only reads, and has no authentication until M10, so keep it on a trusted
+  network.
+
 ### Fixed
 
 - A release's notes on GitLab are its version's section of the CHANGELOG.

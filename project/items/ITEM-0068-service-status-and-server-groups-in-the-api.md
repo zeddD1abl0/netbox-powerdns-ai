@@ -28,3 +28,4 @@ every list uses (ADR-0033).
 
 <!-- Append-only. Start each note with the date: "- YYYY-MM-DD: …" -->
 - 2026-10-08: Created from M06's approved design.
+- 2026-10-08: `/api/status` was built in ITEM-0066, as the pipeline's first operation. This item keeps the server groups and the pagination.

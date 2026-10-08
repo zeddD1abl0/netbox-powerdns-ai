@@ -19,6 +19,8 @@ and another path `404`. None changes anything.
 | `/readyz` | `503` until the first drift refresh has finished, whatever its outcome; then `200 ready`. |
 | `/status` | The service's state, as text for a person, or as JSON with `?json=1`. |
 | `/metrics` | The metrics, in Prometheus's text format, or in OpenMetrics if the scraper asks for it. The [metrics reference](metrics.md) lists them. |
+| `/api/status` | The API's view of the service's state, as JSON: what `/status?json=1` shows, without the groups. |
+| `/api/openapi.yaml` | The API's OpenAPI 3.1 document, `application/yaml`, which describes every operation under `/api`. |
 
 Neither `/livez` nor `/readyz` depends on NetBox or the primaries: their
 failures show on `/status`, in the metrics, and in the logs.
