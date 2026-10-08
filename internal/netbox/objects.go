@@ -192,8 +192,10 @@ func (c *Client) Nameservers(ctx context.Context) ([]Nameserver, error) {
 
 // A ZoneFilter selects zones. Each field that isn't empty must match.
 type ZoneFilter struct {
-	// Name is the zone's name, as ZoneName returns it.
-	Name string
+	// Names are zones' names, as ZoneName returns them; a zone with any of
+	// them matches, whatever its case. The DNS plugin keeps the case a
+	// zone's name is given in, but a name's case means nothing in DNS.
+	Names []string
 	// Views are views' names; a zone in any of them matches.
 	Views []string
 	// Status is the zone's status, such as active.
@@ -203,14 +205,14 @@ type ZoneFilter struct {
 // Zones lists the zones that f selects.
 func (c *Client) Zones(ctx context.Context, f ZoneFilter) ([]Zone, error) {
 	q := url.Values{}
-	for k, v := range map[string]string{"name": f.Name, "status": f.Status} {
-		if v != "" {
-			q.Set(k, v)
-		}
+	if f.Status != "" {
+		q.Set("status", f.Status)
 	}
-	for _, v := range f.Views {
-		if v != "" {
-			q.Add("view", v)
+	for k, values := range map[string][]string{"name__ie": f.Names, "view": f.Views} {
+		for _, v := range values {
+			if v != "" {
+				q.Add(k, v)
+			}
 		}
 	}
 	return list[Zone](ctx, c, "zones/", q)
@@ -239,7 +241,7 @@ func (c *Client) Count(ctx context.Context, objectType string) (int, error) {
 // named view. If view is empty, the zone may be in any view, but only one:
 // otherwise FindZone returns an *AmbiguousZoneError.
 func (c *Client) FindZone(ctx context.Context, name, view string) (Zone, error) {
-	zones, err := c.Zones(ctx, ZoneFilter{Name: name, Views: []string{view}})
+	zones, err := c.Zones(ctx, ZoneFilter{Names: []string{name}, Views: []string{view}})
 	if err != nil {
 		return Zone{}, err
 	}

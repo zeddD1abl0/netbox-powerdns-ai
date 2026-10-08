@@ -22,6 +22,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"slices"
 	"strconv"
@@ -528,6 +529,41 @@ func TestListChecksCounts(t *testing.T) {
 			}
 			if err == nil && len(records) != 39 {
 				t.Errorf("%d records, want 39", len(records))
+			}
+		})
+	}
+}
+
+// TestZoneFilter checks the query that each filter sends.
+func TestZoneFilter(t *testing.T) {
+	tests := []struct {
+		name string
+		f    ZoneFilter
+		want url.Values
+	}{
+		{"everything", ZoneFilter{}, url.Values{}},
+		{"names, whatever their case, in views", ZoneFilter{Names: []string{"a.example", "b.example"}, Views: []string{"v", "w"}, Status: "active"},
+			url.Values{"name__ie": {"a.example", "b.example"}, "view": {"v", "w"}, "status": {"active"}}},
+		{"empty names and views", ZoneFilter{Names: []string{""}, Views: []string{""}}, url.Values{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got url.Values
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				got = r.URL.Query()
+				_, _ = w.Write([]byte(`{"count": 0, "next": null, "results": []}`))
+			}))
+			t.Cleanup(srv.Close)
+			c, _ := testClient(t, srv.URL, Options{})
+			if _, err := c.Zones(t.Context(), tt.f); err != nil {
+				t.Fatal(err)
+			}
+			// Every list pages in a stable order.
+			for _, k := range []string{"limit", "offset", "ordering"} {
+				got.Del(k)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("query %v, want %v", got, tt.want)
 			}
 		})
 	}

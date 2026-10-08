@@ -42,6 +42,9 @@ All notable changes to this project are recorded here. The format follows
 
 ### Fixed
 
+- `nbpdns drift --zone` and `nbpdns netbox records --zone` find a NetBox
+  zone whatever the case of its name. The DNS plugin keeps the case a
+  zone's name was given in, so a zone named `Example.com` wasn't found.
 - A release's notes on GitLab are its version's section of the CHANGELOG.
   The 0.1.0 release was published with empty notes.
 

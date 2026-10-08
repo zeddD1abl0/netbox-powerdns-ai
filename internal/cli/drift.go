@@ -268,7 +268,11 @@ type netboxSource struct {
 }
 
 func (n *netboxSource) Zones(ctx context.Context, views []string, zone string) ([]dns.Zone, error) {
-	zones, err := n.c.Zones(ctx, netbox.ZoneFilter{Name: strings.TrimSuffix(zone, "."), Views: views})
+	f := netbox.ZoneFilter{Views: views}
+	if zone != "" {
+		f.Names = []string{strings.TrimSuffix(zone, ".")}
+	}
+	zones, err := n.c.Zones(ctx, f)
 	if err != nil {
 		return nil, err
 	}
