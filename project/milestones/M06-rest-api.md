@@ -47,36 +47,170 @@ reference at `/api/docs`.
 
 ## Acceptance criteria
 
-- [ ] ADR-0033 and ADR-0034 are accepted. Q-041 is answered, REQ-046 and
+- [x] ADR-0033 and ADR-0034 are accepted. Q-041 is answered, REQ-046 and
   REQ-047 exist, and ITEM-0065 is won't-fix.
-- [ ] oapi-codegen is pinned, and `make generate` and `generate-check`
+- [x] oapi-codegen is pinned, and `make generate` and `generate-check`
   cover the generated server and the embedded spec. `api/openapi.yaml`
   passes `make api-lint`, whose self-test covers the new [215] and [219]
   rules.
-- [ ] Every resource in the table answers as specified, and every
+- [x] Every resource in the table answers as specified, and every
   response, errors included, is validated against the spec in the handler
   tests. The coverage test passes.
-- [ ] Lists page with `limit` and `cursor`, with absolute `self` and
+- [x] Lists page with `limit` and `cursor`, with absolute `self` and
   `next` links, and errors are problem details everywhere under `/api`.
-- [ ] Each request returns its `X-Flow-ID`, continues an incoming
+- [x] Each request returns its `X-Flow-ID`, continues an incoming
   `traceparent`, is logged with its request ID, and is counted in the new
   metrics.
-- [ ] `serve` keeps NetBox's zones, and `rrsets` serves them. `nbpdns
+- [x] `serve` keeps NetBox's zones, and `rrsets` serves them. `nbpdns
   drift` reads no more than before. The scale check's memory is recorded.
-- [ ] `/api/docs` serves the vendored Scalar with the CSP, and loads with
+- [x] `/api/docs` serves the vendored Scalar with the CSP, and loads with
   no request to another host.
-- [ ] The integration test validates every resource against the spec, on
+- [x] The integration test validates every resource against the spec, on
   the lab.
-- [ ] The docs above exist, the references are regenerated, and the
+- [x] The docs above exist, the references are regenerated, and the
   CHANGELOG is updated.
-- [ ] `/code-review high` has run, and `/security-review` too, since M06
+- [x] `/code-review high` has run, and `/security-review` too, since M06
   opens an unauthenticated API.
 - [ ] The manual verification is recorded. The pipelines pass, and the user
   has merged through an MR with a merge commit.
 
+## Decided after approval
+
+> [!IMPORTANT]
+> Changed during implementation, with the reasons recorded in the items
+> named. These override the approved design below.
+>
+> - **`/api/status` arrived with the pipeline**, in ITEM-0066, as its first
+>   operation, so the pipeline was proven end to end. ITEM-0068 kept the
+>   server groups and the paging.
+> - **Spec details:**
+>   - each zone has an `rrset_count`;
+>   - the three, then four, page schemas share `PageLinks` by `allOf`;
+>   - nullable enums are a `oneOf` of a named enum and `null`;
+>   - the zone path parameter's component is `ZoneName`;
+>   - every property has an example.
+>
+>   These are oapi-codegen's and vacuum's needs (ITEM-0066, ITEM-0069,
+>   ITEM-0070).
+> - **`make generate` runs oapi-codegen first**, since `gendocs` compiles
+>   the module, which fails while the generated interface is ahead of the
+>   handlers (ITEM-0069).
+> - **Scalar's styles need no `'unsafe-inline'`:** Scalar reads a nonce
+>   from a `<meta property="csp-nonce">`, so each response carries its own
+>   nonce (ITEM-0071).
+> - **Scalar's bundle is 4.4 MB, not about 3 MB.** It's vendored and
+>   embedded gzipped, 1.28 MB, and served gzipped with ETags. Its license
+>   comes from Scalar's repository at a pinned commit, since the npm
+>   package has none, and the repository tags no package's releases
+>   (ITEM-0071, ITEM-0073).
+> - **The records' reads**, after the code review (ITEM-0073):
+>   - `serve` keeps NetBox's inactive zones too, bare, so the records come
+>     from the view the drift report compares;
+>   - it reads the zones it doesn't compare in a call of their own, whose
+>     failure keeps the last records and fails nothing else.
+> - **Requests' metrics count `openapi` and `docs`** for the document and
+>   the reference, besides each `operationId` and `unmatched` (ITEM-0067,
+>   ITEM-0071).
+> - **DNS rebinding against the unauthenticated listener** is ITEM-0074,
+>   for M10.
+
 ## Verification log
 
 Append-only and dated. Record what was run and what was seen.
+
+- 2026-10-08: **The pipeline, proven first** (ITEM-0066). A draft spec
+  with every construct M06 needed went through oapi-codegen v2.8.0 into a
+  strict `net/http` server that compiled against runtime v1.7.0.
+  libopenapi-validator v0.16.0 passed conforming responses, and caught a
+  missing field, a value outside an enum, a number for a nullable string,
+  and an undocumented content type. ADR-0033 needed no fallback.
+- 2026-10-08: **Scale (REQ-043)** (ITEM-0070). A lab-only script rebuilt
+  M03's data set: 1,000 zones of 100 A records in a NetBox view, `scale`,
+  and 995 of them on lab-a, with 10 changed values, 5 extra TXT RRsets and
+  5 zones missing. `serve` ran five refreshes at a 70 s interval:
+  - every refresh was complete, finding 980 in sync, 15 in drift and 5
+    missing, exactly the planted drift;
+  - they averaged 53.0 s, against M04's 54.7 s, with about 1,000 NetBox
+    requests each, one per zone, and no retries;
+  - memory sat at 76 to 79 MB between refreshes, with NetBox's 100,000
+    records kept, against M04's 38 MB, and peaked at 131 to 132 MB at each
+    refresh's end, against M04's 95 MB, with no growth over the five;
+  - the API answered 1,000 zones in one page in 8.4 ms, the drifted ones
+    in 7.6 ms, a zone's 102 RRsets in 0.5 ms, and `/api/status` in
+    0.3 ms;
+  - SIGTERM: exit 0 in 27 ms.
+
+  Afterwards, the data set's zones were removed from lab-a, and NetBox's
+  are being deleted, which is as slow as their creation; `make lab-down`
+  would reset the lab anyway.
+- 2026-10-08: **The how-to, run** (ITEM-0072). Every command in "Read drift
+  and DNS records through the API" ran against that `serve`, and gave
+  the planted drift:
+  - the drifted zones across groups;
+  - z0000's changed A record, and z0010's extra TXT;
+  - the missing zone's 100 records as zone-file lines;
+  - 102 RRsets paged in four;
+  - a flow ID echoed and logged.
+- 2026-10-08: **The reference in a browser** (ITEM-0071). Headless Firefox,
+  with an isolated profile, loaded `/api/docs` from `serve` on the lab. It
+  rendered styled, with the spec's operations, models and server URL,
+  under the strict CSP with no `'unsafe-inline'`, in the browser's own
+  fonts.
+- 2026-10-08: **Flow IDs and traces.** A request with `X-Flow-ID:
+  m06-verify-1` and a `traceparent` went to `serve`, with spans exported
+  to Jaeger (`jaegertracing/jaeger:latest`, a temporary container):
+  - the response returned the flow ID;
+  - its log line had it as `request_id`, with the incoming trace's ID;
+  - Jaeger had the span `GET /api/server-groups`, a child of the incoming
+    parent span, with `http.route` and status 200.
+- 2026-10-08: **`/code-review high`** on `origin/main...m06-rest-api` at
+  `f4871f1` (a first attempt stopped at the session limit) found ten
+  things (ITEM-0073):
+  1. an empty NetBox read never replaced the records;
+  2. HEAD requests lost their route, and miscounted the reference;
+  3. links lost a zone name's escapes, so an RFC 2317 zone couldn't be
+     paged;
+  4. records could come from another view than the report's;
+  5. a failed read of a zone that isn't compared failed the refresh;
+  6. zone lists mapped every zone before paging;
+  7. duplicated cursor and zone-name code;
+  8. Scalar's license fetched from a moving branch;
+  9. links from the request's Host when `server.public_url` isn't set;
+  10. `gzip;q=0`, and ETag lists and weak tags, ignored.
+
+  Nine were fixed. The ninth stays as ADR-0033 designed it, documented:
+  responses are `no-store`, so a forged Host misleads only its own
+  request.
+- 2026-10-08: **`/security-review`** on the branch, with the fixes: nothing
+  at the report's bar. It checked:
+  - **Secrets:** none reaches a response, a log line, a span or the
+    reference. The status fields are those `/status?json=1` already
+    served.
+  - **The reference page:** html/template, a `crypto/rand` nonce, the CSP
+    with nothing `unsafe`, `nosniff`, and correct content types.
+  - **Problems:** always `application/problem+json`, HTML-escaped by
+    `encoding/json`.
+  - **Flow IDs:** anchored, with no CR or LF.
+  - **Links:** a forged Host can't poison a cache, since every response is
+    `no-store`.
+  - **Cursors:** they decode into two strings, nothing more.
+  - **Docs assets:** a map lookup of three files, so no path traversal.
+  - **Scalar:** the bundle is pinned and verified, and matched the npm
+    tarball byte for byte.
+
+  Below its bar: DNS rebinding against the unauthenticated listener, as
+  `/status` has been open to since M04, is ITEM-0074, for M10.
+- 2026-10-08: **Close checks**, on the tree committed as `baaed89`:
+  - `make check` passes: vet, golangci-lint with 0 issues, the tests with
+    `-race`, govulncheck, gitleaks, Vale, the API ruleset's self-test and
+    the spec at 100/100, project lint, and `generate-check`, which now
+    covers the API's code, its embedded spec and its reference.
+  - `make test-integration` passes against the local lab, with `TestServe`
+    and `TestDrift` exercising the API.
+  - `make release-check` passes.
+  - `make docs-links` passes, on 73 pages.
+  - The stripped binary is 21.1 MB, from 19.8 MB at M05's end: +1.31 MB
+    for Scalar's gzipped bundle, and the API.
 
 ## Approved design
 
