@@ -47,7 +47,9 @@ All notable changes to this project are recorded here. The format follows
   `nbpdns_drift_zone_refresh_duration_seconds` and
   `nbpdns_drift_pending_zones`. `/status` and `/api/status` gain a
   `webhooks` section: whether they're on, the last event, what waits, and
-  the last refresh they asked for. The API's version is 1.1.0.
+  the last refresh they asked for. The API's version is 1.1.0. The how-to
+  "Refresh drift as NetBox changes" sets them up in NetBox, by its web
+  interface or its REST API, with the event rule in Terraform if you like.
 
 - The development lab's profile `webhooks`, which adds NetBox's worker, so
   that the lab's NetBox sends webhooks: `make lab-up LAB_PROFILES=webhooks`.

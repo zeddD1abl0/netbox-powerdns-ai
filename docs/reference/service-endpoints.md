@@ -15,8 +15,9 @@ the request's own, if it sent a valid one, or a new one. It's the request's
 `request_id` in the logs. A request's W3C `traceparent` continues its trace.
 
 > [!WARNING]
-> The endpoints have no authentication until M10, and they name your server
-> groups, zones, and URLs. Keep the port on a trusted network.
+> The endpoints have no authentication until M10, apart from
+> `/api/netbox-events`, which needs NetBox's signature. They name your
+> server groups, zones, and URLs. Keep the port on a trusted network.
 
 | Path | Answers |
 |---|---|
@@ -25,6 +26,7 @@ the request's own, if it sent a valid one, or a new one. It's the request's
 | `/status` | The service's state, as text for a person, or as JSON with `?json=1`. |
 | `/metrics` | The metrics, in Prometheus's text format, or in OpenMetrics if the scraper asks for it. The [metrics reference](metrics.md) lists them. |
 | `/api/…` | The API, as JSON: the service's status, at `/api/status`; the server groups, at `/api/server-groups`; each group's zones, filtered by state; each zone's changes; and each zone's records as NetBox defines them, at `…/rrsets`. Everything is last-known state. Lists are paged with `limit` and `cursor`. The [API reference](api.md) lists every operation. |
+| `/api/netbox-events` | `POST` only: NetBox's webhooks, signed with `netbox.webhook_secret`, which queue a refresh of the zones they name. `202` when accepted, `401` for a missing or wrong `X-Hook-Signature`, and `404` while `netbox.webhook_secret` isn't set. [Refresh drift as NetBox changes](../how-to/refresh-drift-as-netbox-changes.md) sets them up. |
 | `/api/openapi.yaml` | The API's OpenAPI 3.1 document, `application/yaml`, which describes every operation under `/api`. |
 | `/api/docs` | The API's reference, for a browser: Scalar's, built into nbpdns, reading `/api/openapi.yaml`. Its Content-Security-Policy lets it reach no other host. |
 
