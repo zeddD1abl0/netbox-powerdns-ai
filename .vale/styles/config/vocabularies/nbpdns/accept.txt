@@ -116,3 +116,10 @@ Sigstore
 cosign
 distroless
 GoReleaser
+Scalar('s)?
+API's
+Redoc
+ogen
+[Vv]alidators?
+nullable
+browsable

@@ -297,3 +297,20 @@ options; the label of the chosen option is quoted.
 The user then approved M05's plan. The decisions are recorded in ADR-0030,
 ADR-0031 (superseding ADR-0015) and ADR-0032 (superseding ADR-0016), and as
 REQ-045, answering Q-025 for the binaries and the image.
+
+## Answers, 2026-10-08 (M06 design)
+
+These were given in the M06 design session. Where an answer was one of the
+proposed options, its label is quoted; the others are quoted in full.
+
+| Question | Answer |
+|---|---|
+| Q-041: what will IaC manage through nbpdns's API? | "nbpdns config + the ability to read only DNS records. It may be useful to have a Terraform query nbpdns for records, and then push to other Terraform Providers." |
+| Which viewer should the binary serve at `/api/docs`? | "Provide a pros and cons of Swagger UI vs Scalar. I would lean towards Scalar only because it appears to be better for AI, and we'll probably look at some sort of MCP at a MUCH later milestone." After the comparison: "Scalar, locked down". |
+| Which read-only resources should M06's API have? | "Plus service status": server groups, zones and their changes, and the service's status. |
+| Should M06 fix the slow lab start on GitLab's runner (ITEM-0065)? | "Unfortunately the issue is to do with the hardware restrictions on the runner. This is a known issue that if the node is busy with other actions, the memory paging kicks in, slowing down the NetBox run-up. Avoid trying to fix this, as retrying the pipeline continues to succeed, and I do not have the resources to expand the capacity of the GitLab Runner currently." |
+| Should M06's API also serve DNS records? | "Yes, in M06": each zone's RRsets as NetBox defines them, in nbpdns's normalized form. |
+
+The user then approved M06's plan. The decisions are recorded in ADR-0033
+and ADR-0034, and as REQ-046 and REQ-047, answering Q-041. ITEM-0065 is
+closed as won't-fix.

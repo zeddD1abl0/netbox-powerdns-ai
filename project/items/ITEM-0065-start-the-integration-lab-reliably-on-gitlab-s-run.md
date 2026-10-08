@@ -2,12 +2,12 @@
 id: ITEM-0065
 title: Start the integration lab reliably on GitLab's runner
 type: bug # feature | bug | debt | task
-status: open # open | in-progress | blocked | done | wontfix
+status: wontfix # open | in-progress | blocked | done | wontfix
 milestone: M06
 requirements: [REQ-036]
 depends_on: []
 created: 2026-10-08
-closed:
+closed: 2026-10-08
 ---
 
 # ITEM-0065: Start the integration lab reliably on GitLab's runner
@@ -51,3 +51,14 @@ need retrying.
 
     Raising `start_period` and `--wait-timeout` would hide the cause, not
     fix it.
+- 2026-10-08: Won't fix, on the user's word in M06's design:
+  > Unfortunately the issue is to do with the hardware restrictions on the
+  > runner. This is a known issue that if the node is busy with other
+  > actions, the memory paging kicks in, slowing down the NetBox run-up.
+  > Avoid trying to fix this, as retrying the pipeline continues to
+  > succeed, and I do not have the resources to expand the capacity of the
+  > GitLab Runner currently.
+
+  So the cause is memory paging on a busy node. A failed `integration-test`
+  whose log ends in `lab-up`'s timeout, or NetBox unhealthy, is retried,
+  not investigated.
