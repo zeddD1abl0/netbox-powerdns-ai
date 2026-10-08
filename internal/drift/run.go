@@ -1,10 +1,12 @@
 package drift
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/config"
@@ -55,6 +57,12 @@ type Options struct {
 	// Concurrency is how many groups are listed, read and compared at once.
 	// Below 1, it's 1.
 	Concurrency int
+	// ReadNetBox reads the RRsets of every active NetBox zone in the
+	// groups' views, not only of those compared, and returns them as the
+	// report's NetBox zones, for nbpdns serve's API (ADR-0033). Their reads
+	// change nothing in the comparison: the problems they find are left
+	// out of it.
+	ReadNetBox bool
 }
 
 // Run compares every group, or only the zone o names. It lists NetBox's
@@ -113,9 +121,26 @@ func Run(ctx context.Context, nb NetBox, groups []Group, o Options) (Report, err
 			}
 		}
 	}
-	read, nbProbs, err := nb.Read(ctx, slices.Collect(maps.Values(needed)))
+	toRead := needed
+	if o.ReadNetBox {
+		toRead = maps.Clone(needed)
+		for _, z := range listed {
+			if z.Active {
+				toRead[id{z.View, z.Name}] = z
+			}
+		}
+	}
+	read, nbProbs, err := nb.Read(ctx, slices.Collect(maps.Values(toRead)))
 	if err != nil {
 		return Report{}, err
+	}
+	if o.ReadNetBox {
+		// The comparison sees only the problems of the zones it compares, as
+		// it would without the extra reads.
+		nbProbs = slices.DeleteFunc(nbProbs, func(p dns.Problem) bool {
+			_, compared := needed[id{p.View, p.Zone}]
+			return !compared
+		})
 	}
 	full := map[id]dns.Zone{}
 	for _, z := range read {
@@ -139,6 +164,11 @@ func Run(ctx context.Context, nb NetBox, groups []Group, o Options) (Report, err
 		reports[i] = compareGroup(ctx, g.Primary, st.cfg, nbZones, st.pd, nbProbs)
 	})
 	r := Report{Complete: true, Groups: []GroupReport{}}
+	if o.ReadNetBox {
+		r.NetBox = slices.SortedFunc(slices.Values(read), func(a, b dns.Zone) int {
+			return cmp.Or(strings.Compare(a.View, b.View), dns.CompareNames(a.Name, b.Name))
+		})
+	}
 	for _, gr := range reports {
 		if gr.Status != StatusOK {
 			r.Complete = false

@@ -168,8 +168,10 @@ type memory struct {
 	zones   []dns.Zone
 	err     error
 	readErr error
-	mu      sync.Mutex
-	read    []string
+	// probs are the problems that Read finds in the zones it reads.
+	probs []dns.Problem
+	mu    sync.Mutex
+	read  []string
 }
 
 func (m *memory) list(zone string) []dns.Zone {
@@ -191,15 +193,21 @@ func (m *memory) Read(_ context.Context, zones []dns.Zone) ([]dns.Zone, []dns.Pr
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var out []dns.Zone
+	probs := []dns.Problem{}
 	for _, want := range zones {
 		for _, z := range m.zones {
 			if z.Name == want.Name && z.View == want.View {
 				out = append(out, z)
 				m.read = append(m.read, z.View+"/"+z.Name)
+				for _, p := range m.probs {
+					if p.Zone == z.Name && p.View == z.View {
+						probs = append(probs, p)
+					}
+				}
 			}
 		}
 	}
-	return out, []dns.Problem{}, nil
+	return out, probs, nil
 }
 
 type memNetBox struct{ *memory }
@@ -402,4 +410,61 @@ func TestRunConcurrently(t *testing.T) {
 			t.Errorf("report %+v, %v", r, err)
 		}
 	})
+}
+
+func TestRunReadNetBox(t *testing.T) {
+	inactive := zone("e.example.", "v", 1)
+	inactive.Active = false
+	zones := []dns.Zone{
+		zone("a.example.", "v", 1, rrset("www.a.example.", "A", 300, rec("192.0.2.1"))),
+		zone("b.example.", "v", 1),
+		zone("c.example.", "w", 1),
+		zone("d.example.", "v", 1, rrset("www.d.example.", "A", 300, rec("192.0.2.1"))),
+		inactive,
+		zone("f.example.", "elsewhere", 1),
+	}
+	// A problem in a compared zone, and one in d.example., which site-a's
+	// primary doesn't have, so it's read only for the API.
+	probs := []dns.Problem{{Zone: "a.example.", View: "v", Detail: "compared"}, {Zone: "d.example.", View: "v", Detail: "only read"}}
+	pdA := &memory{zones: []dns.Zone{zone("a.example.", "", 1), zone("b.example.", "", 1)}}
+	groups := func() []Group {
+		return []Group{
+			{Config: config.Group{Name: "site-a", Views: []string{"v"}, DriftPolicy: config.PolicyReport,
+				ZonePolicies: map[string]string{"b.example.": config.PolicyIgnore}}, Primary: memPrimary{pdA}},
+			{Config: config.Group{Name: "site-b", Views: []string{"w"}, DriftPolicy: config.PolicyReport}, Err: errors.New("no client")},
+		}
+	}
+	lean := &memory{zones: zones, probs: probs}
+	without, err := Run(t.Context(), memNetBox{lean}, groups(), Options{})
+	if err != nil || without.NetBox != nil {
+		t.Fatalf("without ReadNetBox: %v, NetBox %v", err, without.NetBox)
+	}
+	full := &memory{zones: zones, probs: probs}
+	with, err := Run(t.Context(), memNetBox{full}, groups(), Options{ReadNetBox: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The comparison is the same, the problem in d.example. left out.
+	if !reflect.DeepEqual(with.Groups, without.Groups) {
+		t.Errorf("the reports differ:\nwith    %+v\nwithout %+v", with.Groups, without.Groups)
+	}
+	if p := with.Groups[0].Problems; len(p) != 1 || p[0].Detail != "compared" {
+		t.Errorf("site-a's problems %+v", p)
+	}
+	// Every active zone in the groups' views is read, even of a group that
+	// failed and of zones not compared, but not the inactive one, nor one in
+	// no group's view.
+	var got []string
+	for _, z := range with.NetBox {
+		got = append(got, z.View+"/"+z.Name)
+	}
+	if want := []string{"v/a.example.", "v/b.example.", "v/d.example.", "w/c.example."}; !slices.Equal(got, want) {
+		t.Errorf("NetBox zones %v, want %v", got, want)
+	}
+	if slices.Sort(full.read); !slices.Equal(full.read, []string{"v/a.example.", "v/b.example.", "v/d.example.", "w/c.example."}) {
+		t.Errorf("NetBox read %v", full.read)
+	}
+	if with.NetBox[2].RRsets[1].Name != "www.d.example." {
+		t.Errorf("d.example. without its RRsets: %+v", with.NetBox[2])
+	}
 }

@@ -146,6 +146,52 @@ func TestServe(t *testing.T) {
 	if code, _ := s.api("/api/server-groups/lab-a/zones/" + strings.TrimSuffix(f.InSync, ".")); code != http.StatusOK {
 		t.Errorf("the zone in sync, without its final dot: %d", code)
 	}
+	// NetBox's records of the zone in sync, as nbpdns netbox records shows
+	// them, and of the missing zone, which the primary doesn't have.
+	for _, zone := range []string{f.InSync, f.Missing} {
+		code, page = s.api("/api/server-groups/lab-a/zones/" + zone + "/rrsets?limit=1000")
+		var rrsets struct {
+			Items []struct {
+				Name, Type string
+				TTL        uint32
+				Records    []struct{ Value string }
+			}
+		}
+		if err := json.Unmarshal([]byte(page), &rrsets); err != nil || code != http.StatusOK || len(rrsets.Items) == 0 {
+			t.Fatalf("%s's rrsets: %d, %v:\n%s", zone, code, err, page)
+		}
+		_, out, stderr := run(t, map[string]string{"NBPDNS_NETBOX_URL": nb.URL(), "NBPDNS_NETBOX_TOKEN": f.ReaderToken},
+			"netbox", "records", "--zone", zone, "--view", f.View, "-o", "json")
+		var want struct {
+			RRsets []struct {
+				Name, Type string
+				TTL        uint32
+				Records    []struct {
+					Value  string
+					Active bool
+				}
+			}
+		}
+		if err := json.Unmarshal([]byte(out), &want); err != nil {
+			t.Fatalf("nbpdns netbox records %s: %v:\n%s%s", zone, err, out, stderr)
+		}
+		var got, exp []string
+		for _, r := range rrsets.Items {
+			for _, rec := range r.Records {
+				got = append(got, fmt.Sprintf("%s %s %d %s", r.Name, r.Type, r.TTL, rec.Value))
+			}
+		}
+		for _, r := range want.RRsets {
+			for _, rec := range r.Records {
+				if rec.Active {
+					exp = append(exp, fmt.Sprintf("%s %s %d %s", r.Name, r.Type, r.TTL, rec.Value))
+				}
+			}
+		}
+		if !reflect.DeepEqual(got, exp) {
+			t.Errorf("%s's rrsets in the API:\n%s\nnbpdns netbox records:\n%s", zone, strings.Join(got, "\n"), strings.Join(exp, "\n"))
+		}
+	}
 	if code := s.stop(); code != exitOK {
 		t.Errorf("exit %d, want 0:\n%s", code, s.stderr)
 	}

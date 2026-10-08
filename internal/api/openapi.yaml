@@ -228,6 +228,7 @@ paths:
                     netbox_serial: 2026100801
                     powerdns_serial: 2026100701
                     change_count: 2
+                    rrset_count: 42
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -262,6 +263,7 @@ paths:
                 netbox_serial: 2026100801
                 powerdns_serial: 2026100701
                 change_count: 2
+                rrset_count: 42
                 as_of: "2026-10-08T01:10:02Z"
         "404":
           $ref: "#/components/responses/NotFound"
@@ -314,6 +316,58 @@ paths:
                     powerdns:
                       ttl: 3600
                       values: [www.example.com.]
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        default:
+          $ref: "#/components/responses/Problem"
+  /server-groups/{group}/zones/{zone}/rrsets:
+    get:
+      operationId: listZoneRRsets
+      summary: List a zone's RRsets, as NetBox defines them
+      description: >-
+        Returns a page of a zone's RRsets as NetBox defines them, in
+        nbpdns's normalized form, as of NetBox's last successful read: what
+        nbpdns compares with the group's primary, so what a client can
+        publish elsewhere. Only active records are listed. The zone is the
+        one in the group's NetBox views, the first by view name if several
+        views have it. RRsets come in canonical order: by owner name, then
+        the SOA, then NS, then the other types.
+      tags: [server-groups]
+      parameters:
+        - $ref: "#/components/parameters/FlowID"
+        - $ref: "#/components/parameters/Group"
+        - $ref: "#/components/parameters/ZoneName"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of the zone's RRsets.
+          headers:
+            X-Flow-ID:
+              $ref: "#/components/headers/FlowID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RRsetPage"
+              example:
+                self: https://nbpdns.example.com/api/server-groups/site-a/zones/example.com./rrsets
+                next: null
+                as_of: "2026-10-08T01:10:00Z"
+                items:
+                  - name: example.com.
+                    type: SOA
+                    ttl: 3600
+                    records:
+                      - value: ns1.example.com. hostmaster.example.com. 2026100801 10800 3600 604800 3600
+                        managed: true
+                  - name: www.example.com.
+                    type: A
+                    ttl: 300
+                    records:
+                      - value: 192.0.2.10
+                        managed: false
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -804,7 +858,7 @@ components:
     Zone:
       type: object
       description: A zone of a server group, as of the group's last successful read.
-      required: [zone, view, policy, state, netbox_serial, powerdns_serial, change_count]
+      required: [zone, view, policy, state, netbox_serial, powerdns_serial, change_count, rrset_count]
       properties:
         zone:
           type: string
@@ -842,6 +896,16 @@ components:
           minimum: 0
           description: How many of the zone's RRsets differ, which `changes` lists.
           examples: [2]
+        rrset_count:
+          type: [integer, "null"]
+          format: int64
+          minimum: 0
+          description: >-
+            How many RRsets with active records NetBox defines for the zone,
+            which `rrsets` lists, as of NetBox's last successful read, or
+            null if NetBox has no active zone of that name in the group's
+            views.
+          examples: [42]
     ZoneDetail:
       description: A zone of a server group, and when the group was last read.
       allOf:
@@ -879,6 +943,7 @@ components:
                     netbox_serial: 2026100801
                     powerdns_serial: 2026100801
                     change_count: 0
+                    rrset_count: 42
     ChangeKind:
       type: string
       description: >-
@@ -955,3 +1020,71 @@ components:
                     kind: missing
                     netbox: {ttl: 300, values: [192.0.2.10]}
                     powerdns: null
+    Record:
+      type: object
+      description: A record of an RRset.
+      required: [value, managed]
+      properties:
+        value:
+          type: string
+          description: The record's data, normalized as nbpdns compares it.
+          examples: [192.0.2.10]
+        managed:
+          type: boolean
+          description: >-
+            Whether NetBox's DNS plugin makes the record itself, such as the
+            zone's SOA and NS records, rather than a user.
+          examples: [false]
+    RRset:
+      type: object
+      description: An RRset as NetBox defines it, with its active records.
+      required: [name, type, ttl, records]
+      properties:
+        name:
+          type: string
+          description: The absolute owner name of the RRset's records.
+          examples: [www.example.com.]
+        type:
+          type: string
+          description: The type of the RRset's records, such as `A` or `MX`.
+          examples: [A]
+        ttl:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 4294967295
+          description: The RRset's one TTL, in seconds, which NetBox's records give it.
+          examples: [300]
+        records:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/Record"
+          description: The RRset's active records, sorted by value.
+          examples:
+            - - value: 192.0.2.10
+                managed: false
+    RRsetPage:
+      description: One page of a zone's RRsets, with the links to it and to the next.
+      allOf:
+        - $ref: "#/components/schemas/PageLinks"
+        - type: object
+          required: [as_of, items]
+          properties:
+            as_of:
+              type: string
+              format: date-time
+              description: When NetBox was last read, which the RRsets are as of.
+              examples: ["2026-10-08T01:10:00Z"]
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/RRset"
+              description: The page's RRsets.
+              examples:
+                - - name: www.example.com.
+                    type: A
+                    ttl: 300
+                    records:
+                      - value: 192.0.2.10
+                        managed: false

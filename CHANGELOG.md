@@ -15,7 +15,12 @@ All notable changes to this project are recorded here. The format follows
   A group's `zones` can be filtered by state, such as
   `?state=drift,missing`, and include the primary's unmanaged zones. A
   zone, by its name with or without the final dot, has its `changes`:
-  each RRset that differs, with each side's TTL and values. Lists come in
+  each RRset that differs, with each side's TTL and values; and its
+  `rrsets`: its records as NetBox defines them, in nbpdns's normalized
+  form, with NetBox's own SOA and NS records marked `managed`, for IaC to
+  read and publish elsewhere. `nbpdns serve` now reads the records of
+  every active zone in the groups' views to serve them, which
+  `nbpdns drift` doesn't. Lists come in
   pages, with `limit` and an opaque `cursor`, and absolute `self` and
   `next` links. Every error is an RFC 9457 problem. Each request takes, or is given, an
   `X-Flow-ID`, which is its request ID in the logs, continues the client's

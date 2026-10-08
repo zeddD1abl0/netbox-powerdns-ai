@@ -91,6 +91,8 @@ type state struct {
 	netboxUp     bool
 	netboxError  string
 	groups       map[string]*groupState
+	// netbox is NetBox's zones as of its last successful read.
+	netbox NetBoxView
 }
 
 // groupState is a server group's last-known state.
@@ -218,6 +220,9 @@ func (s *Service) record(ctx context.Context, r drift.Report, err error, start, 
 		return
 	}
 	st.netboxUp, st.netboxError = true, ""
+	if r.NetBox != nil {
+		st.netbox = netboxView(r.NetBox, end)
+	}
 	type change struct {
 		g       drift.GroupReport
 		now     map[[2]string]bool

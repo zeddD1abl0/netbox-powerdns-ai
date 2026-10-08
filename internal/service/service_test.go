@@ -19,6 +19,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/dns"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/drift"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/logging"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/metrics"
@@ -360,5 +361,34 @@ func TestGroups(t *testing.T) {
 	}
 	if b.Report == nil || b.Report.Counts.InSync != 1 || b.Info.Status != drift.StatusFailed || b.Info.Error == "" || b.Info.LastSuccess == nil {
 		t.Errorf("site-b: %+v", b)
+	}
+}
+
+func TestNetBoxZones(t *testing.T) {
+	s, _, _ := testService(t, Options{})
+	if nb := s.NetBox(); !nb.AsOf.IsZero() || nb.Zones != nil {
+		t.Errorf("before a refresh: %+v", nb)
+	}
+	t0 := time.Now()
+	r := report(group("site-a", drift.StateInSync))
+	r.NetBox = []dns.Zone{{Name: "a.example.", View: "v", Active: true}, {Name: "a.example.", View: "w", Active: true}, {Name: "b.example.", View: "w", Active: true}}
+	s.record(t.Context(), r, nil, t0, t0)
+	nb := s.NetBox()
+	if !nb.AsOf.Equal(t0) || len(nb.Zones["v"]) != 1 || len(nb.Zones["w"]) != 2 {
+		t.Fatalf("after a refresh: %+v", nb)
+	}
+	// The first of the views, by name, that has the zone.
+	if z, ok := nb.Zone([]string{"w", "v"}, "a.example."); !ok || z.View != "v" {
+		t.Errorf("Zone(w, v) = %+v, %v", z, ok)
+	}
+	if _, ok := nb.Zone([]string{"v"}, "b.example."); ok {
+		t.Error("b.example. is only in view w")
+	}
+	// NetBox fails, and a refresh times out: the zones stay as they were.
+	t1 := t0.Add(time.Minute)
+	s.record(t.Context(), drift.Report{}, errors.New("NetBox isn't reachable"), t1, t1)
+	s.record(t.Context(), drift.Report{}, &TimeoutError{Timeout: time.Minute}, t1, t1)
+	if nb := s.NetBox(); !nb.AsOf.Equal(t0) || len(nb.Zones["w"]) != 2 {
+		t.Errorf("after failures: %+v", nb)
 	}
 }

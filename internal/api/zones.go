@@ -23,13 +23,30 @@ func serial(n uint32) *int64 {
 	return &s
 }
 
+// A records looks up how many RRsets with active records NetBox defines
+// for a zone of a group, by its absolute name, or nil if it has no active
+// zone of that name in the group's views.
+type records func(zone string) *int64
+
+// recordsOf returns g's records lookup in nb.
+func recordsOf(nb service.NetBoxView, g service.GroupView) records {
+	return func(zone string) *int64 {
+		z, ok := nb.Zone(g.Views, zone)
+		if !ok {
+			return nil
+		}
+		n := int64(len(activeRRsets(z)))
+		return &n
+	}
+}
+
 // zoneOf maps a zone's report onto the API's type.
-func zoneOf(z drift.ZoneReport) gen.Zone {
+func zoneOf(z drift.ZoneReport, rrsets records) gen.Zone {
 	p := gen.DriftPolicy(z.Policy)
 	return gen.Zone{
 		Zone: z.Zone, View: optional(z.View), Policy: &p, State: gen.ZoneState(z.State),
 		NetboxSerial: serial(z.NetBoxSerial), PowerdnsSerial: serial(z.PowerDNSSerial),
-		ChangeCount: int64(len(z.Changes)),
+		ChangeCount: int64(len(z.Changes)), RrsetCount: rrsets(z.Zone),
 	}
 }
 
@@ -41,10 +58,10 @@ func unmanagedZone(name string) gen.Zone {
 
 // zones returns the zones of report, those NetBox assigns and the
 // unmanaged ones, in canonical name order.
-func zones(r *drift.GroupReport) []gen.Zone {
+func zones(r *drift.GroupReport, rrsets records) []gen.Zone {
 	out := make([]gen.Zone, 0, len(r.Zones)+len(r.Unmanaged))
 	for _, z := range r.Zones {
-		out = append(out, zoneOf(z))
+		out = append(out, zoneOf(z, rrsets))
 	}
 	for _, name := range r.Unmanaged {
 		out = append(out, unmanagedZone(name))
@@ -96,7 +113,7 @@ func (s *server) ListZones(ctx context.Context, req gen.ListZonesRequestObject) 
 	out := gen.ZonePage{Items: []gen.Zone{}, AsOf: g.Info.LastSuccess}
 	var all []gen.Zone
 	if g.Report != nil {
-		for _, z := range zones(g.Report) {
+		for _, z := range zones(g.Report, recordsOf(s.o.Source.NetBox(), g)) {
 			if want == nil || want[z.State] {
 				all = append(all, z)
 			}
@@ -142,7 +159,7 @@ func (s *server) zone(ctx context.Context, group, name string) (service.GroupVie
 	n += "."
 	for i, z := range g.Report.Zones {
 		if z.Zone == n {
-			return g, &g.Report.Zones[i], zoneOf(z), nil
+			return g, &g.Report.Zones[i], zoneOf(z, recordsOf(s.o.Source.NetBox(), g)), nil
 		}
 	}
 	if slices.Contains(g.Report.Unmanaged, n) {
@@ -168,7 +185,7 @@ func (s *server) GetZone(ctx context.Context, req gen.GetZoneRequestObject) (gen
 	return gen.GetZone200JSONResponse{Body: gen.ZoneDetail{
 		Zone: z.Zone, View: z.View, Policy: z.Policy, State: z.State,
 		NetboxSerial: z.NetboxSerial, PowerdnsSerial: z.PowerdnsSerial, ChangeCount: z.ChangeCount,
-		AsOf: asOf(g),
+		RrsetCount: z.RrsetCount, AsOf: asOf(g),
 	}}, nil
 }
 

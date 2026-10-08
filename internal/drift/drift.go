@@ -144,6 +144,10 @@ type Report struct {
 	// Drift reports whether any group's zones drifted.
 	Drift  bool          `json:"drift"`
 	Groups []GroupReport `json:"groups"`
+	// NetBox, with Options.ReadNetBox, is every active NetBox zone in the
+	// groups' views, with its RRsets, sorted by view and name. It isn't
+	// part of the report's JSON.
+	NetBox []dns.Zone `json:"-"`
 }
 
 // Compare compares group g's NetBox zones, nb, which are the zones of its

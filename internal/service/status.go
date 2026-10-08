@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
 
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/dns"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/drift"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/metrics"
 )
@@ -317,4 +319,45 @@ func when(t *time.Time) string {
 // seconds writes a number of seconds as a duration, such as 5m0s.
 func seconds(s float64) string {
 	return time.Duration(s * float64(time.Second)).Round(100 * time.Millisecond).String()
+}
+
+// A NetBoxView is NetBox's active zones in the groups' views, with their
+// RRsets, as of its last successful read, for the API's records.
+type NetBoxView struct {
+	// AsOf is when NetBox was last read, or zero if it never was.
+	AsOf time.Time
+	// Zones holds the zones by view, then by absolute name. A kept view is
+	// never changed, only replaced by the next refresh's, so it's safe to
+	// read without the service's lock.
+	Zones map[string]map[string]dns.Zone
+}
+
+// Zone returns the zone named name, an absolute name, in the first of views,
+// by name, that has it, as the drift report compares it.
+func (v NetBoxView) Zone(views []string, name string) (dns.Zone, bool) {
+	for _, view := range slices.Sorted(slices.Values(views)) {
+		if z, ok := v.Zones[view][name]; ok {
+			return z, true
+		}
+	}
+	return dns.Zone{}, false
+}
+
+// netboxView indexes zones, read at asOf.
+func netboxView(zones []dns.Zone, asOf time.Time) NetBoxView {
+	v := NetBoxView{AsOf: asOf, Zones: map[string]map[string]dns.Zone{}}
+	for _, z := range zones {
+		if v.Zones[z.View] == nil {
+			v.Zones[z.View] = map[string]dns.Zone{}
+		}
+		v.Zones[z.View][z.Name] = z
+	}
+	return v
+}
+
+// NetBox returns NetBox's zones as of its last successful read.
+func (s *Service) NetBox() NetBoxView {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.st.netbox
 }

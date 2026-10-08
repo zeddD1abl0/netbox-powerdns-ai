@@ -66,7 +66,8 @@ func newServeCmd(a *app) *cobra.Command {
 			svc := service.New(service.Options{
 				Refresh: func(ctx context.Context) (drift.Report, error) {
 					s.retryClients(ctx, clients)
-					return s.compare(ctx, nbc, clients, "")
+					// The API serves NetBox's records too (ADR-0033).
+					return s.compare(ctx, nbc, clients, drift.Options{ReadNetBox: true})
 				},
 				Interval:  s.cfg.Drift.Interval,
 				Timeout:   s.cfg.Drift.Timeout,

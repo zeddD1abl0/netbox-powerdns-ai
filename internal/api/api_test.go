@@ -43,11 +43,14 @@ func TestMain(m *testing.M) {
 type fakeSource struct {
 	status service.Status
 	groups []service.GroupView
+	netbox service.NetBoxView
 }
 
 func (f fakeSource) Status() service.Status { return f.status }
 
 func (f fakeSource) Groups() []service.GroupView { return f.groups }
+
+func (f fakeSource) NetBox() service.NetBoxView { return f.netbox }
 
 // A reply is a response's status code, header and body.
 type reply struct {
