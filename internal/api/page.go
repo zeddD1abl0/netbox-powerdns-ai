@@ -82,15 +82,17 @@ func take[T any](items []T, start, limit int) ([]T, bool) {
 
 // links returns the absolute URLs of the page r asked for, and of the next
 // one, which starts after the item keyed last, or nil if there's none.
+// The path is the request's escaped one, so a zone named with a / or a %
+// keeps its escapes.
 func (o Options) links(r *http.Request, p page, last string, more bool) (string, *string) {
-	self := o.link(r, r.URL.Path, r.URL.Query())
+	self := o.link(r, r.URL.EscapedPath(), r.URL.Query())
 	if !more {
 		return self, nil
 	}
 	q := r.URL.Query()
 	q.Set("cursor", cursor{After: last, Filter: p.filter}.String())
 	q.Set("limit", strconv.Itoa(p.limit))
-	next := o.link(r, r.URL.Path, q)
+	next := o.link(r, r.URL.EscapedPath(), q)
 	return self, &next
 }
 

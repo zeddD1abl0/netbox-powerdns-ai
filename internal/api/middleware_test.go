@@ -233,3 +233,28 @@ func TestErrorHandlers(t *testing.T) {
 		t.Errorf("500 detail %q, log:\n%s", *p.Detail, log.String())
 	}
 }
+
+// A GET route answers HEAD too, under its own route and operation.
+func TestHead(t *testing.T) {
+	in := newInstrumented(t)
+	in.do(t, http.MethodHead, "/api/status", nil)
+	in.do(t, http.MethodHead, "/api/docs/init.js", nil)
+	spans := in.spans.Ended()
+	if len(spans) != 2 || spans[0].Name() != "HEAD /api/status" {
+		t.Fatalf("spans %v", spans)
+	}
+	for _, a := range spans[0].Attributes() {
+		if a.Key == "http.route" && a.Value.AsString() != "/api/status" {
+			t.Errorf("http.route %q", a.Value.AsString())
+		}
+	}
+	want := `
+# HELP nbpdns_api_requests_total Requests to the API. The operation is the request's ` + "`operationId`" + ` in ` + "`api/openapi.yaml`" + `, such as ` + "`getStatus`" + `, or ` + "`openapi`" + ` for the OpenAPI document, ` + "`docs`" + ` for the API reference, or ` + "`unmatched`" + ` for any other path or method. The code is the answer's status.
+# TYPE nbpdns_api_requests_total counter
+nbpdns_api_requests_total{code="200",operation="docs"} 1
+nbpdns_api_requests_total{code="200",operation="getStatus"} 1
+`
+	if err := testutil.GatherAndCompare(in.metrics.Registry, strings.NewReader(want), "nbpdns_api_requests_total"); err != nil {
+		t.Error(err)
+	}
+}

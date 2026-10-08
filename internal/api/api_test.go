@@ -50,6 +50,15 @@ func (f fakeSource) Status() service.Status { return f.status }
 
 func (f fakeSource) Groups() []service.GroupView { return f.groups }
 
+func (f fakeSource) Group(name string) (service.GroupView, bool) {
+	for _, g := range f.groups {
+		if g.Name == name {
+			return g, true
+		}
+	}
+	return service.GroupView{}, false
+}
+
 func (f fakeSource) NetBox() service.NetBoxView { return f.netbox }
 
 // A reply is a response's status code, header and body.

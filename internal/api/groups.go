@@ -75,16 +75,6 @@ func (s *server) ListServerGroups(ctx context.Context, req gen.ListServerGroupsR
 	return gen.ListServerGroups200JSONResponse{Body: out}, nil
 }
 
-// group returns the group named name, if there's one.
-func (s *server) group(name string) (service.GroupView, bool) {
-	for _, g := range s.o.Source.Groups() {
-		if g.Name == name {
-			return g, true
-		}
-	}
-	return service.GroupView{}, false
-}
-
 // noGroup returns the problem for a group that isn't configured.
 func noGroup(ctx context.Context, name string) gen.Problem {
 	return problem(request(ctx), http.StatusNotFound, "No server group is named "+name+".")
@@ -92,7 +82,7 @@ func noGroup(ctx context.Context, name string) gen.Problem {
 
 // GetServerGroup serves one group.
 func (s *server) GetServerGroup(ctx context.Context, req gen.GetServerGroupRequestObject) (gen.GetServerGroupResponseObject, error) {
-	g, ok := s.group(req.Group)
+	g, ok := s.o.Source.Group(req.Group)
 	if !ok {
 		return gen.GetServerGroup404ApplicationProblemPlusJSONResponse{NotFoundApplicationProblemPlusJSONResponse: gen.NotFoundApplicationProblemPlusJSONResponse{Body: noGroup(ctx, req.Group)}}, nil
 	}

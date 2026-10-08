@@ -15,11 +15,11 @@
 | [M03](milestones/M03-drift-report.md) | Drift report | done | 7 of 7 |
 | [M04](milestones/M04-service.md) | Service | done | 10 of 10 |
 | [M05](milestones/M05-packaging.md) | Packaging | done | 5 of 5 |
-| [M06](milestones/M06-rest-api.md) | REST API | in-progress | 7 of 9 |
+| [M06](milestones/M06-rest-api.md) | REST API | in-progress | 8 of 10 |
 | [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | planned | — |
 | [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | planned | — |
 | [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | planned | — |
-| [M10](milestones/M10-authentication.md) | Authentication | planned | — |
+| [M10](milestones/M10-authentication.md) | Authentication | planned | 0 of 1 |
 | [M11](milestones/M11-sso-and-rbac.md) | SSO and RBAC | planned | — |
 | [M12](milestones/M12-web-ui.md) | Web UI | planned | — |
 | [M13](milestones/M13-write-path-plan-and-apply.md) | Write path: plan and apply | planned | 0 of 1 |
@@ -42,6 +42,7 @@
 | [ITEM-0068](items/ITEM-0068-service-status-and-server-groups-in-the-api.md) | Service status and server groups in the API | feature | done 2026-10-08 | — |
 | [ITEM-0069](items/ITEM-0069-zones-and-their-changes-in-the-api.md) | Zones and their changes in the API | feature | done 2026-10-08 | — |
 | [ITEM-0071](items/ITEM-0071-scalar-at-api-docs-vendored-and-locked-down.md) | Scalar at /api/docs, vendored and locked down | feature | done 2026-10-08 | — |
+| [ITEM-0073](items/ITEM-0073-fix-the-m06-code-review-findings.md) | Fix the M06 code review findings | bug | done 2026-10-08 | — |
 | [ITEM-0065](items/ITEM-0065-start-the-integration-lab-reliably-on-gitlab-s-run.md) | Start the integration lab reliably on GitLab's runner | bug | wontfix 2026-10-08 | — |
 
 ## Open items in other milestones
@@ -50,6 +51,7 @@
 |---|---|---|---|---|
 | [ITEM-0040](items/ITEM-0040-write-record-values-to-powerdns-in-its-own-text-fo.md) | Write record values to PowerDNS in its own text form | task | open | — |
 | [ITEM-0062](items/ITEM-0062-keep-the-image-s-latest-tag-on-the-newest-release.md) | Keep the image's latest tag on the newest release | debt | open | — |
+| [ITEM-0074](items/ITEM-0074-refuse-requests-whose-host-isn-t-server-public-url.md) | Refuse requests whose Host isn't server.public_url's | debt | open | — |
 
 ## Open questions
 

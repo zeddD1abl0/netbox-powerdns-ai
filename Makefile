@@ -270,9 +270,11 @@ api-lint: $(VACUUM) ## Lint api/openapi.yaml against the Zalando ruleset, and se
 # Scalar's API reference (ADR-0034), vendored into internal/api/docs: its
 # standalone bundle, gzipped as the binary serves it, and its license, each
 # checked by SHA-256. The npm package has no license file, so it comes from
-# Scalar's repository.
+# Scalar's repository, at a pinned commit: the repository tags no package's
+# releases.
 SCALAR_VERSION        := 1.73.1
 SCALAR_SHA256         := 424d2f1e55df6c6a485a374bcebbab32c1945b7f2028219b425d79a07b3b15c6
+SCALAR_LICENSE_COMMIT := 854b0f448b6f98884e0dc9964995deaf1559c94c
 SCALAR_LICENSE_SHA256 := 380cd0a6ad700e1f821f2a509f0dd9ff835041cee2d43daf5dedc1adb2bcc620
 
 .PHONY: vendor-scalar
@@ -282,7 +284,7 @@ vendor-scalar: ## Fetch the pinned Scalar API reference into internal/api/docs (
 	echo "$(SCALAR_SHA256)  $$tmp/scalar.tgz" | sha256sum --check --quiet; \
 	tar -xzf "$$tmp/scalar.tgz" -C "$$tmp" package/dist/browser/standalone.js; \
 	gzip -9 -n -c "$$tmp/package/dist/browser/standalone.js" > internal/api/docs/scalar.js.gz; \
-	curl -fsSL -o "$$tmp/LICENSE" https://raw.githubusercontent.com/scalar/scalar/main/LICENSE; \
+	curl -fsSL -o "$$tmp/LICENSE" https://raw.githubusercontent.com/scalar/scalar/$(SCALAR_LICENSE_COMMIT)/LICENSE; \
 	echo "$(SCALAR_LICENSE_SHA256)  $$tmp/LICENSE" | sha256sum --check --quiet; \
 	cp "$$tmp/LICENSE" internal/api/docs/LICENSE.scalar; \
 	echo "vendor-scalar: Scalar $(SCALAR_VERSION) in internal/api/docs"

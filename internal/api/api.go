@@ -35,6 +35,7 @@ func Spec() []byte { return spec }
 type Source interface {
 	Status() service.Status
 	Groups() []service.GroupView
+	Group(name string) (service.GroupView, bool)
 	NetBox() service.NetBoxView
 }
 

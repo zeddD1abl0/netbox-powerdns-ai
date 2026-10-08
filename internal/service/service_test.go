@@ -362,33 +362,58 @@ func TestGroups(t *testing.T) {
 	if b.Report == nil || b.Report.Counts.InSync != 1 || b.Info.Status != drift.StatusFailed || b.Info.Error == "" || b.Info.LastSuccess == nil {
 		t.Errorf("site-b: %+v", b)
 	}
+	if g, ok := s.Group("site-b"); !ok || !reflect.DeepEqual(g, b) {
+		t.Errorf("Group(site-b) = %+v, %v", g, ok)
+	}
+	if _, ok := s.Group("site-z"); ok {
+		t.Error("Group(site-z) found a group")
+	}
 }
 
 func TestNetBoxZones(t *testing.T) {
-	s, _, _ := testService(t, Options{})
+	s, logs, _ := testService(t, Options{})
 	if nb := s.NetBox(); !nb.AsOf.IsZero() || nb.Zones != nil {
 		t.Errorf("before a refresh: %+v", nb)
 	}
 	t0 := time.Now()
 	r := report(group("site-a", drift.StateInSync))
-	r.NetBox = []dns.Zone{{Name: "a.example.", View: "v", Active: true}, {Name: "a.example.", View: "w", Active: true}, {Name: "b.example.", View: "w", Active: true}}
+	r.NetBox = []dns.Zone{{Name: "a.example.", View: "v", Active: true}, {Name: "a.example.", View: "w", Active: true},
+		{Name: "b.example.", View: "w", Active: true}, {Name: "c.example.", View: "v"}, {Name: "c.example.", View: "w", Active: true}}
 	s.record(t.Context(), r, nil, t0, t0)
 	nb := s.NetBox()
-	if !nb.AsOf.Equal(t0) || len(nb.Zones["v"]) != 1 || len(nb.Zones["w"]) != 2 {
+	if !nb.AsOf.Equal(t0) || len(nb.Zones["v"]) != 2 || len(nb.Zones["w"]) != 3 {
 		t.Fatalf("after a refresh: %+v", nb)
 	}
-	// The first of the views, by name, that has the zone.
-	if z, ok := nb.Zone([]string{"w", "v"}, "a.example."); !ok || z.View != "v" {
-		t.Errorf("Zone(w, v) = %+v, %v", z, ok)
+	// The first of the views, by name, that has the zone, as the report
+	// compares it: so c.example., inactive in v, isn't taken from w.
+	in := nb.In([]string{"w", "v"})
+	if z, ok := in("a.example."); !ok || z.View != "v" {
+		t.Errorf("a.example. = %+v, %v", z, ok)
 	}
-	if _, ok := nb.Zone([]string{"v"}, "b.example."); ok {
+	if z, ok := in("c.example."); ok || z.View != "v" {
+		t.Errorf("c.example. = %+v, %v; want v's, inactive", z, ok)
+	}
+	if _, ok := nb.In([]string{"v"})("b.example."); ok {
 		t.Error("b.example. is only in view w")
 	}
 	// NetBox fails, and a refresh times out: the zones stay as they were.
 	t1 := t0.Add(time.Minute)
 	s.record(t.Context(), drift.Report{}, errors.New("NetBox isn't reachable"), t1, t1)
 	s.record(t.Context(), drift.Report{}, &TimeoutError{Timeout: time.Minute}, t1, t1)
-	if nb := s.NetBox(); !nb.AsOf.Equal(t0) || len(nb.Zones["w"]) != 2 {
+	if nb := s.NetBox(); !nb.AsOf.Equal(t0) || len(nb.Zones["w"]) != 3 {
 		t.Errorf("after failures: %+v", nb)
+	}
+	// The zones that aren't compared fail: the last records stay, and it's
+	// logged.
+	r.NetBox, r.NetBoxErr = nil, errors.New("reading d.example. timed out")
+	s.record(t.Context(), r, nil, t1, t1)
+	if nb := s.NetBox(); !nb.AsOf.Equal(t0) || !strings.Contains(logs.String(), "the API keeps NetBox's last records") {
+		t.Errorf("after the other zones failed: %+v", nb)
+	}
+	// No zones at all is a read, which empties the records.
+	r.NetBox, r.NetBoxErr = []dns.Zone{}, nil
+	s.record(t.Context(), r, nil, t1, t1)
+	if nb := s.NetBox(); !nb.AsOf.Equal(t1) || len(nb.Zones) != 0 {
+		t.Errorf("after an empty read: %+v", nb)
 	}
 }

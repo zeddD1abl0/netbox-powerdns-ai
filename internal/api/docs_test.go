@@ -93,3 +93,49 @@ func TestDocsAssets(t *testing.T) {
 		problemOf(t, docsGet(t, path, nil), http.StatusNotFound)
 	}
 }
+
+func TestAcceptsGzip(t *testing.T) {
+	tests := []struct {
+		header string
+		want   bool
+	}{
+		{"", false},
+		{"gzip", true},
+		{"gzip, deflate, br", true},
+		{"br;q=1.0, gzip;q=0.8", true},
+		{"gzip;q=0", false},
+		{"gzip;q=0, identity", false},
+		{"GZIP", true},
+		{"*", true},
+		{"*;q=0", false},
+		{"*, gzip;q=0", false},
+		{"identity", false},
+		{"x-gzip", true},
+	}
+	for _, tt := range tests {
+		if got := acceptsGzip(tt.header); got != tt.want {
+			t.Errorf("acceptsGzip(%q) = %v, want %v", tt.header, got, tt.want)
+		}
+	}
+}
+
+func TestNoneMatch(t *testing.T) {
+	const etag = `"abc-gzip"`
+	tests := []struct {
+		header string
+		want   bool
+	}{
+		{"", false},
+		{`"abc-gzip"`, true},
+		{`W/"abc-gzip"`, true},
+		{`"x", "abc-gzip"`, true},
+		{`"x",W/"abc-gzip"`, true},
+		{"*", true},
+		{`"abc"`, false},
+	}
+	for _, tt := range tests {
+		if got := noneMatch(tt.header, etag); got != tt.want {
+			t.Errorf("noneMatch(%q) = %v, want %v", tt.header, got, tt.want)
+		}
+	}
+}

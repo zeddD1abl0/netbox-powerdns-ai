@@ -230,3 +230,38 @@ func TestListZoneChanges(t *testing.T) {
 	problemOf(t, get(t, zoned(), http.MethodGet, "/api/server-groups/site-a/zones/nope.example/changes"), http.StatusNotFound)
 	problemOf(t, get(t, zoned(), http.MethodGet, "/api/server-groups/site-a/zones/example.com/changes?limit=0"), http.StatusBadRequest)
 }
+
+// A zone named with a /, as RFC 2317's classless reverse zones are, keeps
+// its escape in the links, so its pages can be followed.
+func TestEscapedZoneLinks(t *testing.T) {
+	src := zoned()
+	r := *src.groups[0].Report
+	r.Zones = append(r.Zones, drift.ZoneReport{Zone: "0/25.2.0.192.in-addr.arpa.", View: "_default_", Policy: "report", State: drift.StateDrift,
+		Changes: []drift.Change{
+			{Name: "1.0/25.2.0.192.in-addr.arpa.", Type: "PTR", Kind: drift.ChangeMissing, NetBox: &drift.Side{TTL: 300, Values: []string{"a.example."}}},
+			{Name: "2.0/25.2.0.192.in-addr.arpa.", Type: "PTR", Kind: drift.ChangeMissing, NetBox: &drift.Side{TTL: 300, Values: []string{"b.example."}}},
+		}})
+	src.groups[0].Report = &r
+	target := "/api/server-groups/site-a/zones/0%2F25.2.0.192.in-addr.arpa/changes?limit=1"
+	var names []string
+	for target != "" && len(names) < 5 {
+		page := decode[gen.ChangePage](t, get(t, src, http.MethodGet, target))
+		for _, c := range page.Items {
+			names = append(names, c.Name)
+		}
+		target = ""
+		if page.Next != nil {
+			if !strings.Contains(*page.Next, "/zones/0%2F25.2.0.192.in-addr.arpa/changes?") {
+				t.Fatalf("next %q lost the escape", *page.Next)
+			}
+			u, err := url.Parse(*page.Next)
+			if err != nil {
+				t.Fatal(err)
+			}
+			target = u.RequestURI()
+		}
+	}
+	if strings.Join(names, " ") != "1.0/25.2.0.192.in-addr.arpa. 2.0/25.2.0.192.in-addr.arpa." {
+		t.Errorf("changes %v", names)
+	}
+}

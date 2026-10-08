@@ -23,50 +23,86 @@ func serial(n uint32) *int64 {
 	return &s
 }
 
-// A records looks up how many RRsets with active records NetBox defines
-// for a zone of a group, by its absolute name, or nil if it has no active
-// zone of that name in the group's views.
-type records func(zone string) *int64
+// zoneName returns the absolute name of a zone, given with or without its
+// final dot, in any case, or false if it isn't a zone name.
+func zoneName(raw string) (string, bool) {
+	n, err := dns.ZoneName(raw)
+	if err != nil {
+		return "", false
+	}
+	return n + ".", true
+}
 
-// recordsOf returns g's records lookup in nb.
-func recordsOf(nb service.NetBoxView, g service.GroupView) records {
+// startAfter returns where the page after a cursor's item starts: the
+// index of the first item ordered after key, by cmp, or len(items) if none
+// is. A key that's gone from the list still finds its place in it.
+func startAfter[T any](items []T, key string, cmp func(T, string) int) int {
+	if key == "" {
+		return 0
+	}
+	if i := slices.IndexFunc(items, func(it T) bool { return cmp(it, key) > 0 }); i >= 0 {
+		return i
+	}
+	return len(items)
+}
+
+// A recordCount returns how many RRsets with active records NetBox defines
+// for a zone of a group, by its absolute name, or nil if NetBox has no
+// active zone of that name in the view the drift report compares.
+type recordCount func(zone string) *int64
+
+// recordCountOf returns g's count, in nb.
+func recordCountOf(nb service.NetBoxView, g service.GroupView) recordCount {
+	in := nb.In(g.Views)
 	return func(zone string) *int64 {
-		z, ok := nb.Zone(g.Views, zone)
+		z, ok := in(zone)
 		if !ok {
 			return nil
 		}
-		n := int64(len(activeRRsets(z)))
+		n := int64(countActive(z))
 		return &n
 	}
 }
 
-// zoneOf maps a zone's report onto the API's type.
-func zoneOf(z drift.ZoneReport, rrsets records) gen.Zone {
+// A zoneEntry is a zone of a group's report: NetBox's, with its report, or
+// an unmanaged one, without.
+type zoneEntry struct {
+	name   string
+	report *drift.ZoneReport
+}
+
+func (e zoneEntry) state() gen.ZoneState {
+	if e.report == nil {
+		return gen.ZoneStateUnmanaged
+	}
+	return gen.ZoneState(e.report.State)
+}
+
+// zone maps the entry onto the API's type.
+func (e zoneEntry) zone(count recordCount) gen.Zone {
+	z := e.report
+	if z == nil {
+		return gen.Zone{Zone: e.name, State: gen.ZoneStateUnmanaged}
+	}
 	p := gen.DriftPolicy(z.Policy)
 	return gen.Zone{
 		Zone: z.Zone, View: optional(z.View), Policy: &p, State: gen.ZoneState(z.State),
 		NetboxSerial: serial(z.NetBoxSerial), PowerdnsSerial: serial(z.PowerDNSSerial),
-		ChangeCount: int64(len(z.Changes)), RrsetCount: rrsets(z.Zone),
+		ChangeCount: int64(len(z.Changes)), RrsetCount: count(z.Zone),
 	}
 }
 
-// unmanagedZone is a zone on the primary that NetBox doesn't assign to the
-// group.
-func unmanagedZone(name string) gen.Zone {
-	return gen.Zone{Zone: name, State: gen.ZoneStateUnmanaged}
-}
-
-// zones returns the zones of report, those NetBox assigns and the
-// unmanaged ones, in canonical name order.
-func zones(r *drift.GroupReport, rrsets records) []gen.Zone {
-	out := make([]gen.Zone, 0, len(r.Zones)+len(r.Unmanaged))
-	for _, z := range r.Zones {
-		out = append(out, zoneOf(z, rrsets))
+// entries returns the zones of r, those NetBox assigns and the unmanaged
+// ones, in canonical name order.
+func entries(r *drift.GroupReport) []zoneEntry {
+	out := make([]zoneEntry, 0, len(r.Zones)+len(r.Unmanaged))
+	for i := range r.Zones {
+		out = append(out, zoneEntry{name: r.Zones[i].Zone, report: &r.Zones[i]})
 	}
 	for _, name := range r.Unmanaged {
-		out = append(out, unmanagedZone(name))
+		out = append(out, zoneEntry{name: name})
 	}
-	slices.SortFunc(out, func(a, b gen.Zone) int { return dns.CompareNames(a.Zone, b.Zone) })
+	slices.SortFunc(out, func(a, b zoneEntry) int { return dns.CompareNames(a.name, b.name) })
 	return out
 }
 
@@ -93,7 +129,7 @@ func stateFilter(states *[]gen.ZoneState) (map[gen.ZoneState]bool, string, error
 
 // ListZones serves a page of a group's zones, in canonical name order. The
 // cursor names the zone the page starts after, so a refresh between pages
-// skips no zone that's still there.
+// skips no zone that's still there. Only the page's zones are mapped.
 func (s *server) ListZones(ctx context.Context, req gen.ListZonesRequestObject) (gen.ListZonesResponseObject, error) {
 	bad := func(p gen.Problem) gen.ListZonesResponseObject {
 		return gen.ListZones400ApplicationProblemPlusJSONResponse{BadRequestApplicationProblemPlusJSONResponse: gen.BadRequestApplicationProblemPlusJSONResponse{Body: p}}
@@ -106,31 +142,24 @@ func (s *server) ListZones(ctx context.Context, req gen.ListZonesRequestObject) 
 	if prob, ok := badParam(ctx, err); ok {
 		return bad(prob), nil
 	}
-	g, ok := s.group(req.Group)
+	g, ok := s.o.Source.Group(req.Group)
 	if !ok {
 		return gen.ListZones404ApplicationProblemPlusJSONResponse{NotFoundApplicationProblemPlusJSONResponse: gen.NotFoundApplicationProblemPlusJSONResponse{Body: noGroup(ctx, req.Group)}}, nil
 	}
-	out := gen.ZonePage{Items: []gen.Zone{}, AsOf: g.Info.LastSuccess}
-	var all []gen.Zone
+	var all []zoneEntry
 	if g.Report != nil {
-		for _, z := range zones(g.Report, recordsOf(s.o.Source.NetBox(), g)) {
-			if want == nil || want[z.State] {
-				all = append(all, z)
-			}
-		}
+		all = slices.DeleteFunc(entries(g.Report), func(e zoneEntry) bool { return want != nil && !want[e.state()] })
 	}
-	start := 0
-	if p.after != "" {
-		start = len(all)
-		if i := slices.IndexFunc(all, func(z gen.Zone) bool { return dns.CompareNames(z.Zone, p.after) > 0 }); i >= 0 {
-			start = i
-		}
+	start := startAfter(all, p.after, func(e zoneEntry, key string) int { return dns.CompareNames(e.name, key) })
+	page, more := take(all, start, p.limit)
+	count := recordCountOf(s.o.Source.NetBox(), g)
+	out := gen.ZonePage{Items: make([]gen.Zone, len(page)), AsOf: g.Info.LastSuccess}
+	for i, e := range page {
+		out.Items[i] = e.zone(count)
 	}
-	items, more := take(all, start, p.limit)
-	out.Items = append(out.Items, items...)
 	last := ""
-	if len(items) > 0 {
-		last = items[len(items)-1].Zone
+	if len(page) > 0 {
+		last = page[len(page)-1].name
 	}
 	out.Self, out.Next = s.o.links(request(ctx), p, last, more)
 	return gen.ListZones200JSONResponse{Body: out}, nil
@@ -138,13 +167,13 @@ func (s *server) ListZones(ctx context.Context, req gen.ListZonesRequestObject) 
 
 // zone finds the zone named name, with or without its final dot, in the
 // group named group. It returns the group, the zone's report, which is nil
-// for an unmanaged zone, and the zone.
+// for an unmanaged zone, and the zone, or the problem why it can't.
 func (s *server) zone(ctx context.Context, group, name string) (service.GroupView, *drift.ZoneReport, gen.Zone, *gen.Problem) {
 	notFound := func(detail string) *gen.Problem {
 		p := problem(request(ctx), http.StatusNotFound, detail)
 		return &p
 	}
-	g, ok := s.group(group)
+	g, ok := s.o.Source.Group(group)
 	if !ok {
 		p := noGroup(ctx, group)
 		return g, nil, gen.Zone{}, &p
@@ -152,18 +181,19 @@ func (s *server) zone(ctx context.Context, group, name string) (service.GroupVie
 	if g.Report == nil {
 		return g, nil, gen.Zone{}, notFound("Server group " + group + " hasn't been read yet, so its zones aren't known.")
 	}
-	n, err := dns.ZoneName(name)
-	if err != nil {
+	n, ok := zoneName(name)
+	if !ok {
 		return g, nil, gen.Zone{}, notFound("Server group " + group + " has no zone " + name + ".")
 	}
-	n += "."
+	count := recordCountOf(s.o.Source.NetBox(), g)
 	for i, z := range g.Report.Zones {
 		if z.Zone == n {
-			return g, &g.Report.Zones[i], zoneOf(z, recordsOf(s.o.Source.NetBox(), g)), nil
+			e := zoneEntry{name: n, report: &g.Report.Zones[i]}
+			return g, e.report, e.zone(count), nil
 		}
 	}
 	if slices.Contains(g.Report.Unmanaged, n) {
-		return g, nil, unmanagedZone(n), nil
+		return g, nil, zoneEntry{name: n}.zone(count), nil
 	}
 	return g, nil, gen.Zone{}, notFound("Server group " + group + " has no zone " + n + ".")
 }
@@ -201,8 +231,15 @@ func side(s *drift.Side) *gen.Side {
 	return &gen.Side{Ttl: int64(s.TTL), Values: values}
 }
 
-// changeKey is a change's key in a cursor: its owner name and type.
-func changeKey(name, typ string) string { return name + " " + typ }
+// rrsetKey is an RRset's key in a cursor: its owner name and type.
+func rrsetKey(name, typ string) string { return name + " " + typ }
+
+// compareRRset orders an RRset, by its name and type, against a cursor's
+// key, canonically.
+func compareRRset(name, typ, key string) int {
+	kname, ktyp, _ := strings.Cut(key, " ")
+	return dns.CompareRRsets(name, typ, kname, ktyp)
+}
 
 // ListZoneChanges serves a page of a zone's changes, in canonical order.
 // The cursor names the RRset the page starts after.
@@ -219,14 +256,7 @@ func (s *server) ListZoneChanges(ctx context.Context, req gen.ListZoneChangesReq
 	if zr != nil {
 		changes = zr.Changes
 	}
-	start := 0
-	if p.after != "" {
-		name, typ, _ := strings.Cut(p.after, " ")
-		start = len(changes)
-		if i := slices.IndexFunc(changes, func(c drift.Change) bool { return dns.CompareRRsets(c.Name, c.Type, name, typ) > 0 }); i >= 0 {
-			start = i
-		}
-	}
+	start := startAfter(changes, p.after, func(c drift.Change, key string) int { return compareRRset(c.Name, c.Type, key) })
 	page, more := take(changes, start, p.limit)
 	out := gen.ChangePage{Items: make([]gen.Change, len(page)), AsOf: asOf(g)}
 	for i, c := range page {
@@ -234,7 +264,7 @@ func (s *server) ListZoneChanges(ctx context.Context, req gen.ListZoneChangesReq
 	}
 	last := ""
 	if len(page) > 0 {
-		last = changeKey(page[len(page)-1].Name, page[len(page)-1].Type)
+		last = rrsetKey(page[len(page)-1].Name, page[len(page)-1].Type)
 	}
 	out.Self, out.Next = s.o.links(request(ctx), p, last, more)
 	return gen.ListZoneChanges200JSONResponse{Body: out}, nil

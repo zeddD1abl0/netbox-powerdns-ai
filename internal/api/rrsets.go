@@ -3,76 +3,91 @@ package api
 import (
 	"context"
 	"net/http"
-	"slices"
 	"strings"
 
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/api/gen"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/dns"
 )
 
-// activeRRsets returns z's RRsets with their active records, as nbpdns
-// compares them, leaving out RRsets with none, in z's canonical order.
-func activeRRsets(z dns.Zone) []gen.RRset {
-	var out []gen.RRset
-	for _, s := range z.RRsets {
-		var recs []gen.Record
-		for _, r := range s.Records {
-			if r.Active {
-				recs = append(recs, gen.Record{Value: r.Value, Managed: r.Managed})
-			}
-		}
-		if len(recs) > 0 {
-			out = append(out, gen.RRset{Name: s.Name, Type: s.Type, Ttl: int64(s.TTL), Records: recs})
+// isActive reports whether an RRset has an active record: whether nbpdns
+// compares it, and the API lists it.
+func isActive(s dns.RRset) bool {
+	for _, r := range s.Records {
+		if r.Active {
+			return true
 		}
 	}
-	return out
+	return false
+}
+
+// countActive counts z's RRsets with active records, without copying them.
+func countActive(z dns.Zone) int {
+	n := 0
+	for _, s := range z.RRsets {
+		if isActive(s) {
+			n++
+		}
+	}
+	return n
+}
+
+// activeRRset maps an RRset with active records onto the API's type, with
+// only those records.
+func activeRRset(s dns.RRset) gen.RRset {
+	var recs []gen.Record
+	for _, r := range s.Records {
+		if r.Active {
+			recs = append(recs, gen.Record{Value: r.Value, Managed: r.Managed})
+		}
+	}
+	return gen.RRset{Name: s.Name, Type: s.Type, Ttl: int64(s.TTL), Records: recs}
 }
 
 // ListZoneRRsets serves a page of a zone's RRsets as NetBox defines them,
 // as of NetBox's last successful read (REQ-047). The zone is the one in
-// the group's views, whatever its state in the drift report: a zone
+// the view the drift report compares, whatever its state there: a zone
 // missing on the primary has its records too. The cursor names the RRset
-// the page starts after.
+// the page starts after. Only the page's RRsets are mapped.
 func (s *server) ListZoneRRsets(ctx context.Context, req gen.ListZoneRRsetsRequestObject) (gen.ListZoneRRsetsResponseObject, error) {
-	notFound := func(p gen.Problem) gen.ListZoneRRsetsResponseObject {
-		return gen.ListZoneRRsets404ApplicationProblemPlusJSONResponse{NotFoundApplicationProblemPlusJSONResponse: gen.NotFoundApplicationProblemPlusJSONResponse{Body: p}}
+	notFound := func(detail string) gen.ListZoneRRsetsResponseObject {
+		return gen.ListZoneRRsets404ApplicationProblemPlusJSONResponse{NotFoundApplicationProblemPlusJSONResponse: gen.NotFoundApplicationProblemPlusJSONResponse{
+			Body: problem(request(ctx), http.StatusNotFound, detail)}}
 	}
 	p, err := newPage(req.Params.Limit, req.Params.Cursor, "")
 	if prob, ok := badParam(ctx, err); ok {
 		return gen.ListZoneRRsets400ApplicationProblemPlusJSONResponse{BadRequestApplicationProblemPlusJSONResponse: gen.BadRequestApplicationProblemPlusJSONResponse{Body: prob}}, nil
 	}
-	g, ok := s.group(req.Group)
+	g, ok := s.o.Source.Group(req.Group)
 	if !ok {
-		return notFound(noGroup(ctx, req.Group)), nil
+		return gen.ListZoneRRsets404ApplicationProblemPlusJSONResponse{NotFoundApplicationProblemPlusJSONResponse: gen.NotFoundApplicationProblemPlusJSONResponse{Body: noGroup(ctx, req.Group)}}, nil
 	}
 	nb := s.o.Source.NetBox()
 	if nb.AsOf.IsZero() {
-		return notFound(problem(request(ctx), http.StatusNotFound, "NetBox hasn't been read yet, so its records aren't known.")), nil
+		return notFound("NetBox hasn't been read yet, so its records aren't known."), nil
 	}
-	n, err := dns.ZoneName(req.Zone)
-	if err != nil {
-		return notFound(problem(request(ctx), http.StatusNotFound, "Server group "+req.Group+" has no zone "+req.Zone+".")), nil
-	}
-	n += "."
-	z, ok := nb.Zone(g.Views, n)
+	n, ok := zoneName(req.Zone)
 	if !ok {
-		return notFound(problem(request(ctx), http.StatusNotFound,
-			"NetBox has no active zone "+n+" in server group "+req.Group+"'s views, "+strings.Join(g.Views, ", ")+".")), nil
+		return notFound("Server group " + req.Group + " has no zone " + req.Zone + "."), nil
 	}
-	all := activeRRsets(z)
-	start := 0
-	if p.after != "" {
-		name, typ, _ := strings.Cut(p.after, " ")
-		start = len(all)
-		if i := slices.IndexFunc(all, func(r gen.RRset) bool { return dns.CompareRRsets(r.Name, r.Type, name, typ) > 0 }); i >= 0 {
-			start = i
+	z, ok := nb.In(g.Views)(n)
+	if !ok {
+		return notFound("NetBox has no active zone " + n + " in server group " + req.Group + "'s views, " + strings.Join(g.Views, ", ") + "."), nil
+	}
+	var all []dns.RRset
+	for _, rs := range z.RRsets {
+		if isActive(rs) {
+			all = append(all, rs)
 		}
 	}
-	items, more := take(all, start, p.limit)
-	out := gen.RRsetPage{Items: append([]gen.RRset{}, items...), AsOf: nb.AsOf}
+	start := startAfter(all, p.after, func(rs dns.RRset, key string) int { return compareRRset(rs.Name, rs.Type, key) })
+	page, more := take(all, start, p.limit)
+	out := gen.RRsetPage{Items: make([]gen.RRset, len(page)), AsOf: nb.AsOf}
+	for i, rs := range page {
+		out.Items[i] = activeRRset(rs)
+	}
 	last := ""
-	if len(items) > 0 {
-		last = changeKey(items[len(items)-1].Name, items[len(items)-1].Type)
+	if len(page) > 0 {
+		last = rrsetKey(page[len(page)-1].Name, page[len(page)-1].Type)
 	}
 	out.Self, out.Next = s.o.links(request(ctx), p, last, more)
 	return gen.ListZoneRRsets200JSONResponse{Body: out}, nil

@@ -42,6 +42,12 @@ func recorded() fakeSource {
 			{Name: "dup.example.", Type: "TXT", TTL: 60, Records: []dns.Record{active(`"default"`)}},
 		}},
 		{Name: "f.example.", View: "elsewhere", Active: true},
+		// Inactive in _default_, which the report compares, and active in
+		// internal: the records aren't internal's.
+		{Name: "split.example.", View: "_default_"},
+		{Name: "split.example.", View: "internal", Active: true, RRsets: []dns.RRset{
+			{Name: "split.example.", Type: "TXT", TTL: 60, Records: []dns.Record{active(`"internal"`)}},
+		}},
 	}
 	src.netbox = service.NetBoxView{AsOf: at("2026-10-08T01:10:00Z"), Zones: map[string]map[string]dns.Zone{}}
 	for _, z := range zones {
@@ -128,6 +134,7 @@ func TestZoneRRsetsNotFound(t *testing.T) {
 		{"NetBox never read", never, "/api/server-groups/site-a/zones/example.com/rrsets", "NetBox hasn't been read yet"},
 		{"an unmanaged zone", recorded(), "/api/server-groups/site-a/zones/z.example/rrsets", "NetBox has no active zone z.example. in server group site-a's views, _default_, internal."},
 		{"a zone in another view", recorded(), "/api/server-groups/site-a/zones/f.example/rrsets", "no active zone f.example."},
+		{"a zone inactive in the view compared", recorded(), "/api/server-groups/site-a/zones/split.example/rrsets", "no active zone split.example."},
 		{"an unknown group", recorded(), "/api/server-groups/site-z/zones/example.com/rrsets", "No server group is named site-z."},
 	}
 	for _, tt := range tests {

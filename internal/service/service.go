@@ -223,6 +223,10 @@ func (s *Service) record(ctx context.Context, r drift.Report, err error, start, 
 	if r.NetBox != nil {
 		st.netbox = netboxView(r.NetBox, end)
 	}
+	if r.NetBoxErr != nil {
+		s.o.Log.WarnContext(ctx, "couldn't read the records of NetBox's zones that aren't compared, so the API keeps NetBox's last records",
+			"err", r.NetBoxErr)
+	}
 	type change struct {
 		g       drift.GroupReport
 		now     map[[2]string]bool

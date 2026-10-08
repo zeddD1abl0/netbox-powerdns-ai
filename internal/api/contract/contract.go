@@ -84,7 +84,7 @@ func (c *Checker) Check(t testing.TB, req *http.Request, resp *http.Response) {
 	resp.Request = req
 	op, ok := c.match(req)
 	if !ok {
-		t.Errorf("%s %s: no operation in the OpenAPI document", req.Method, req.URL.Path)
+		t.Errorf("%s %s: no operation in the OpenAPI document", req.Method, req.URL.EscapedPath())
 		return
 	}
 	c.mu.Lock()
@@ -105,7 +105,8 @@ func (c *Checker) Check(t testing.TB, req *http.Request, resp *http.Response) {
 // match finds the operation for req: the one whose template matches its
 // path with the most literal segments.
 func (c *Checker) match(req *http.Request) (operation, bool) {
-	rest, ok := strings.CutPrefix(req.URL.Path, c.base+"/")
+	// Segments split as the mux splits them: an escaped / is in a segment.
+	rest, ok := strings.CutPrefix(req.URL.EscapedPath(), c.base+"/")
 	if !ok {
 		return operation{}, false
 	}

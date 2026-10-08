@@ -199,14 +199,32 @@ func (s *Service) Groups() []GroupView {
 	defer s.mu.Unlock()
 	out := make([]GroupView, len(s.o.Groups))
 	for i, g := range s.o.Groups {
-		gs := s.st.groups[g.Name]
-		out[i] = GroupView{Group: g, Info: groupInfo(g, gs)}
-		if gs != nil && !gs.lastSuccess.IsZero() {
-			r := gs.report
-			out[i].Report = &r
-		}
+		out[i] = s.view(g)
 	}
 	return out
+}
+
+// Group returns the group named name, if there's one.
+func (s *Service) Group(name string) (GroupView, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, g := range s.o.Groups {
+		if g.Name == name {
+			return s.view(g), true
+		}
+	}
+	return GroupView{}, false
+}
+
+// view returns g's view. It's called with s.mu held.
+func (s *Service) view(g Group) GroupView {
+	gs := s.st.groups[g.Name]
+	v := GroupView{Group: g, Info: groupInfo(g, gs)}
+	if gs != nil && !gs.lastSuccess.IsZero() {
+		r := gs.report
+		v.Report = &r
+	}
+	return v
 }
 
 func utc(t time.Time) *time.Time {
@@ -321,8 +339,8 @@ func seconds(s float64) string {
 	return time.Duration(s * float64(time.Second)).Round(100 * time.Millisecond).String()
 }
 
-// A NetBoxView is NetBox's active zones in the groups' views, with their
-// RRsets, as of its last successful read, for the API's records.
+// A NetBoxView is NetBox's zones in the groups' views, the active ones with
+// their RRsets, as of its last successful read, for the API's records.
 type NetBoxView struct {
 	// AsOf is when NetBox was last read, or zero if it never was.
 	AsOf time.Time
@@ -332,15 +350,20 @@ type NetBoxView struct {
 	Zones map[string]map[string]dns.Zone
 }
 
-// Zone returns the zone named name, an absolute name, in the first of views,
-// by name, that has it, as the drift report compares it.
-func (v NetBoxView) Zone(views []string, name string) (dns.Zone, bool) {
-	for _, view := range slices.Sorted(slices.Values(views)) {
-		if z, ok := v.Zones[view][name]; ok {
-			return z, true
+// In returns a lookup of the zones in views: of the zone named name, an
+// absolute name, in the first of views, by name, that has it, as the drift
+// report compares it. It reports false if no view has the zone, or the
+// zone in that view isn't active.
+func (v NetBoxView) In(views []string) func(name string) (dns.Zone, bool) {
+	sorted := slices.Sorted(slices.Values(views))
+	return func(name string) (dns.Zone, bool) {
+		for _, view := range sorted {
+			if z, ok := v.Zones[view][name]; ok {
+				return z, z.Active
+			}
 		}
+		return dns.Zone{}, false
 	}
-	return dns.Zone{}, false
 }
 
 // netboxView indexes zones, read at asOf.

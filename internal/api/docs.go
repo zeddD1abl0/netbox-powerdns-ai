@@ -10,6 +10,7 @@ import (
 	"html/template"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -121,14 +122,55 @@ func serveAsset(w http.ResponseWriter, r *http.Request) {
 	h.Set("Content-Type", a.ctype)
 	h.Set("Vary", "Accept-Encoding")
 	body, etag := a.body, a.etag
-	if a.gzipped != nil && strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+	if a.gzipped != nil && acceptsGzip(r.Header.Get("Accept-Encoding")) {
 		body, etag = a.gzipped, strings.TrimSuffix(a.etag, `"`)+`-gzip"`
 		h.Set("Content-Encoding", "gzip")
 	}
 	h.Set("ETag", etag)
-	if r.Header.Get("If-None-Match") == etag {
+	if noneMatch(r.Header.Get("If-None-Match"), etag) {
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}
 	_, _ = w.Write(body)
+}
+
+// acceptsGzip reports whether an Accept-Encoding header accepts gzip (RFC
+// 9110, section 12.5.3): it names gzip with a q-value above 0, or, if it
+// doesn't name gzip, it names * with one.
+func acceptsGzip(header string) bool {
+	gzipQ, anyQ := -1.0, -1.0
+	for part := range strings.SplitSeq(header, ",") {
+		name, params, _ := strings.Cut(part, ";")
+		q := 1.0
+		for param := range strings.SplitSeq(params, ";") {
+			if k, v, ok := strings.Cut(strings.TrimSpace(param), "="); ok && strings.EqualFold(k, "q") {
+				if f, err := strconv.ParseFloat(v, 64); err == nil {
+					q = f
+				}
+			}
+		}
+		switch strings.ToLower(strings.TrimSpace(name)) {
+		case "gzip", "x-gzip":
+			gzipQ = q
+		case "*":
+			anyQ = q
+		}
+	}
+	if gzipQ >= 0 {
+		return gzipQ > 0
+	}
+	return anyQ > 0
+}
+
+// noneMatch reports whether an If-None-Match header matches etag (RFC
+// 9110, section 13.1.2): as *, or as one of its entity tags, compared
+// weakly.
+func noneMatch(header, etag string) bool {
+	for tag := range strings.SplitSeq(header, ",") {
+		tag = strings.TrimPrefix(strings.TrimSpace(tag), "W/")
+		if tag == "*" || tag == etag {
+			return true
+		}
+	}
+	return false
 }

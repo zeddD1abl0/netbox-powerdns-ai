@@ -170,8 +170,10 @@ type memory struct {
 	readErr error
 	// probs are the problems that Read finds in the zones it reads.
 	probs []dns.Problem
-	mu    sync.Mutex
-	read  []string
+	// failZone makes Read fail when it's asked for that zone.
+	failZone string
+	mu       sync.Mutex
+	read     []string
 }
 
 func (m *memory) list(zone string) []dns.Zone {
@@ -192,6 +194,11 @@ func (m *memory) Read(_ context.Context, zones []dns.Zone) ([]dns.Zone, []dns.Pr
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	for _, want := range zones {
+		if want.Name == m.failZone {
+			return nil, nil, errors.New("reading " + want.Name + " timed out")
+		}
+	}
 	var out []dns.Zone
 	probs := []dns.Problem{}
 	for _, want := range zones {
@@ -452,19 +459,35 @@ func TestRunReadNetBox(t *testing.T) {
 		t.Errorf("site-a's problems %+v", p)
 	}
 	// Every active zone in the groups' views is read, even of a group that
-	// failed and of zones not compared, but not the inactive one, nor one in
-	// no group's view.
+	// failed and of zones not compared, and the inactive one is kept bare,
+	// but nothing in no group's view.
 	var got []string
 	for _, z := range with.NetBox {
-		got = append(got, z.View+"/"+z.Name)
+		got = append(got, fmt.Sprintf("%s/%s %v", z.View, z.Name, z.Active))
 	}
-	if want := []string{"v/a.example.", "v/b.example.", "v/d.example.", "w/c.example."}; !slices.Equal(got, want) {
-		t.Errorf("NetBox zones %v, want %v", got, want)
+	want := []string{"v/a.example. true", "v/b.example. true", "v/d.example. true", "v/e.example. false", "w/c.example. true"}
+	if !slices.Equal(got, want) || with.NetBoxErr != nil {
+		t.Errorf("NetBox zones %v, %v; want %v", got, with.NetBoxErr, want)
 	}
 	if slices.Sort(full.read); !slices.Equal(full.read, []string{"v/a.example.", "v/b.example.", "v/d.example.", "w/c.example."}) {
 		t.Errorf("NetBox read %v", full.read)
 	}
-	if with.NetBox[2].RRsets[1].Name != "www.d.example." {
-		t.Errorf("d.example. without its RRsets: %+v", with.NetBox[2])
+	if with.NetBox[2].RRsets[1].Name != "www.d.example." || with.NetBox[3].RRsets != nil {
+		t.Errorf("d.example. without its RRsets, or e.example. with some: %+v", with.NetBox[2:4])
 	}
+
+	t.Run("a zone that isn't compared fails", func(t *testing.T) {
+		// The comparison stands; only the zones for the API are missing.
+		broken := &memory{zones: zones, probs: probs, failZone: "d.example."}
+		r, err := Run(t.Context(), memNetBox{broken}, groups(), Options{ReadNetBox: true})
+		if err != nil || r.NetBox != nil || r.NetBoxErr == nil || !reflect.DeepEqual(r.Groups, without.Groups) {
+			t.Errorf("Run: %v; NetBox %v, %v", err, r.NetBox, r.NetBoxErr)
+		}
+	})
+	t.Run("no zones", func(t *testing.T) {
+		r, err := Run(t.Context(), memNetBox{&memory{}}, groups(), Options{ReadNetBox: true})
+		if err != nil || r.NetBox == nil || len(r.NetBox) != 0 {
+			t.Errorf("Run: %v; NetBox %#v, want empty, not nil", err, r.NetBox)
+		}
+	})
 }

@@ -79,7 +79,10 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	next, pattern := h.mux.Handler(r)
 	op, route := opUnmatched, ""
 	if pattern != "" {
-		op, route = h.ops[pattern], strings.TrimPrefix(pattern, r.Method+" ")
+		// A GET pattern answers HEAD too, so the route is the pattern without
+		// whatever method it names.
+		_, route, _ = strings.Cut(pattern, " ")
+		op = h.ops[pattern]
 		switch {
 		case op != "":
 		case strings.HasPrefix(route, base+"/docs"):
