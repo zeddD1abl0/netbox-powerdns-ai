@@ -1,9 +1,9 @@
 ---
 id: M06
 title: REST API
-status: in-progress # planned | in-progress | done
+status: done # planned | in-progress | done
 started: 2026-10-08
-closed:
+closed: 2026-10-08
 ---
 
 # M06: REST API
@@ -214,6 +214,25 @@ Append-only and dated. Record what was run and what was seen.
 - 2026-10-08: The scale data set is gone from the lab: NetBox's `scale`
   view, its 1,000 zones and their records, and the name server. lab-a is
   back to its one zone.
+- 2026-10-08: **Pipelines**, on `f0d13b0`, which the user pushed:
+  - **GitHub Actions run 37732341893** passed every job: the lint jobs,
+    `unit-test`, `integration-test` (7m15s), `build`, `release-check`
+    (1m28s), `docs-site`, `secrets` and `vuln`.
+  - **GitLab pipeline 782** passed, read with the read-only project token.
+    Its first `integration-test`, job 4253, was killed by the runner after
+    20 minutes: "system failure", exit code 137, a SIGKILL. The lab had
+    come up, in 12 minutes, and `go test` was compiling and running when
+    it was killed. No test failed. The runner was under the memory
+    pressure of ITEM-0065: `unit-test` took 10m19s there, against 3m41s on
+    GitHub. The user retried it, and job 4259 passed in 23m49s; the build
+    and security stages followed.
+
+    If the kill recurs, `make test-integration` could limit how many
+    packages `go test` builds and runs at once; the user's approval comes
+    first.
+- 2026-10-08: **Closed**, with every item done. ITEM-0074 is M10's. Left for
+  the user: merging through a GitLab merge request with a merge commit.
+  The merge, and its pipelines, are recorded on the next branch.
 
 ## Approved design
 
