@@ -34,7 +34,7 @@
 
 | Item | Title | Type | Status | Waiting on |
 |---|---|---|---|---|
-| [ITEM-0075](items/ITEM-0075-run-the-integration-tests-apart-from-the-unit-test.md) | Run the integration tests apart from the unit tests | task | open | — |
+| [ITEM-0075](items/ITEM-0075-run-the-integration-tests-apart-from-the-unit-test.md) | Run the integration tests apart from the unit tests | task | in-progress | — |
 | [ITEM-0076](items/ITEM-0076-the-webhook-endpoint.md) | The webhook endpoint | feature | open | ITEM-0075 |
 | [ITEM-0077](items/ITEM-0077-zone-refreshes-from-webhooks.md) | Zone refreshes from webhooks | feature | open | ITEM-0076 |
 | [ITEM-0078](items/ITEM-0078-webhooks-on-the-status-page-and-in-the-api.md) | Webhooks on the status page and in the API | feature | open | ITEM-0077 |

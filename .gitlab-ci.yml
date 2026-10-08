@@ -62,10 +62,13 @@ unit-test:
 # NetBox and one PowerDNS server (ADR-0023, ADR-0026). The service's resident
 # memory peaks at about 1.1 to 1.25 GiB, almost all of it NetBox applying its
 # first-start migrations, and the job's at about 0.35 GiB; the service stores
-# about 2.2 GB (ITEM-0028, ITEM-0037).
+# about 2.2 GB (ITEM-0028, ITEM-0037). It waits for unit-test, so the two
+# never share the runner's memory: run together, the runner killed it
+# (ITEM-0075).
 integration-test:
   extends: .go
   stage: test
+  needs: [unit-test]
   services:
     - name: docker:29.8.1-dind@sha256:3f3c01aaaebf7cce837356b688b7c059a4749f10bd7660dec7c58fc454a283f0
       alias: docker

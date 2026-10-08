@@ -89,9 +89,10 @@ the runner's own Docker commands.
 make test-integration
 ```
 
-This starts the lab if it isn't running, then runs every test with the
-`integration` build tag. The tests use every NetBox and PowerDNS server in the
-lab. Each test creates its own DNS data, and in NetBox users with their own API
+This starts the lab if it isn't running, then tests the packages that have
+tests with the `integration` build tag: their unit tests too, but no other
+package's, which `make test` covers. The tests use every NetBox and PowerDNS
+server in the lab. Each test creates its own DNS data, and in NetBox users with their own API
 tokens, with names that contain a random ID, and removes them when it ends.
 Data you add to the lab yourself isn't touched.
 

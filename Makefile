@@ -118,10 +118,24 @@ test: $(TEST_TOOLS) ## Run unit tests with the race detector
 	$(need_cgo)
 	$(call each_module,$(TEST_ENV) go test -race ./...)
 
+# The integration tests run only the packages that have them: in each module,
+# those whose test files change when the "integration" tag is set. Every other
+# package's tests run only in `make test`, so CI's integration job, which
+# shares its runner with the lab, compiles and runs no more than it needs
+# (ITEM-0075).
+TEST_FILES := go list -f '{{.ImportPath}} {{.TestGoFiles}} {{.XTestGoFiles}}'
+
 .PHONY: test-integration
-test-integration: lab-up $(TEST_TOOLS) ## Start the lab, then run the integration tests (build tag "integration")
+test-integration: lab-up ## Start the lab, then run the integration tests (build tag "integration")
 	$(need_cgo)
-	$(call each_module,$(TEST_ENV) go test -race -tags integration ./...)
+	@found=; for m in $(GO_MODULES); do \
+		pkgs=$$(cd $$m && { $(TEST_FILES) ./...; $(TEST_FILES) -tags integration ./...; } | sort | uniq -u | cut -d' ' -f1 | sort -u); \
+		if [ -z "$$pkgs" ]; then echo "$$m: no integration tests, skipped"; continue; fi; \
+		found=1; \
+		echo "$$m: go test -race -tags integration" $$pkgs; \
+		( cd $$m && go test -race -tags integration $$pkgs ); \
+	done; \
+	[ -n "$$found" ] || { echo "No package has integration tests: is the build tag still \"integration\"?"; exit 1; }
 
 ##@ Build
 

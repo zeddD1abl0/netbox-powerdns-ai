@@ -34,6 +34,12 @@ All notable changes to this project are recorded here. The format follows
   of the API's links, for a service behind a proxy. The API only reads,
   and has no authentication until M10, so keep it on a trusted network.
 
+### Changed
+
+- `make test-integration` tests only the packages that have integration
+  tests, and CI's integration job runs after the unit tests, not beside
+  them, so the two don't compete for the runner's memory.
+
 ### Fixed
 
 - A release's notes on GitLab are its version's section of the CHANGELOG.
