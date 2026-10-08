@@ -49,6 +49,12 @@ All notable changes to this project are recorded here. The format follows
   `webhooks` section: whether they're on, the last event, what waits, and
   the last refresh they asked for. The API's version is 1.1.0.
 
+- The development lab's profile `webhooks`, which adds NetBox's worker, so
+  that the lab's NetBox sends webhooks: `make lab-up LAB_PROFILES=webhooks`.
+  `make test-webhooks` uses it to have NetBox send webhooks to
+  `nbpdns serve`, on a local Docker host. The integration tests replay
+  NetBox's webhooks instead, so CI doesn't run the worker.
+
 ### Changed
 
 - `make test-integration` tests only the packages that have integration

@@ -94,11 +94,12 @@ endef
 fmt: $(GOLANGCI_LINT) ## Format Go code with the configured formatters (gofmt, goimports)
 	$(call each_module,$(GOLANGCI_LINT) fmt --config $(ROOT)/.golangci.yml ./...)
 
-# Integration tests carry the "integration" build tag. vet and lint check them
-# too; otherwise they'd skip those files.
+# Integration tests carry the "integration" build tag, and the end-to-end
+# webhook test "webhooks" too. vet and lint check them as well; otherwise
+# they'd skip those files.
 .PHONY: vet
 vet: ## Run go vet
-	$(call each_module,go vet -tags integration$(comma)release ./...)
+	$(call each_module,go vet -tags integration$(comma)release$(comma)webhooks ./...)
 
 # The hook tests in tools/hooktest run the pinned jq and golangci-lint.
 TEST_TOOLS := $(JQ) $(GOLANGCI_LINT)
@@ -136,6 +137,16 @@ test-integration: lab-up ## Start the lab, then run the integration tests (build
 		( cd $$m && go test -race -tags integration $$pkgs ); \
 	done; \
 	[ -n "$$found" ] || { echo "No package has integration tests: is the build tag still \"integration\"?"; exit 1; }
+
+# The end-to-end webhook test (ADR-0035) has the lab's NetBox send its own
+# webhooks to nbpdns serve, through the worker of the profile webhooks. It
+# needs a local Docker host, which the worker reaches nbpdns on, so it's not
+# part of `make ci`; the integration tests replay NetBox's webhooks instead.
+.PHONY: test-webhooks
+test-webhooks: LAB_PROFILES = webhooks
+test-webhooks: lab-up ## Start the lab with NetBox's worker, then have NetBox send webhooks to nbpdns serve (local only)
+	$(need_cgo)
+	go test -race -count=1 -tags integration,webhooks -run '^TestWebhooksFromNetBox$$' ./internal/cli/
 
 ##@ Build
 
@@ -226,7 +237,10 @@ LAB_DIR := deploy/dev
 # reached by name, so they listen on every interface there.
 LAB_LOOPBACK := tcp://localhost tcp://localhost:% tcp://127.% tcp://[::1] tcp://[::1]:%
 LAB_BIND_ADDRESS := $(if $(filter-out $(LAB_LOOPBACK),$(filter tcp://%,$(DOCKER_HOST))),0.0.0.0,127.0.0.1)
-LAB_COMPOSE = LAB_BIND_ADDRESS=$(LAB_BIND_ADDRESS) $(DOCKER_COMPOSE) --file $(LAB_DIR)/compose.yaml
+# Compose profiles to start with the lab, such as webhooks, which adds
+# NetBox's worker, which sends its webhooks (ADR-0035). CI starts none.
+LAB_PROFILES ?=
+LAB_COMPOSE = LAB_BIND_ADDRESS=$(LAB_BIND_ADDRESS) $(DOCKER_COMPOSE) --file $(LAB_DIR)/compose.yaml $(foreach p,$(LAB_PROFILES),--profile $(p))
 
 .PHONY: lab-up
 lab-up: $(DOCKER_COMPOSE) ## Start the NetBox lab, and wait until it's healthy
@@ -239,8 +253,8 @@ lab-up: $(DOCKER_COMPOSE) ## Start the NetBox lab, and wait until it's healthy
 	$(LAB_COMPOSE) up --detach --wait --wait-timeout 1200
 
 .PHONY: lab-down
-lab-down: $(DOCKER_COMPOSE) ## Remove the NetBox lab and its data
-	$(LAB_COMPOSE) down --volumes --remove-orphans
+lab-down: $(DOCKER_COMPOSE) ## Remove the NetBox lab and its data, in every profile
+	$(LAB_COMPOSE) --profile '*' down --volumes --remove-orphans
 
 ##@ Security
 

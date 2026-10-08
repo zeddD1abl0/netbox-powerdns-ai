@@ -11,6 +11,10 @@
 #   make lab-up    start the lab, and wait until it's healthy
 #   make lab-down  remove the lab and its data
 #
+# The profile webhooks adds NetBox's worker, which sends NetBox's webhooks
+# (ADR-0035): make lab-up LAB_PROFILES=webhooks, which make test-webhooks
+# does. CI never starts it.
+#
 # NetBox 4.7 listens on port 8047 on the Docker host: localhost, or the host
 # in DOCKER_HOST. It has the superuser admin, with the v2 API token
 # nbt_nbpdnslabadm.nbpdnsLabAdminTokenNotForProduction00000. The PowerDNS API
@@ -130,6 +134,36 @@ services:
         condition: service_healthy
     ports:
       - "${LAB_BIND_ADDRESS:-127.0.0.1}:8047:8080"
+
+  # NetBox's worker runs the jobs that send its webhooks, in the profile
+  # webhooks only: it costs about 260 MB, which CI's runners don't have. It
+  # reaches nbpdns serve on the Docker host as host.docker.internal, so it's
+  # only for a local Docker host. It starts once NetBox has applied its
+  # migrations.
+  netbox-worker-47:
+    <<: *netbox
+    image: docker.io/netboxcommunity/netbox:v4.7.1-5.1.1@sha256:59e3e5954d0243d8648f2fa7ba82cf7c7770aaeef392026cca8b21cd67411e74
+    profiles: [webhooks]
+    command:
+      - sh
+      - -c
+      - >-
+        /usr/local/bin/uv pip install --quiet "netbox-plugin-dns==$${NETBOX_DNS_VERSION}" &&
+        echo 'PLUGINS = ["netbox_dns"]' > /etc/netbox/config/plugins.py &&
+        exec /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py rqworker high default low
+    environment:
+      <<: *netbox-env
+      NETBOX_DNS_VERSION: "1.7.2"
+      DB_HOST: postgres-47
+      REDIS_DATABASE: "0"
+      REDIS_CACHE_DATABASE: "1"
+    depends_on:
+      netbox-47:
+        condition: service_healthy
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    healthcheck:
+      disable: true
 
   powerdns-51:
     <<: *powerdns

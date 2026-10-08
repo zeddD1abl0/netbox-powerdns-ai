@@ -52,10 +52,13 @@ type served struct {
 }
 
 // startServe runs `nbpdns serve` with env, listening on a free port of
-// 127.0.0.1, and returns once it's listening.
+// 127.0.0.1, unless env sets another address, and returns once it's
+// listening.
 func startServe(t *testing.T, env map[string]string) *served {
 	t.Helper()
-	env["NBPDNS_SERVER_LISTEN"] = "127.0.0.1:0"
+	if env["NBPDNS_SERVER_LISTEN"] == "" {
+		env["NBPDNS_SERVER_LISTEN"] = "127.0.0.1:0"
+	}
 	env["NBPDNS_LOG_FORMAT"] = "json"
 	for k, v := range env {
 		t.Setenv(k, v)
