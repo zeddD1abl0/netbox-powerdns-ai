@@ -14,11 +14,11 @@
 | [M03](milestones/M03-drift-report.md) | Drift report | done | 7 of 7 |
 | [M04](milestones/M04-service.md) | Service | done | 10 of 10 |
 | [M05](milestones/M05-packaging.md) | Packaging | done | 5 of 5 |
-| [M06](milestones/M06-rest-api.md) | REST API | planned | — |
+| [M06](milestones/M06-rest-api.md) | REST API | done | 10 of 10 |
 | [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | planned | — |
 | [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | planned | — |
 | [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | planned | — |
-| [M10](milestones/M10-authentication.md) | Authentication | planned | — |
+| [M10](milestones/M10-authentication.md) | Authentication | planned | 0 of 1 |
 | [M11](milestones/M11-sso-and-rbac.md) | SSO and RBAC | planned | — |
 | [M12](milestones/M12-web-ui.md) | Web UI | planned | — |
 | [M13](milestones/M13-write-path-plan-and-apply.md) | Write path: plan and apply | planned | 0 of 1 |
@@ -35,14 +35,14 @@
 |---|---|---|---|---|
 | [ITEM-0040](items/ITEM-0040-write-record-values-to-powerdns-in-its-own-text-fo.md) | Write record values to PowerDNS in its own text form | task | open | — |
 | [ITEM-0062](items/ITEM-0062-keep-the-image-s-latest-tag-on-the-newest-release.md) | Keep the image's latest tag on the newest release | debt | open | — |
+| [ITEM-0074](items/ITEM-0074-refuse-requests-whose-host-isn-t-server-public-url.md) | Refuse requests whose Host isn't server.public_url's | debt | open | — |
 
 ## Open questions
 
-25 open (0 blocking), 31 answered. The questions and their proposed defaults are in [requirements.md](requirements.md#open-questions).
+24 open (0 blocking), 32 answered. The questions and their proposed defaults are in [requirements.md](requirements.md#open-questions).
 
 | Needed by | Open questions |
 |---|---|
-| M06 | Q-041 |
 | M07 | Q-037 |
 | M07 (triggers), M15 (import) | Q-054 |
 | M08 | Q-012, Q-023, Q-024, Q-035, Q-036 |
@@ -57,8 +57,8 @@
 
 ## Requirements
 
-45 requirements, listed in [requirements.md](requirements.md#requirements). 14 aren't referenced by any item yet: REQ-004, REQ-007, REQ-008, REQ-009, REQ-010, REQ-011, REQ-015, REQ-016, REQ-017, REQ-023, REQ-032, REQ-033, REQ-034, REQ-035.
+47 requirements, listed in [requirements.md](requirements.md#requirements). 14 aren't referenced by any item yet: REQ-004, REQ-007, REQ-008, REQ-009, REQ-010, REQ-011, REQ-015, REQ-016, REQ-017, REQ-023, REQ-032, REQ-033, REQ-034, REQ-035.
 
 ## Decisions
 
-32 ADRs (24 accepted, 8 superseded), listed in [docs/adr](../docs/adr/_index.md).
+34 ADRs (26 accepted, 8 superseded), listed in [docs/adr](../docs/adr/_index.md).

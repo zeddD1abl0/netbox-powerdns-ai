@@ -39,6 +39,32 @@ rules:
       functionOptions:
         notMatch: "/v[0-9]+(/|$)"
 
+  zalando-215-api-id:
+    description: "MUST provide API identifiers [215]: info.x-api-id, a UUID."
+    severity: error
+    given: $.info
+    then:
+      - field: x-api-id
+        function: truthy
+      - field: x-api-id
+        function: pattern
+        functionOptions:
+          match: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+
+  zalando-219-audience:
+    description: "MUST provide API audience [219]: info.x-audience, one of Zalando's audiences."
+    severity: error
+    given: $.info
+    then:
+      - field: x-audience
+        function: truthy
+      # vacuum's enumeration doesn't read extension fields, so a pattern
+      # lists the audiences.
+      - field: x-audience
+        function: pattern
+        functionOptions:
+          match: "^(component-internal|business-unit-internal|company-internal|external-partner|external-public)$"
+
   zalando-116-semantic-version:
     description: "MUST use semantic versioning [116] in info.version."
     severity: error

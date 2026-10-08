@@ -1,0 +1,18 @@
+<!doctype html>
+<!-- nbpdns's API reference (ADR-0034): Scalar, vendored, with every URL on
+     this origin. The service fills in a new nonce for each response, which
+     Scalar puts on the style it adds, and the Content-Security-Policy
+     allows. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta property="csp-nonce" content="{{.Nonce}}">
+<title>nbpdns API</title>
+</head>
+<body>
+<div id="app"></div>
+<script src="docs/scalar.js"></script>
+<script src="docs/init.js"></script>
+</body>
+</html>

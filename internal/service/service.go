@@ -37,21 +37,27 @@ type Options struct {
 	Tracer  trace.Tracer
 	Metrics *metrics.Metrics
 
-	// What /status shows besides the refreshes: the build, NetBox's URL,
-	// each group's primary, in the configuration's order, and where spans
-	// are exported, if they are.
+	// What /status and the API show besides the refreshes: the build,
+	// NetBox's URL, each group, in the configuration's order, and where
+	// spans are exported, if they are.
 	Version   version.Info
 	NetBoxURL string
-	Groups    []Primary
+	Groups    []Group
 	OTLP      OTLP
 
 	now func() time.Time // time.Now if nil
 }
 
-// A Primary is a server group and its primary's URL.
-type Primary struct {
-	Group string
+// A Group is a server group's configuration, as /status and the API show
+// it.
+type Group struct {
+	Name string
+	// URL is the group's primary's.
 	URL   string
+	Views []string
+	// DriftPolicy is the policy of the group's zones that it doesn't name
+	// a policy for.
+	DriftPolicy string
 }
 
 // OTLP says where spans are exported. An empty Endpoint means nowhere.
@@ -85,6 +91,8 @@ type state struct {
 	netboxUp     bool
 	netboxError  string
 	groups       map[string]*groupState
+	// netbox is NetBox's zones as of its last successful read.
+	netbox NetBoxView
 }
 
 // groupState is a server group's last-known state.
@@ -212,6 +220,13 @@ func (s *Service) record(ctx context.Context, r drift.Report, err error, start, 
 		return
 	}
 	st.netboxUp, st.netboxError = true, ""
+	if r.NetBox != nil {
+		st.netbox = netboxView(r.NetBox, end)
+	}
+	if r.NetBoxErr != nil {
+		s.o.Log.WarnContext(ctx, "couldn't read the records of NetBox's zones that aren't compared, so the API keeps NetBox's last records",
+			"err", r.NetBoxErr)
+	}
 	type change struct {
 		g       drift.GroupReport
 		now     map[[2]string]bool

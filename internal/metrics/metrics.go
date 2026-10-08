@@ -101,6 +101,13 @@ var (
 	defRetries = def{name: "nbpdns_http_client_retries_total", kind: counter, labels: []string{"service", "target"},
 		values: map[string][]string{"service": services},
 		help:   "Requests to NetBox and to each primary that were tried again."}
+	defAPIRequests = def{name: "nbpdns_api_requests_total", kind: counter, labels: []string{"operation", "code"},
+		help: "Requests to the API. The operation is the request's `operationId` in `api/openapi.yaml`, such as `getStatus`, " +
+			"or `openapi` for the OpenAPI document, `docs` for the API reference, or `unmatched` for any other path or method. " +
+			"The code is the answer's status."}
+	defAPIRequestDuration = def{name: "nbpdns_api_request_duration_seconds", kind: histogram, labels: []string{"operation"},
+		buckets: []float64{0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5},
+		help:    "How long the API took to answer each request."}
 	defBuildInfo = def{name: "nbpdns_build_info", kind: gauge, labels: []string{"version", "revision", "goversion"},
 		help: "1, with the running build's version, VCS revision, and Go version."}
 
@@ -108,7 +115,7 @@ var (
 		defRefreshes, defRefreshDuration, defLastRefresh, defLastComplete,
 		defZones, defRRsetChanges, defZoneDrifted, defProblems, defWarnings,
 		defNetBoxUp, defGroupUp, defGroupLastSuccess,
-		defRequests, defRequestDuration, defRetries, defBuildInfo,
+		defRequests, defRequestDuration, defRetries, defAPIRequests, defAPIRequestDuration, defBuildInfo,
 	}
 )
 
@@ -132,9 +139,11 @@ type Metrics struct {
 	GroupUp             *prometheus.GaugeVec
 	GroupLastSuccess    *prometheus.GaugeVec
 
-	requests        *prometheus.CounterVec
-	requestDuration *prometheus.HistogramVec
-	retries         *prometheus.CounterVec
+	requests           *prometheus.CounterVec
+	requestDuration    *prometheus.HistogramVec
+	retries            *prometheus.CounterVec
+	apiRequests        *prometheus.CounterVec
+	apiRequestDuration *prometheus.HistogramVec
 }
 
 // New returns nbpdns's metrics for the build info, registered in a new
@@ -159,6 +168,8 @@ func New(info version.Info) *Metrics {
 		requests:            register(reg, prometheus.NewCounterVec(counterOpts(defRequests), defRequests.labels)),
 		requestDuration:     register(reg, prometheus.NewHistogramVec(histogramOpts(defRequestDuration), defRequestDuration.labels)),
 		retries:             register(reg, prometheus.NewCounterVec(counterOpts(defRetries), defRetries.labels)),
+		apiRequests:         register(reg, prometheus.NewCounterVec(counterOpts(defAPIRequests), defAPIRequests.labels)),
+		apiRequestDuration:  register(reg, prometheus.NewHistogramVec(histogramOpts(defAPIRequestDuration), defAPIRequestDuration.labels)),
 	}
 	build := register(reg, prometheus.NewGaugeVec(gaugeOpts(defBuildInfo), defBuildInfo.labels))
 	build.WithLabelValues(info.Version, info.Commit, info.GoVersion).Set(1)
@@ -173,6 +184,13 @@ func New(info version.Info) *Metrics {
 // Handler serves the metrics in Prometheus's text or OpenMetrics format.
 func (m *Metrics) Handler() http.Handler {
 	return promhttp.HandlerFor(m.Registry, promhttp.HandlerOpts{EnableOpenMetrics: true})
+}
+
+// APIRequest counts one request to the API, for operation, answered with
+// code after d.
+func (m *Metrics) APIRequest(operation string, code int, d time.Duration) {
+	m.apiRequests.WithLabelValues(operation, strconv.Itoa(code)).Inc()
+	m.apiRequestDuration.WithLabelValues(operation).Observe(d.Seconds())
 }
 
 // Observer returns an observer of the requests to target, a server of

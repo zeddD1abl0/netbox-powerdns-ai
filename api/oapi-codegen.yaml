@@ -1,0 +1,11 @@
+# oapi-codegen's configuration (ADR-0033): `make generate` writes the
+# net/http strict server's interfaces and types from api/openapi.yaml.
+package: gen
+generate:
+  std-http-server: true
+  strict-server: true
+  models: true
+compatibility:
+  # Enum constants are named after their type, such as ZoneStateMissing, so
+  # that values that two enums share can't collide.
+  always-prefix-enum-values: true

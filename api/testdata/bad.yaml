@@ -6,6 +6,8 @@ info:
   contact:
     name: nbpdns
     url: https://github.com/zeddD1abl0/netbox-powerdns-ai
+  x-api-id: not-a-uuid
+  x-audience: everyone
 servers:
   - url: https://nbpdns.example.com/api
 tags:

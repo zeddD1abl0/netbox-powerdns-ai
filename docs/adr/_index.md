@@ -46,5 +46,7 @@ from [`template.md`](template.md).
 | [0030](0030-release-with-goreleaser-and-ko-to-gitlab-on-versio.md) | Release with GoReleaser and ko to GitLab on version tags | accepted |
 | [0031](0031-debian-images-for-ci-with-a-distroless-static-runt.md) | Debian images for CI, with a distroless static runtime image | accepted |
 | [0032](0032-staged-ci-pipelines-with-a-tag-only-release-stage.md) | Staged CI pipelines with a tag-only release stage | accepted |
+| [0033](0033-a-read-only-api-spec-first-generated-with-oapi-cod.md) | A read-only API, spec-first, generated with oapi-codegen | accepted |
+| [0034](0034-a-vendored-locked-down-scalar-viewer-at-api-docs.md) | A vendored, locked-down Scalar viewer at /api/docs | accepted |
 
 <!-- projctl:adr-index:end -->

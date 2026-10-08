@@ -5,6 +5,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"reflect"
 	"slices"
 	"strings"
@@ -38,6 +39,25 @@ func TestDrift(t *testing.T) {
 		}
 		return r
 	}
+
+	t.Run("reads only the zones it compares", func(t *testing.T) {
+		// nbpdns serve reads every active zone for the API's records
+		// (ADR-0033); nbpdns drift still reads only those it compares: the
+		// zone in sync and the drifted one. Not the missing one, the
+		// ignored one, nor the parked one.
+		e := maps.Clone(labA)
+		e["NBPDNS_LOG_LEVEL"], e["NBPDNS_LOG_FORMAT"] = "debug", "json"
+		code, _, stderr := run(t, e, "drift", "-o", "json")
+		reads := 0
+		for l := range strings.Lines(stderr) {
+			if strings.Contains(l, `"msg":"http request"`) && strings.Contains(l, `"service":"NetBox"`) && strings.Contains(l, "/records/") {
+				reads++
+			}
+		}
+		if code != exitDrift || reads != 2 {
+			t.Errorf("exit %d, %d reads of NetBox's records, want 2:\n%s", code, reads, stderr)
+		}
+	})
 
 	t.Run("JSON", func(t *testing.T) {
 		r := report(t, labA, exitDrift)

@@ -71,7 +71,7 @@ func newDriftCmd(a *app) *cobra.Command {
 			defer nb.Close()
 			clients := s.groupClients(ctx, groups)
 			defer closeClients(clients)
-			r, err := s.compare(ctx, &netboxConn{c: nb}, clients, name)
+			r, err := s.compare(ctx, &netboxConn{c: nb}, clients, drift.Options{Zone: name})
 			if err != nil {
 				return err
 			}
@@ -137,7 +137,7 @@ func closeClients(cs []groupClient) {
 // are checked, their server and release, only until a check succeeds, so
 // that a long-running serve neither asks again each refresh nor repeats a
 // warning about an unsupported release.
-func (s *session) compare(ctx context.Context, nb *netboxConn, groups []groupClient, zone string) (drift.Report, error) {
+func (s *session) compare(ctx context.Context, nb *netboxConn, groups []groupClient, o drift.Options) (drift.Report, error) {
 	if !nb.checked {
 		if _, err := nb.c.Connect(ctx); err != nil {
 			return drift.Report{}, err
@@ -152,7 +152,8 @@ func (s *session) compare(ctx context.Context, nb *netboxConn, groups []groupCli
 			sources[i].Primary = &primarySource{g: g}
 		}
 	}
-	return drift.Run(ctx, &netboxSource{c: nb.c}, sources, drift.Options{Zone: zone, Concurrency: s.cfg.Drift.GroupConcurrency})
+	o.Concurrency = s.cfg.Drift.GroupConcurrency
+	return drift.Run(ctx, &netboxSource{c: nb.c}, sources, o)
 }
 
 // driftResult returns the error that gives the report's exit status: one

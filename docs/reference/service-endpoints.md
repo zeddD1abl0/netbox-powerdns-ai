@@ -9,6 +9,11 @@ weight: 50
 over plain HTTP. Each answers `GET` and `HEAD`; another method gets `405`,
 and another path `404`. None changes anything.
 
+Under `/api`, every error, those included, is an RFC 9457 problem, as
+`application/problem+json`. Every response there carries an `X-Flow-ID`:
+the request's own, if it sent a valid one, or a new one. It's the request's
+`request_id` in the logs. A request's W3C `traceparent` continues its trace.
+
 > [!WARNING]
 > The endpoints have no authentication until M10, and they name your server
 > groups, zones, and URLs. Keep the port on a trusted network.
@@ -19,6 +24,9 @@ and another path `404`. None changes anything.
 | `/readyz` | `503` until the first drift refresh has finished, whatever its outcome; then `200 ready`. |
 | `/status` | The service's state, as text for a person, or as JSON with `?json=1`. |
 | `/metrics` | The metrics, in Prometheus's text format, or in OpenMetrics if the scraper asks for it. The [metrics reference](metrics.md) lists them. |
+| `/api/…` | The API, as JSON: the service's status, at `/api/status`; the server groups, at `/api/server-groups`; each group's zones, filtered by state; each zone's changes; and each zone's records as NetBox defines them, at `…/rrsets`. Everything is last-known state. Lists are paged with `limit` and `cursor`. The [API reference](api.md) lists every operation. |
+| `/api/openapi.yaml` | The API's OpenAPI 3.1 document, `application/yaml`, which describes every operation under `/api`. |
+| `/api/docs` | The API's reference, for a browser: Scalar's, built into nbpdns, reading `/api/openapi.yaml`. Its Content-Security-Policy lets it reach no other host. |
 
 Neither `/livez` nor `/readyz` depends on NetBox or the primaries: their
 failures show on `/status`, in the metrics, and in the logs.

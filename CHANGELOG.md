@@ -6,6 +6,39 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- An API, at `/api` on `server.listen`, described by its OpenAPI 3.1
+  document, `api/openapi.yaml`, which the service serves at
+  `/api/openapi.yaml`. `/api/status` gives the service's state, and
+  `/api/server-groups` each group's configuration and last-known state.
+  A group's `zones` can be filtered by state, such as
+  `?state=drift,missing`, and include the primary's unmanaged zones. A
+  zone, by its name with or without the final dot, has its `changes`:
+  each RRset that differs, with each side's TTL and values; and its
+  `rrsets`: its records as NetBox defines them, in nbpdns's normalized
+  form, with NetBox's own SOA and NS records marked `managed`, for IaC to
+  read and publish elsewhere. `nbpdns serve` now reads the records of
+  every active zone in the groups' views to serve them, which
+  `nbpdns drift` doesn't. Lists come in
+  pages, with `limit` and an opaque `cursor`, and absolute `self` and
+  `next` links. Every error is an RFC 9457 problem. `/api/docs` is a
+  browsable reference, Scalar's, built into nbpdns, whose
+  Content-Security-Policy lets it reach no other host.
+- Documentation: the API's reference, generated from its OpenAPI document,
+  a how-to guide on reading drift and DNS records through the API with curl
+  and jq, and an explanation of how the API is designed. Each request takes, or is given, an
+  `X-Flow-ID`, which is its request ID in the logs, continues the client's
+  W3C `traceparent`, and is counted in `nbpdns_api_requests_total` and
+  `nbpdns_api_request_duration_seconds`. `server.public_url` sets the host
+  of the API's links, for a service behind a proxy. The API only reads,
+  and has no authentication until M10, so keep it on a trusted network.
+
+### Fixed
+
+- A release's notes on GitLab are its version's section of the CHANGELOG.
+  The 0.1.0 release was published with empty notes.
+
 ## [0.1.0] - 2026-10-07
 
 ### Added

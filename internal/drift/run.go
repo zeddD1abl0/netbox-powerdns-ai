@@ -1,10 +1,12 @@
 package drift
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/config"
@@ -55,6 +57,13 @@ type Options struct {
 	// Concurrency is how many groups are listed, read and compared at once.
 	// Below 1, it's 1.
 	Concurrency int
+	// ReadNetBox reads the RRsets of every active NetBox zone in the
+	// groups' views, not only of those compared, and returns every zone
+	// listed as the report's NetBox zones, for nbpdns serve's API
+	// (ADR-0033). The extra reads change nothing in the comparison: they're
+	// made apart from it, their problems are left out of it, and their
+	// failure is the report's NetBoxErr, not Run's error.
+	ReadNetBox bool
 }
 
 // Run compares every group, or only the zone o names. It lists NetBox's
@@ -139,6 +148,12 @@ func Run(ctx context.Context, nb NetBox, groups []Group, o Options) (Report, err
 		reports[i] = compareGroup(ctx, g.Primary, st.cfg, nbZones, st.pd, nbProbs)
 	})
 	r := Report{Complete: true, Groups: []GroupReport{}}
+	if o.ReadNetBox {
+		r.NetBox, r.NetBoxErr = readRest(ctx, nb, listed, read, func(z dns.Zone) bool {
+			_, ok := needed[id{z.View, z.Name}]
+			return ok
+		})
+	}
 	for _, gr := range reports {
 		if gr.Status != StatusOK {
 			r.Complete = false
@@ -157,6 +172,37 @@ func Run(ctx context.Context, nb NetBox, groups []Group, o Options) (Report, err
 		}
 	}
 	return r, nil
+}
+
+// readRest returns every zone listed: those read, the other active zones,
+// which it reads, and the inactive ones, bare, sorted by view and name. It
+// reads the others in a call of their own, so that their failure, which it
+// returns, can't fail the comparison. Their problems aren't the
+// comparison's, so they're dropped. The zones are never nil.
+func readRest(ctx context.Context, nb NetBox, listed, read []dns.Zone, wasRead func(dns.Zone) bool) ([]dns.Zone, error) {
+	out := make([]dns.Zone, 0, len(listed))
+	out = append(out, read...)
+	var rest []dns.Zone
+	for _, z := range listed {
+		switch {
+		case wasRead(z):
+		case z.Active:
+			rest = append(rest, z)
+		default:
+			out = append(out, z)
+		}
+	}
+	if len(rest) > 0 {
+		more, _, err := nb.Read(ctx, rest)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, more...)
+	}
+	slices.SortFunc(out, func(a, b dns.Zone) int {
+		return cmp.Or(strings.Compare(a.View, b.View), dns.CompareNames(a.Name, b.Name))
+	})
+	return out, nil
 }
 
 // each calls fn for 0 to n-1, running up to limit at once, and returns when

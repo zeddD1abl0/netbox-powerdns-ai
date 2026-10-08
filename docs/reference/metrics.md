@@ -30,6 +30,8 @@ PowerDNS's own `/metrics`.
 | `nbpdns_http_client_requests_total` | counter | `service`: `NetBox`, `PowerDNS`; `target`; `method`: `GET`; `code` | Requests to NetBox and to each primary, one per attempt. The target is `netbox`, or the server group's name, and the code is the answer's status, or `error` if none came. |
 | `nbpdns_http_client_request_duration_seconds` | histogram | `service`: `NetBox`, `PowerDNS`; `target`; `method`: `GET` | How long each request took to answer, or to fail. Buckets, in seconds: 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30. |
 | `nbpdns_http_client_retries_total` | counter | `service`: `NetBox`, `PowerDNS`; `target` | Requests to NetBox and to each primary that were tried again. |
+| `nbpdns_api_requests_total` | counter | `operation`; `code` | Requests to the API. The operation is the request's `operationId` in `api/openapi.yaml`, such as `getStatus`, or `openapi` for the OpenAPI document, `docs` for the API reference, or `unmatched` for any other path or method. The code is the answer's status. |
+| `nbpdns_api_request_duration_seconds` | histogram | `operation` | How long the API took to answer each request. Buckets, in seconds: 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5. |
 | `nbpdns_build_info` | gauge | `version`; `revision`; `goversion` | 1, with the running build's version, VCS revision, and Go version. |
 
 The Prometheus client's standard collectors add the `go_*` metrics of the Go

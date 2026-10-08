@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/drift"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/lab"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/service"
 )
@@ -86,6 +87,110 @@ func TestServe(t *testing.T) {
 	}
 	if _, text := s.get("/status"); !strings.Contains(text, f.Drift) || !strings.Contains(text, f.Parked) {
 		t.Errorf("the status page lacks the drifted zones:\n%s", text)
+	}
+	// The API's status, checked against its OpenAPI document.
+	if code, page := s.api("/api/status"); code != http.StatusOK || !strings.Contains(page, `"up":true`) ||
+		!strings.Contains(page, `"outcome":"incomplete"`) {
+		t.Errorf("/api/status: %d:\n%s", code, page)
+	}
+	// The API's groups: lab-a compared, down failed.
+	code, page = s.api("/api/server-groups")
+	var groups struct {
+		Items []struct {
+			Name, Status string
+			Counts       *drift.Counts
+		}
+	}
+	if err := json.Unmarshal([]byte(page), &groups); err != nil || code != http.StatusOK || len(groups.Items) != 2 {
+		t.Fatalf("/api/server-groups: %d, %v:\n%s", code, err, page)
+	}
+	if g := groups.Items[0]; g.Name != "lab-a" || g.Status != "ok" || g.Counts == nil || g.Counts.Drift != 1 || g.Counts.Missing != 1 {
+		t.Errorf("lab-a in the API: %+v", g)
+	}
+	if g := groups.Items[1]; g.Name != "down" || g.Status != "failed" || g.Counts != nil {
+		t.Errorf("down in the API: %+v", g)
+	}
+	if code, _ := s.api("/api/server-groups/down"); code != http.StatusOK {
+		t.Errorf("/api/server-groups/down: %d", code)
+	}
+	// lab-a's drifted zones, and the drifted zone's changes: www and mail
+	// changed, and the SOA, by its contact, one missing and one extra.
+	code, page = s.api("/api/server-groups/lab-a/zones?state=drift,missing,inactive_in_netbox")
+	var zones struct {
+		Items []struct{ Zone, State string }
+	}
+	if err := json.Unmarshal([]byte(page), &zones); err != nil || code != http.StatusOK {
+		t.Fatalf("lab-a's zones: %d, %v:\n%s", code, err, page)
+	}
+	got = map[string]string{}
+	for _, z := range zones.Items {
+		got[z.Zone] = z.State
+	}
+	if !reflect.DeepEqual(got, map[string]string{f.Drift: "drift", f.Missing: "missing", f.Parked: "inactive_in_netbox"}) {
+		t.Errorf("lab-a's drifted zones in the API: %v", got)
+	}
+	code, page = s.api("/api/server-groups/lab-a/zones/" + f.Drift + "/changes")
+	var changes struct {
+		Items []struct{ Name, Type, Kind string }
+	}
+	if err := json.Unmarshal([]byte(page), &changes); err != nil || code != http.StatusOK {
+		t.Fatalf("the drifted zone's changes: %d, %v:\n%s", code, err, page)
+	}
+	kinds := map[string]int{}
+	for _, c := range changes.Items {
+		kinds[c.Kind]++
+	}
+	if !reflect.DeepEqual(kinds, map[string]int{"changed": 3, "missing": 1, "extra": 1}) {
+		t.Errorf("the drifted zone's changes in the API: %v:\n%s", kinds, page)
+	}
+	if code, _ := s.api("/api/server-groups/lab-a/zones/" + strings.TrimSuffix(f.InSync, ".")); code != http.StatusOK {
+		t.Errorf("the zone in sync, without its final dot: %d", code)
+	}
+	// NetBox's records of the zone in sync, as nbpdns netbox records shows
+	// them, and of the missing zone, which the primary doesn't have.
+	for _, zone := range []string{f.InSync, f.Missing} {
+		code, page = s.api("/api/server-groups/lab-a/zones/" + zone + "/rrsets?limit=1000")
+		var rrsets struct {
+			Items []struct {
+				Name, Type string
+				TTL        uint32
+				Records    []struct{ Value string }
+			}
+		}
+		if err := json.Unmarshal([]byte(page), &rrsets); err != nil || code != http.StatusOK || len(rrsets.Items) == 0 {
+			t.Fatalf("%s's rrsets: %d, %v:\n%s", zone, code, err, page)
+		}
+		_, out, stderr := run(t, map[string]string{"NBPDNS_NETBOX_URL": nb.URL(), "NBPDNS_NETBOX_TOKEN": f.ReaderToken},
+			"netbox", "records", "--zone", zone, "--view", f.View, "-o", "json")
+		var want struct {
+			RRsets []struct {
+				Name, Type string
+				TTL        uint32
+				Records    []struct {
+					Value  string
+					Active bool
+				}
+			}
+		}
+		if err := json.Unmarshal([]byte(out), &want); err != nil {
+			t.Fatalf("nbpdns netbox records %s: %v:\n%s%s", zone, err, out, stderr)
+		}
+		var got, exp []string
+		for _, r := range rrsets.Items {
+			for _, rec := range r.Records {
+				got = append(got, fmt.Sprintf("%s %s %d %s", r.Name, r.Type, r.TTL, rec.Value))
+			}
+		}
+		for _, r := range want.RRsets {
+			for _, rec := range r.Records {
+				if rec.Active {
+					exp = append(exp, fmt.Sprintf("%s %s %d %s", r.Name, r.Type, r.TTL, rec.Value))
+				}
+			}
+		}
+		if !reflect.DeepEqual(got, exp) {
+			t.Errorf("%s's rrsets in the API:\n%s\nnbpdns netbox records:\n%s", zone, strings.Join(got, "\n"), strings.Join(exp, "\n"))
+		}
 	}
 	if code := s.stop(); code != exitOK {
 		t.Errorf("exit %d, want 0:\n%s", code, s.stderr)
