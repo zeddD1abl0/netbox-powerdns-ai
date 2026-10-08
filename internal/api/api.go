@@ -1,8 +1,10 @@
-// Package api serves nbpdns's read-only API at /api (ADR-0033). The API's
+// Package api serves nbpdns's API at /api (ADR-0033). The API's
 // source of truth is api/openapi.yaml: `make generate` writes its server
 // code into package gen, and the copy of it that the binary serves at
 // /api/openapi.yaml. The handlers map the service's last-known state onto
-// the generated types. Every error is an RFC 9457 problem.
+// the generated types. It changes nothing, and it receives NetBox's signed
+// webhooks, which queue refreshes (ADR-0035). Every error is an RFC 9457
+// problem.
 package api
 
 import (
@@ -18,6 +20,7 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/api/gen"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/config"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/metrics"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/service"
 )
@@ -50,6 +53,12 @@ type Options struct {
 	// PublicURL, server.public_url, is where clients reach the service, for
 	// the API's absolute links. If empty, links use the request's host.
 	PublicURL string
+	// WebhookSecret, netbox.webhook_secret, keys the signatures of NetBox's
+	// webhooks. If it's unset, /api/netbox-events is off.
+	WebhookSecret config.Secret
+	// Events queues the refreshes that webhooks ask for. It must be set if
+	// WebhookSecret is.
+	Events Notifier
 }
 
 // base is the API's path, where the spec's server is.
@@ -67,6 +76,9 @@ func New(o Options) http.Handler {
 		// The spec is embedded, and the tests parse it.
 		panic("the embedded OpenAPI document: " + err.Error())
 	}
+	if o.WebhookSecret.IsSet() && o.Events == nil {
+		panic("api.Options has a WebhookSecret, but no Events to queue them")
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET "+base+"/openapi.yaml", serveSpec)
 	mux.HandleFunc("GET "+base+"/docs", serveDocs)
@@ -78,6 +90,7 @@ func New(o Options) http.Handler {
 	gen.HandlerWithOptions(strict, gen.StdHTTPServerOptions{
 		BaseURL:          base,
 		BaseRouter:       mux,
+		Middlewares:      []gen.MiddlewareFunc{o.verified(ops)},
 		ErrorHandlerFunc: badRequest,
 	})
 	return &handler{o: o, mux: mux, ops: ops}

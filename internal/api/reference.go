@@ -10,8 +10,9 @@ import (
 )
 
 // WriteReference writes the API's reference page, docs/reference/api.md,
-// from its OpenAPI document: every operation, with its parameters and
-// responses, and every schema, with its fields, in the document's order.
+// from its OpenAPI document: every operation, with what it needs, its
+// parameters, its request body and its responses, and every schema, with
+// its fields, in the document's order.
 func WriteReference(w io.Writer) error {
 	var doc yaml.Node
 	if err := yaml.Unmarshal(spec, &doc); err != nil {
@@ -37,10 +38,12 @@ func WriteReference(w io.Writer) error {
 	p("explains its conventions.\n\n")
 	p("> [!WARNING]\n")
 	p("> The API has no authentication until M10, and it names your server\n")
-	p("> groups, zones, and records. Keep `server.listen` on a trusted network.\n\n")
+	p("> groups, zones, and records. Keep `server.listen` on a trusted network.\n")
+	p("> Only NetBox's webhooks need a signature.\n\n")
 	p("## Conventions\n\n")
-	p("- Bodies are JSON, with `snake_case` fields. Every field the schemas\n")
-	p("  below list is always present: one with nothing to say is `null`.\n")
+	p("- Bodies are JSON, with `snake_case` fields. Every field that a\n")
+	p("  response's schema lists is always present: one with nothing to say is\n")
+	p("  `null`.\n")
 	p("- Times are RFC 3339, in UTC.\n")
 	p("- A list takes `limit`, from 1 to 1000, 100 by default, and `cursor`, and\n")
 	p("  answers a page: its `items`, and the absolute URLs of itself, `self`,\n")
@@ -57,6 +60,13 @@ func WriteReference(w io.Writer) error {
 			if d := node(op, "description"); d != nil {
 				p("%s\n\n", strings.TrimSpace(d.Value))
 			}
+			// An operation without its own security has the document's: none.
+			for _, req := range contentOf(node(op, "security")) {
+				for name := range pairs(req) {
+					scheme := node(node(node(root, "components"), "securitySchemes"), name)
+					p("Needs the `%s` %s. %s\n\n", node(scheme, "name").Value, node(scheme, "in").Value, oneLine(node(scheme, "description")))
+				}
+			}
 			p("| Parameter | In | Type | Description |\n|---|---|---|---|\n")
 			for _, param := range node(op, "parameters").Content {
 				param = ref.resolve(param)
@@ -65,6 +75,11 @@ func WriteReference(w io.Writer) error {
 					in += ", required"
 				}
 				p("| `%s` | %s | %s | %s |\n", node(param, "name").Value, in, ref.typeOf(node(param, "schema")), oneLine(node(param, "description")))
+			}
+			if body := node(op, "requestBody"); body != nil {
+				for ctype, media := range pairs(node(body, "content")) {
+					p("\nThe request's body is %s, `%s`. %s\n", ref.typeOf(node(media, "schema")), ctype, oneLine(node(body, "description")))
+				}
 			}
 			p("\n| Response | Description | Body |\n|---|---|---|\n")
 			for code, resp := range pairs(node(op, "responses")) {
@@ -181,6 +196,14 @@ func (r *reference) typeOf(s *yaml.Node) string {
 		typ += ", or null"
 	}
 	return typ
+}
+
+// contentOf returns the items of the sequence n, or none if n is nil.
+func contentOf(n *yaml.Node) []*yaml.Node {
+	if n == nil {
+		return nil
+	}
+	return n.Content
 }
 
 // node returns the value of key in the mapping n, or nil.

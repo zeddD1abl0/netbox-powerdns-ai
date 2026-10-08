@@ -14,3 +14,7 @@ indent_size = 4
 
 [{Makefile,*.mk}]
 indent_style = tab
+
+# NetBox's webhook bodies, byte for byte: their signatures cover every byte.
+[internal/webhook/testdata/netbox-47/*-*.json]
+insert_final_newline = unset

@@ -39,6 +39,8 @@ in the [configuration reference](configuration.md).
 | `--netbox-token` | `string` | none | The NetBox API token that nbpdns reads with. |
 | `--netbox-token-file` | `path` | none | Read `netbox.token` from this file. |
 | `--netbox-url` | `url` | none | NetBox's base URL, such as `https://netbox.example.com`. |
+| `--netbox-webhook-secret` | `string` | none | The secret that NetBox's webhooks sign their events with. Setting it turns on `nbpdns serve`'s `/api/netbox-events`. |
+| `--netbox-webhook-secret-file` | `path` | none | Read `netbox.webhook_secret` from this file. |
 | `--otlp-ca-file` | `path` | none | A PEM file of CA certificates to trust for the collector, as well as the system's. |
 | `--otlp-endpoint` | `url` | none | The URL of the OpenTelemetry collector that nbpdns exports its spans to, over OTLP. |
 | `--otlp-headers` | `string` | none | Headers to send with every export, such as the collector's token, as `name=value,name=value`. |

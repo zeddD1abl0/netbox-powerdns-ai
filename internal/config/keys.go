@@ -2,6 +2,7 @@ package config
 
 import (
 	"cmp"
+	"fmt"
 	"slices"
 	"time"
 )
@@ -51,6 +52,9 @@ type NetBoxConfig struct {
 	Timeout     time.Duration
 	PageSize    int
 	Concurrency int
+	// WebhookSecret keys the signatures of NetBox's webhooks (ADR-0035).
+	// If it's unset, `nbpdns serve` takes no webhooks.
+	WebhookSecret Secret
 }
 
 // PowerDNSConfig says how to read the PowerDNS server groups.
@@ -89,6 +93,9 @@ func (c PowerDNSConfig) Group(name string) (Group, bool) {
 	}
 	return Group{}, false
 }
+
+// minWebhookSecret is the shortest netbox.webhook_secret allowed.
+const minWebhookSecret = 16
 
 // keys declares every configuration key, bound to a field of c, sorted by
 // name.
@@ -145,6 +152,21 @@ func keys(c *Config) []Key {
 			Summary: "How many requests to NetBox may be in flight at once.",
 			Default: "4",
 		}, 32),
+		secretKey(&c.NetBox.WebhookSecret, Key{
+			Name:    "netbox.webhook_secret",
+			Summary: "The secret that NetBox's webhooks sign their events with. Setting it turns on `nbpdns serve`'s `/api/netbox-events`.",
+			Details: "Give NetBox's webhook the same secret. An event is refused unless its `X-Hook-Signature` is the HMAC-SHA512 of its body, keyed by it. " +
+				"If it's unset, `/api/netbox-events` answers 404, and only the scheduled refreshes run. " +
+				"Use a long random string, such as `openssl rand -hex 32` prints: it must be at least 16 characters.",
+			Warning: "Over `http://`, anyone on the path between NetBox and nbpdns can read the events, " +
+				"and replay them, which makes nbpdns refresh the zones they name again. " +
+				"They can't forge one without the secret.",
+		}, func(s string) error {
+			if len(s) < minWebhookSecret {
+				return fmt.Errorf("it must be at least %d characters, so that it can't be guessed", minWebhookSecret)
+			}
+			return nil
+		}),
 		durationKey(&c.PowerDNS.Timeout, Key{
 			Name:    "powerdns.timeout",
 			Summary: "How long one request to a PowerDNS API may take.",

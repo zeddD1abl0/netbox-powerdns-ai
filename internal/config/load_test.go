@@ -227,6 +227,8 @@ func TestLoadErrors(t *testing.T) {
 			[]string{"mustn't contain credentials; set the token or API key in its own key"}},
 		{"a token that YAML reads as a number", "netbox:\n  token: 12345\n", nil, nil,
 			[]string{"netbox.token (from file", "want a string, not a number; put it in quotes"}},
+		{"a webhook secret too short to be safe", "", map[string]string{"NBPDNS_NETBOX_WEBHOOK_SECRET": "s3cret-is-short"}, nil,
+			[]string{"netbox.webhook_secret (from env NBPDNS_NETBOX_WEBHOOK_SECRET)", "at least 16 characters"}},
 		{"URL with a query", "", map[string]string{"NBPDNS_NETBOX_URL": "https://netbox.example.com/?x=1"}, nil,
 			[]string{"mustn't have a query"}},
 		{"a mapping for a string", "netbox:\n  url:\n    host: x\n", nil, nil,
@@ -257,15 +259,17 @@ func TestLoadErrors(t *testing.T) {
 
 // TestLoadAcceptsGoodValues covers valid values of each kind.
 func TestLoadAcceptsGoodValues(t *testing.T) {
+	hookSecret := secretFile(t, "0123456789abcdef\n")
 	cfg, _, err := load(t,
 		"log:\n  format: text\nnetbox:\n  url: http://netbox.lab:8047\n  page_size: \"1000\"\n  timeout: 2m\n  ca_file: /etc/ssl/netbox.pem\n",
-		map[string]string{"NBPDNS_NETBOX_CONCURRENCY": " 32 "})
+		map[string]string{"NBPDNS_NETBOX_CONCURRENCY": " 32 ", "NBPDNS_NETBOX_WEBHOOK_SECRET_FILE": hookSecret})
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
 	n := cfg.NetBox
 	if cfg.Log.Format != "text" || n.URL != "http://netbox.lab:8047" || n.PageSize != 1000 ||
-		n.Timeout != 2*time.Minute || n.CAFile != "/etc/ssl/netbox.pem" || n.Concurrency != 32 {
+		n.Timeout != 2*time.Minute || n.CAFile != "/etc/ssl/netbox.pem" || n.Concurrency != 32 ||
+		n.WebhookSecret.Reveal() != "0123456789abcdef" {
 		t.Errorf("Load() = %+v", *cfg)
 	}
 }

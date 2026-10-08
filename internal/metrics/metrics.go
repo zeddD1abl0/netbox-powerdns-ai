@@ -30,6 +30,23 @@ const (
 // Outcomes are the values of the outcome label.
 var Outcomes = []string{OutcomeComplete, OutcomeIncomplete, OutcomeFailed}
 
+// The results of a NetBox webhook (ADR-0035).
+const (
+	// WebhookAccepted is an event that queued a refresh.
+	WebhookAccepted = "accepted"
+	// WebhookIgnored is an event that named nothing that a server group
+	// serves.
+	WebhookIgnored = "ignored"
+	// WebhookBadSignature is a request whose signature didn't verify.
+	WebhookBadSignature = "bad_signature"
+	// WebhookInvalid is a signed request that wasn't an event NetBox sends,
+	// or was too large.
+	WebhookInvalid = "invalid"
+)
+
+// WebhookResults are the values of the result label.
+var WebhookResults = []string{WebhookAccepted, WebhookIgnored, WebhookBadSignature, WebhookInvalid}
+
 // The kinds of metric.
 const (
 	counter   = "counter"
@@ -108,6 +125,11 @@ var (
 	defAPIRequestDuration = def{name: "nbpdns_api_request_duration_seconds", kind: histogram, labels: []string{"operation"},
 		buckets: []float64{0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5},
 		help:    "How long the API took to answer each request."}
+	defWebhooks = def{name: "nbpdns_netbox_webhooks_total", kind: counter, labels: []string{"result"},
+		values: map[string][]string{"result": WebhookResults},
+		help: "Requests to `/api/netbox-events`, NetBox's webhooks, by result: `accepted` if the event queued a refresh, " +
+			"`ignored` if it named nothing that a server group serves, `bad_signature` if its signature didn't verify, " +
+			"and `invalid` if it wasn't an event that NetBox sends, or was over 1 MiB. Requests while webhooks are off aren't counted."}
 	defBuildInfo = def{name: "nbpdns_build_info", kind: gauge, labels: []string{"version", "revision", "goversion"},
 		help: "1, with the running build's version, VCS revision, and Go version."}
 
@@ -115,7 +137,8 @@ var (
 		defRefreshes, defRefreshDuration, defLastRefresh, defLastComplete,
 		defZones, defRRsetChanges, defZoneDrifted, defProblems, defWarnings,
 		defNetBoxUp, defGroupUp, defGroupLastSuccess,
-		defRequests, defRequestDuration, defRetries, defAPIRequests, defAPIRequestDuration, defBuildInfo,
+		defRequests, defRequestDuration, defRetries, defAPIRequests, defAPIRequestDuration,
+		defWebhooks, defBuildInfo,
 	}
 )
 
@@ -144,6 +167,7 @@ type Metrics struct {
 	retries            *prometheus.CounterVec
 	apiRequests        *prometheus.CounterVec
 	apiRequestDuration *prometheus.HistogramVec
+	webhooks           *prometheus.CounterVec
 }
 
 // New returns nbpdns's metrics for the build info, registered in a new
@@ -170,6 +194,7 @@ func New(info version.Info) *Metrics {
 		retries:             register(reg, prometheus.NewCounterVec(counterOpts(defRetries), defRetries.labels)),
 		apiRequests:         register(reg, prometheus.NewCounterVec(counterOpts(defAPIRequests), defAPIRequests.labels)),
 		apiRequestDuration:  register(reg, prometheus.NewHistogramVec(histogramOpts(defAPIRequestDuration), defAPIRequestDuration.labels)),
+		webhooks:            register(reg, prometheus.NewCounterVec(counterOpts(defWebhooks), defWebhooks.labels)),
 	}
 	build := register(reg, prometheus.NewGaugeVec(gaugeOpts(defBuildInfo), defBuildInfo.labels))
 	build.WithLabelValues(info.Version, info.Commit, info.GoVersion).Set(1)
@@ -177,6 +202,9 @@ func New(info version.Info) *Metrics {
 	// the first failure.
 	for _, o := range Outcomes {
 		m.Refreshes.WithLabelValues(o)
+	}
+	for _, r := range WebhookResults {
+		m.webhooks.WithLabelValues(r)
 	}
 	return m
 }
@@ -192,6 +220,10 @@ func (m *Metrics) APIRequest(operation string, code int, d time.Duration) {
 	m.apiRequests.WithLabelValues(operation, strconv.Itoa(code)).Inc()
 	m.apiRequestDuration.WithLabelValues(operation).Observe(d.Seconds())
 }
+
+// NetBoxWebhook counts a request to /api/netbox-events, with one of
+// WebhookResults.
+func (m *Metrics) NetBoxWebhook(result string) { m.webhooks.WithLabelValues(result).Inc() }
 
 // Observer returns an observer of the requests to target, a server of
 // service: NetBox, or a server group's primary.

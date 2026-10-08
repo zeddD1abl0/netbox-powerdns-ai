@@ -9,7 +9,7 @@ weight: 45
 # API
 
 `nbpdns serve` serves its API at `/api`, on `server.listen`. This page is
-generated from `api/openapi.yaml`, the API's source of truth, version 1.0.0.
+generated from `api/openapi.yaml`, the API's source of truth, version 1.1.0.
 The service serves the same document at `/api/openapi.yaml`, and a
 reference to browse at `/api/docs`.
 [How nbpdns's API is designed](../explanation/how-nbpdns-api-is-designed.md)
@@ -18,11 +18,13 @@ explains its conventions.
 > [!WARNING]
 > The API has no authentication until M10, and it names your server
 > groups, zones, and records. Keep `server.listen` on a trusted network.
+> Only NetBox's webhooks need a signature.
 
 ## Conventions
 
-- Bodies are JSON, with `snake_case` fields. Every field the schemas
-  below list is always present: one with nothing to say is `null`.
+- Bodies are JSON, with `snake_case` fields. Every field that a
+  response's schema lists is always present: one with nothing to say is
+  `null`.
 - Times are RFC 3339, in UTC.
 - A list takes `limit`, from 1 to 1000, 100 by default, and `cursor`, and
   answers a page: its `items`, and the absolute URLs of itself, `self`,
@@ -162,6 +164,29 @@ Returns a page of a zone's RRsets as NetBox defines them, in nbpdns's normalized
 | 200 | A page of the zone's RRsets. | [`RRsetPage`](#rrsetpage), `application/json` |
 | 400 | A parameter is invalid, such as a limit out of range, or a cursor that this API didn't give. | [`Problem`](#problem), `application/problem+json` |
 | 404 | No such resource. | [`Problem`](#problem), `application/problem+json` |
+| default | Any other error. | [`Problem`](#problem), `application/problem+json` |
+
+### `POST /api/netbox-events`
+
+Receive a NetBox webhook. Operation `receiveNetBoxEvent`.
+
+Receives an event from a NetBox event rule's webhook, signed with `netbox.webhook_secret`, and queues a refresh of the zones it names, which runs once no event has come for `drift.webhook_delay`. A record's event names its zone, and a zone's event the zone, and its old name if it was renamed. A view's event, a zone moved to another view, a record moved to another zone, and more than 100 zones at once each make a full refresh instead. Events for other object types, and zones in views that no server group serves, are accepted and ignored. The endpoint is off until `netbox.webhook_secret` is set.
+
+Needs the `X-Hook-Signature` header. It's the hex HMAC-SHA512 of the request's body, keyed by `netbox.webhook_secret`, as a NetBox webhook sends it when its secret is set.
+
+| Parameter | In | Type | Description |
+|---|---|---|---|
+| `X-Flow-ID` | header | `string` | The request's flow ID, to follow it through the logs. A request without a valid one is given one. Either way, the response returns it, and it's the request's `request_id` in nbpdns's logs. |
+
+The request's body is [`NetBoxEvent`](#netboxevent), `application/json`. It's the event, as NetBox's webhook sends it without a body template.
+
+| Response | Description | Body |
+|---|---|---|
+| 202 | The event is accepted. The refresh it asks for runs later, if it asks for one. | none |
+| 400 | The body isn't an event that NetBox sends, such as JSON without an `object_type`. | [`Problem`](#problem), `application/problem+json` |
+| 401 | The request's `X-Hook-Signature` is missing, or isn't the body's, keyed by `netbox.webhook_secret`. Nothing in the body is read. | [`Problem`](#problem), `application/problem+json` |
+| 404 | Webhooks are off, because `netbox.webhook_secret` isn't set. | [`Problem`](#problem), `application/problem+json` |
+| 413 | The body is over 1 MiB, which no event that nbpdns reads needs. | [`Problem`](#problem), `application/problem+json` |
 | default | Any other error. | [`Problem`](#problem), `application/problem+json` |
 
 ## Schemas
@@ -420,3 +445,34 @@ The fields of [`PageLinks`](#pagelinks), and:
 |---|---|---|
 | `as_of` | `string` (`date-time`) | When NetBox was last read, which the RRsets are as of. |
 | `items` | array of [`RRset`](#rrset) | The page's RRsets. |
+
+### `NetBoxEvent`
+
+A NetBox webhook's event, as NetBox 4.7 sends it without a body template: what happened to an object, the object, and the request that made the change. nbpdns reads only the fields below, and ignores the rest.
+
+| Field | Type | Description |
+|---|---|---|
+| `event` | `string` | What happened to the object, such as `created`, `updated` or `deleted`. |
+| `timestamp` | `string` (`date-time`) | When it happened. |
+| `object_type` | `string` | The object's type. nbpdns reads `netbox_dns.record`, `netbox_dns.zone` and `netbox_dns.view`, and ignores the others. |
+| `request` | [`NetBoxRequest`](#netboxrequest), or null | The NetBox request that made the change, or null if none did. |
+| `data` | `object` | The object, as NetBox's API serializes it: after the change, or before it, for a deletion. A record's has its `zone`, with the zone's `id`, `name` and `view`, and a zone's has its `id`, `name` and `view`, each view with its `id` and `name`. |
+| `snapshots` | [`NetBoxSnapshots`](#netboxsnapshots), or null | The object's fields around the change, with related objects as their IDs. |
+
+### `NetBoxRequest`
+
+A NetBox request, as its webhooks describe it.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` (`uuid`) | NetBox's ID for the request, which every event it causes shares. |
+| `user` | `string` | The name of the user who made the request. |
+
+### `NetBoxSnapshots`
+
+An object's fields before and after a change.
+
+| Field | Type | Description |
+|---|---|---|
+| `prechange` | `object`, or null | The fields before the change: null for a creation, and for some updates that the DNS plugin makes itself. A renamed zone's has its old `name`, and a moved zone's its old `view` ID, as a moved record's has its old `zone` ID. |
+| `postchange` | `object`, or null | The fields after the change, or null for a deletion. |

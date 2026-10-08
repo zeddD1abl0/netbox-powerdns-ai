@@ -37,27 +37,47 @@ type handler struct {
 	o   Options
 	mux *http.ServeMux
 	// ops maps each route, as the mux's pattern names it, such as
-	// "GET /api/status", to its operationId in the spec.
-	ops map[string]string
+	// "GET /api/status", to its operation in the spec.
+	ops map[string]operation
 }
 
-// operations returns the operationId of each route in the OpenAPI document
+// An operation is one of the spec's operations.
+type operation struct {
+	id string
+	// signed marks an operation that needs NetBox's signature: its
+	// security names the netboxSignature scheme.
+	signed bool
+}
+
+// signatureScheme is the spec's security scheme for NetBox's signature.
+const signatureScheme = "netboxSignature"
+
+// operations returns the operation of each route in the OpenAPI document
 // spec, whose paths start at base.
-func operations(spec []byte, base string) (map[string]string, error) {
+func operations(spec []byte, base string) (map[string]operation, error) {
 	var doc struct {
 		Paths map[string]map[string]struct {
-			OperationID string `yaml:"operationId"`
+			OperationID string                `yaml:"operationId"`
+			Security    []map[string][]string `yaml:"security"`
 		} `yaml:"paths"`
 	}
 	if err := yaml.Unmarshal(spec, &doc); err != nil {
 		return nil, err
 	}
-	ops := map[string]string{}
+	ops := map[string]operation{}
 	for path, methods := range doc.Paths {
 		for method, op := range methods {
-			if op.OperationID != "" {
-				ops[strings.ToUpper(method)+" "+base+path] = op.OperationID
+			if op.OperationID == "" {
+				continue
 			}
+			o := operation{id: op.OperationID}
+			for _, req := range op.Security {
+				_, o.signed = req[signatureScheme]
+				if o.signed {
+					break
+				}
+			}
+			ops[strings.ToUpper(method)+" "+base+path] = o
 		}
 	}
 	return ops, nil
@@ -82,7 +102,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// A GET pattern answers HEAD too, so the route is the pattern without
 		// whatever method it names.
 		_, route, _ = strings.Cut(pattern, " ")
-		op = h.ops[pattern]
+		op = h.ops[pattern].id
 		switch {
 		case op != "":
 		case strings.HasPrefix(route, base+"/docs"):
@@ -142,7 +162,7 @@ func unmatched(w http.ResponseWriter, r *http.Request, next http.Handler) {
 	case http.StatusMethodNotAllowed:
 		w.Header().Set("Allow", probe.header.Get("Allow"))
 		writeProblem(w, r, http.StatusMethodNotAllowed,
-			fmt.Sprintf("The API only reads: %s answers %s, not %s.", r.URL.Path, probe.header.Get("Allow"), r.Method))
+			fmt.Sprintf("%s answers only %s, not %s.", r.URL.Path, probe.header.Get("Allow"), r.Method))
 	default:
 		next.ServeHTTP(w, r)
 	}

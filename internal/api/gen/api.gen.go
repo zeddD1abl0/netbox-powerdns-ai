@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/oapi-codegen/runtime"
+	openapi_types "github.com/oapi-codegen/runtime/types"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/webhook"
 )
 
 // Defines values for ChangeKind.
@@ -209,6 +211,39 @@ type ChangePage struct {
 //
 // Examples: report
 type DriftPolicy string
+
+// NetBoxEvent A NetBox webhook's event, as NetBox 4.7 sends it without a body template: what happened to an object, the object, and the request that made the change. nbpdns reads only the fields below, and ignores the rest.
+//
+// Examples: {"data":{"id":1106,"name":"example.com","view":{"id":1,"name":"_default_"}},"event":"deleted","object_type":"netbox_dns.zone","request":{"id":"23778ad9-07a9-40a0-b9f2-721252181a5e","user":"admin"},"snapshots":{"postchange":null,"prechange":{"name":"example.com","view":1}}}
+type NetBoxEvent = webhook.Event
+
+// NetBoxRequest A NetBox request, as its webhooks describe it.
+type NetBoxRequest struct {
+	// Id NetBox's ID for the request, which every event it causes shares.
+	//
+	// Examples: 23778ad9-07a9-40a0-b9f2-721252181a5e
+	Id *openapi_types.UUID `json:"id,omitempty"`
+
+	// User The name of the user who made the request.
+	//
+	// Examples: admin
+	User                 *string                `json:"user,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// NetBoxSnapshots An object's fields before and after a change.
+type NetBoxSnapshots struct {
+	// Postchange The fields after the change, or null for a deletion.
+	//
+	// Examples: null
+	Postchange *map[string]interface{} `json:"postchange,omitempty"`
+
+	// Prechange The fields before the change: null for a creation, and for some updates that the DNS plugin makes itself. A renamed zone's has its old `name`, and a moved zone's its old `view` ID, as a moved record's has its old `zone` ID.
+	//
+	// Examples: {"name":"example.com","view":1}
+	Prechange            *map[string]interface{} `json:"prechange,omitempty"`
+	AdditionalProperties map[string]interface{}  `json:"-"`
+}
 
 // NetBoxState NetBox's state, as of the last refresh.
 type NetBoxState struct {
@@ -734,10 +769,36 @@ type ZoneName = string
 // Examples: {"detail":"No server group is named site-z.","instance":"/api/server-groups/site-z","status":404,"title":"Not Found","type":"about:blank"}
 type BadRequest = Problem
 
+// BadSignature An error, as RFC 9457 describes it.
+//
+// Examples: {"detail":"No server group is named site-z.","instance":"/api/server-groups/site-z","status":404,"title":"Not Found","type":"about:blank"}
+type BadSignature = Problem
+
+// EventTooLarge An error, as RFC 9457 describes it.
+//
+// Examples: {"detail":"No server group is named site-z.","instance":"/api/server-groups/site-z","status":404,"title":"Not Found","type":"about:blank"}
+type EventTooLarge = Problem
+
+// InvalidEvent An error, as RFC 9457 describes it.
+//
+// Examples: {"detail":"No server group is named site-z.","instance":"/api/server-groups/site-z","status":404,"title":"Not Found","type":"about:blank"}
+type InvalidEvent = Problem
+
 // NotFound An error, as RFC 9457 describes it.
 //
 // Examples: {"detail":"No server group is named site-z.","instance":"/api/server-groups/site-z","status":404,"title":"Not Found","type":"about:blank"}
 type NotFound = Problem
+
+// WebhooksOff An error, as RFC 9457 describes it.
+//
+// Examples: {"detail":"No server group is named site-z.","instance":"/api/server-groups/site-z","status":404,"title":"Not Found","type":"about:blank"}
+type WebhooksOff = Problem
+
+// ReceiveNetBoxEventParams defines parameters for ReceiveNetBoxEvent.
+type ReceiveNetBoxEventParams struct {
+	// XFlowID The request's flow ID, to follow it through the logs. A request without a valid one is given one. Either way, the response returns it, and it's the request's `request_id` in nbpdns's logs.
+	XFlowID *FlowID `json:"X-Flow-ID,omitempty"`
+}
 
 // ListServerGroupsParams defines parameters for ListServerGroups.
 type ListServerGroupsParams struct {
@@ -808,8 +869,180 @@ type GetStatusParams struct {
 	XFlowID *FlowID `json:"X-Flow-ID,omitempty"`
 }
 
+// ReceiveNetBoxEventJSONRequestBody defines body for ReceiveNetBoxEvent for application/json ContentType.
+type ReceiveNetBoxEventJSONRequestBody = NetBoxEvent
+
+// Getter for additional properties for NetBoxRequest. Returns the specified
+// element and whether it was found
+func (a NetBoxRequest) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for NetBoxRequest
+func (a *NetBoxRequest) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for NetBoxRequest to handle AdditionalProperties
+func (a *NetBoxRequest) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["id"]; found {
+		err = json.Unmarshal(raw, &a.Id)
+		if err != nil {
+			return fmt.Errorf("error reading 'id': %w", err)
+		}
+		delete(object, "id")
+	}
+
+	if raw, found := object["user"]; found {
+		err = json.Unmarshal(raw, &a.User)
+		if err != nil {
+			return fmt.Errorf("error reading 'user': %w", err)
+		}
+		delete(object, "user")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for NetBoxRequest to handle AdditionalProperties
+func (a NetBoxRequest) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.Id != nil {
+		object["id"], err = json.Marshal(a.Id)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'id': %w", err)
+		}
+	}
+
+	if a.User != nil {
+		object["user"], err = json.Marshal(a.User)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'user': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for NetBoxSnapshots. Returns the specified
+// element and whether it was found
+func (a NetBoxSnapshots) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for NetBoxSnapshots
+func (a *NetBoxSnapshots) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for NetBoxSnapshots to handle AdditionalProperties
+func (a *NetBoxSnapshots) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["postchange"]; found {
+		err = json.Unmarshal(raw, &a.Postchange)
+		if err != nil {
+			return fmt.Errorf("error reading 'postchange': %w", err)
+		}
+		delete(object, "postchange")
+	}
+
+	if raw, found := object["prechange"]; found {
+		err = json.Unmarshal(raw, &a.Prechange)
+		if err != nil {
+			return fmt.Errorf("error reading 'prechange': %w", err)
+		}
+		delete(object, "prechange")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for NetBoxSnapshots to handle AdditionalProperties
+func (a NetBoxSnapshots) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.Postchange != nil {
+		object["postchange"], err = json.Marshal(a.Postchange)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'postchange': %w", err)
+		}
+	}
+
+	if a.Prechange != nil {
+		object["prechange"], err = json.Marshal(a.Prechange)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'prechange': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// ReceiveNetBoxEvent Receive a NetBox webhook
+	// (POST /netbox-events)
+	ReceiveNetBoxEvent(w http.ResponseWriter, r *http.Request, params ReceiveNetBoxEventParams)
 	// ListServerGroups List the server groups
 	// (GET /server-groups)
 	ListServerGroups(w http.ResponseWriter, r *http.Request, params ListServerGroupsParams)
@@ -841,6 +1074,47 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ReceiveNetBoxEvent operation middleware
+func (siw *ServerInterfaceWrapper) ReceiveNetBoxEvent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReceiveNetBoxEventParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Flow-ID" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Flow-ID")]; found {
+		var XFlowID FlowID
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Flow-ID", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Flow-ID", valueList[0], &XFlowID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Flow-ID", Err: err})
+			return
+		}
+
+		params.XFlowID = &XFlowID
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReceiveNetBoxEvent(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListServerGroups operation middleware
 func (siw *ServerInterfaceWrapper) ListServerGroups(w http.ResponseWriter, r *http.Request) {
@@ -1445,6 +1719,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/server-groups/{group}/zones/{zone}", wrapper.GetZone)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/server-groups/{group}/zones/{zone}/changes", wrapper.ListZoneChanges)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/server-groups/{group}/zones/{zone}/rrsets", wrapper.ListZoneRRsets)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/netbox-events", wrapper.ReceiveNetBoxEvent)
 
 	return m
 }
@@ -1456,6 +1731,34 @@ type BadRequestApplicationProblemPlusJSONResponse struct {
 	Body Problem
 
 	Headers BadRequestResponseHeaders
+}
+
+type BadSignatureResponseHeaders struct {
+	WWWAuthenticate *string
+	XFlowID         *string
+}
+type BadSignatureApplicationProblemPlusJSONResponse struct {
+	Body Problem
+
+	Headers BadSignatureResponseHeaders
+}
+
+type EventTooLargeResponseHeaders struct {
+	XFlowID *string
+}
+type EventTooLargeApplicationProblemPlusJSONResponse struct {
+	Body Problem
+
+	Headers EventTooLargeResponseHeaders
+}
+
+type InvalidEventResponseHeaders struct {
+	XFlowID *string
+}
+type InvalidEventApplicationProblemPlusJSONResponse struct {
+	Body Problem
+
+	Headers InvalidEventResponseHeaders
 }
 
 type NotFoundResponseHeaders struct {
@@ -1474,6 +1777,140 @@ type ProblemApplicationProblemPlusJSONResponse struct {
 	Body Problem
 
 	Headers ProblemResponseHeaders
+}
+
+type WebhooksOffResponseHeaders struct {
+	XFlowID *string
+}
+type WebhooksOffApplicationProblemPlusJSONResponse struct {
+	Body Problem
+
+	Headers WebhooksOffResponseHeaders
+}
+
+type ReceiveNetBoxEventRequestObject struct {
+	Params ReceiveNetBoxEventParams
+	Body   *ReceiveNetBoxEventJSONRequestBody
+}
+
+type ReceiveNetBoxEventResponseObject interface {
+	VisitReceiveNetBoxEventResponse(w http.ResponseWriter) error
+}
+
+type ReceiveNetBoxEvent202ResponseHeaders struct {
+	XFlowID *string
+}
+
+type ReceiveNetBoxEvent202Response struct {
+	Headers ReceiveNetBoxEvent202ResponseHeaders
+}
+
+func (response ReceiveNetBoxEvent202Response) VisitReceiveNetBoxEventResponse(w http.ResponseWriter) error {
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(202)
+	return nil
+}
+
+type ReceiveNetBoxEvent400ApplicationProblemPlusJSONResponse struct {
+	InvalidEventApplicationProblemPlusJSONResponse
+}
+
+func (response ReceiveNetBoxEvent400ApplicationProblemPlusJSONResponse) VisitReceiveNetBoxEventResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReceiveNetBoxEvent401ApplicationProblemPlusJSONResponse struct {
+	BadSignatureApplicationProblemPlusJSONResponse
+}
+
+func (response ReceiveNetBoxEvent401ApplicationProblemPlusJSONResponse) VisitReceiveNetBoxEventResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.WWWAuthenticate != nil {
+		w.Header().Set("WWW-Authenticate", fmt.Sprint(*response.Headers.WWWAuthenticate))
+	}
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReceiveNetBoxEvent404ApplicationProblemPlusJSONResponse struct {
+	WebhooksOffApplicationProblemPlusJSONResponse
+}
+
+func (response ReceiveNetBoxEvent404ApplicationProblemPlusJSONResponse) VisitReceiveNetBoxEventResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReceiveNetBoxEvent413ApplicationProblemPlusJSONResponse struct {
+	EventTooLargeApplicationProblemPlusJSONResponse
+}
+
+func (response ReceiveNetBoxEvent413ApplicationProblemPlusJSONResponse) VisitReceiveNetBoxEventResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReceiveNetBoxEventdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	Headers    ProblemResponseHeaders
+	StatusCode int
+}
+
+func (response ReceiveNetBoxEventdefaultApplicationProblemPlusJSONResponse) VisitReceiveNetBoxEventResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
 }
 
 type ListServerGroupsRequestObject struct {
@@ -2028,6 +2465,9 @@ func (response GetStatusdefaultApplicationProblemPlusJSONResponse) VisitGetStatu
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// ReceiveNetBoxEvent Receive a NetBox webhook
+	// (POST /netbox-events)
+	ReceiveNetBoxEvent(ctx context.Context, request ReceiveNetBoxEventRequestObject) (ReceiveNetBoxEventResponseObject, error)
 	// ListServerGroups List the server groups
 	// (GET /server-groups)
 	ListServerGroups(ctx context.Context, request ListServerGroupsRequestObject) (ListServerGroupsResponseObject, error)
@@ -2088,6 +2528,39 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// ReceiveNetBoxEvent operation middleware
+func (sh *strictHandler) ReceiveNetBoxEvent(w http.ResponseWriter, r *http.Request, params ReceiveNetBoxEventParams) {
+	var request ReceiveNetBoxEventRequestObject
+
+	request.Params = params
+
+	var body ReceiveNetBoxEventJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReceiveNetBoxEvent(ctx, request.(ReceiveNetBoxEventRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReceiveNetBoxEvent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReceiveNetBoxEventResponseObject); ok {
+		if err := validResponse.VisitReceiveNetBoxEventResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // ListServerGroups operation middleware
