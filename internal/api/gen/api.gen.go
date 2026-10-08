@@ -17,6 +17,27 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for ChangeKind.
+const (
+	ChangeKindChanged ChangeKind = "changed"
+	ChangeKindExtra   ChangeKind = "extra"
+	ChangeKindMissing ChangeKind = "missing"
+)
+
+// Valid indicates whether the value is a known member of the ChangeKind enum.
+func (e ChangeKind) Valid() bool {
+	switch e {
+	case ChangeKindChanged:
+		return true
+	case ChangeKindExtra:
+		return true
+	case ChangeKindMissing:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DriftPolicy.
 const (
 	DriftPolicyEnforce DriftPolicy = "enforce"
@@ -98,6 +119,92 @@ func (e ServerGroupStatus) Valid() bool {
 	}
 }
 
+// Defines values for ZoneState.
+const (
+	ZoneStateDrift            ZoneState = "drift"
+	ZoneStateIgnored          ZoneState = "ignored"
+	ZoneStateInSync           ZoneState = "in_sync"
+	ZoneStateInactiveInNetbox ZoneState = "inactive_in_netbox"
+	ZoneStateMissing          ZoneState = "missing"
+	ZoneStateUnmanaged        ZoneState = "unmanaged"
+)
+
+// Valid indicates whether the value is a known member of the ZoneState enum.
+func (e ZoneState) Valid() bool {
+	switch e {
+	case ZoneStateDrift:
+		return true
+	case ZoneStateIgnored:
+		return true
+	case ZoneStateInSync:
+		return true
+	case ZoneStateInactiveInNetbox:
+		return true
+	case ZoneStateMissing:
+		return true
+	case ZoneStateUnmanaged:
+		return true
+	default:
+		return false
+	}
+}
+
+// Change An RRset that differs between NetBox and the group's primary.
+type Change struct {
+	// Kind How an RRset differs: `missing` if NetBox has it and the primary doesn't serve it, `extra` if the primary serves it and NetBox doesn't have it, and `changed` if its values or TTL differ.
+	//
+	// Examples: changed
+	Kind ChangeKind `json:"kind"`
+
+	// Name The RRset's absolute owner name.
+	//
+	// Examples: www.example.com.
+	Name string `json:"name"`
+
+	// Netbox The RRset as NetBox has it, or null if NetBox doesn't.
+	//
+	// Examples: {"ttl":300,"values":["192.0.2.10"]}
+	Netbox *Side `json:"netbox"`
+
+	// Powerdns The RRset as the primary serves it, or null if it doesn't.
+	//
+	// Examples: {"ttl":300,"values":["192.0.2.99"]}
+	Powerdns *Side `json:"powerdns"`
+
+	// Type The RRset's type, such as `A`.
+	//
+	// Examples: A
+	Type string `json:"type"`
+}
+
+// ChangeKind How an RRset differs: `missing` if NetBox has it and the primary doesn't serve it, `extra` if the primary serves it and NetBox doesn't have it, and `changed` if its values or TTL differ.
+//
+// Examples: changed
+type ChangeKind string
+
+// ChangePage One page of a zone's changes, with the links to it and to the next.
+type ChangePage struct {
+	// AsOf When the group was last read and compared.
+	//
+	// Examples: 2026-10-08T01:10:02Z
+	AsOf time.Time `json:"as_of"`
+
+	// Items The page's changes.
+	//
+	// Examples: [{"kind":"missing","name":"www.example.com.","netbox":{"ttl":300,"values":["192.0.2.10"]},"powerdns":null,"type":"A"}]
+	Items []Change `json:"items"`
+
+	// Next The next page's absolute URL, or null on the last page.
+	//
+	// Examples: https://nbpdns.example.com/api/server-groups?cursor=eyJhIjoic2l0ZS1iIn0&limit=2
+	Next *string `json:"next"`
+
+	// Self This page's absolute URL.
+	//
+	// Examples: https://nbpdns.example.com/api/server-groups?limit=2
+	Self string `json:"self"`
+}
+
 // DriftPolicy What nbpdns does about a zone's drift: `report` reports it, `enforce` reports it and, from M13, corrects it, and `ignore` doesn't compare the zone.
 //
 // Examples: report
@@ -125,6 +232,19 @@ type NetBoxState struct {
 //
 // Examples: http/protobuf
 type OTLPProtocol string
+
+// PageLinks The links of a page of a list (Zalando [248]).
+type PageLinks struct {
+	// Next The next page's absolute URL, or null on the last page.
+	//
+	// Examples: https://nbpdns.example.com/api/server-groups?cursor=eyJhIjoic2l0ZS1iIn0&limit=2
+	Next *string `json:"next"`
+
+	// Self This page's absolute URL.
+	//
+	// Examples: https://nbpdns.example.com/api/server-groups?limit=2
+	Self string `json:"self"`
+}
 
 // Problem An error, as RFC 9457 describes it.
 //
@@ -312,6 +432,19 @@ type ServerGroupPage struct {
 	Self string `json:"self"`
 }
 
+// Side An RRset as one side serves it.
+type Side struct {
+	// Ttl The RRset's TTL, in seconds.
+	//
+	// Examples: 300
+	Ttl int64 `json:"ttl"`
+
+	// Values The RRset's values, normalized and sorted.
+	//
+	// Examples: ["192.0.2.10"]
+	Values []string `json:"values"`
+}
+
 // Status The nbpdns service's state.
 type Status struct {
 	// Live Whether a refresh has started within `drift.interval` + `drift.timeout` + 1 minute, as `/livez` reports.
@@ -370,6 +503,44 @@ type Tracing struct {
 	Protocol *OTLPProtocol `json:"protocol"`
 }
 
+// Zone A zone of a server group, as of the group's last successful read.
+type Zone struct {
+	// ChangeCount How many of the zone's RRsets differ, which `changes` lists.
+	//
+	// Examples: 2
+	ChangeCount int64 `json:"change_count"`
+
+	// NetboxSerial The zone's SOA serial in NetBox, or null. Serials aren't compared.
+	//
+	// Examples: 2026100801
+	NetboxSerial *int64 `json:"netbox_serial"`
+
+	// Policy The zone's drift policy, or null for an unmanaged zone.
+	//
+	// Examples: report
+	Policy *DriftPolicy `json:"policy"`
+
+	// PowerdnsSerial The zone's SOA serial on the primary, or null if it doesn't serve the zone.
+	//
+	// Examples: 2026100701
+	PowerdnsSerial *int64 `json:"powerdns_serial"`
+
+	// State A zone's state: `in_sync` if the primary serves it as NetBox says, `drift` if its RRsets differ, `missing` if the primary doesn't serve an active NetBox zone, `inactive_in_netbox` if the primary serves a zone that isn't active in NetBox, `ignored` if its drift policy is `ignore`, and `unmanaged` if the primary serves a zone that NetBox doesn't assign to the group.
+	//
+	// Examples: drift
+	State ZoneState `json:"state"`
+
+	// View The zone's NetBox view, or null for an unmanaged zone, which NetBox doesn't have.
+	//
+	// Examples: _default_
+	View *string `json:"view"`
+
+	// Zone The zone's absolute name, with its final dot.
+	//
+	// Examples: example.com.
+	Zone string `json:"zone"`
+}
+
 // ZoneCounts A server group's zones, by state.
 type ZoneCounts struct {
 	// Drift Zones whose RRsets differ.
@@ -403,6 +574,77 @@ type ZoneCounts struct {
 	Unmanaged int64 `json:"unmanaged"`
 }
 
+// ZoneDetail A zone of a server group, and when the group was last read.
+type ZoneDetail struct {
+	// AsOf When the group was last read and compared, its `last_success`.
+	//
+	// Examples: 2026-10-08T01:10:02Z
+	AsOf time.Time `json:"as_of"`
+
+	// ChangeCount How many of the zone's RRsets differ, which `changes` lists.
+	//
+	// Examples: 2
+	ChangeCount int64 `json:"change_count"`
+
+	// NetboxSerial The zone's SOA serial in NetBox, or null. Serials aren't compared.
+	//
+	// Examples: 2026100801
+	NetboxSerial *int64 `json:"netbox_serial"`
+
+	// Policy The zone's drift policy, or null for an unmanaged zone.
+	//
+	// Examples: report
+	Policy *DriftPolicy `json:"policy"`
+
+	// PowerdnsSerial The zone's SOA serial on the primary, or null if it doesn't serve the zone.
+	//
+	// Examples: 2026100701
+	PowerdnsSerial *int64 `json:"powerdns_serial"`
+
+	// State A zone's state: `in_sync` if the primary serves it as NetBox says, `drift` if its RRsets differ, `missing` if the primary doesn't serve an active NetBox zone, `inactive_in_netbox` if the primary serves a zone that isn't active in NetBox, `ignored` if its drift policy is `ignore`, and `unmanaged` if the primary serves a zone that NetBox doesn't assign to the group.
+	//
+	// Examples: drift
+	State ZoneState `json:"state"`
+
+	// View The zone's NetBox view, or null for an unmanaged zone, which NetBox doesn't have.
+	//
+	// Examples: _default_
+	View *string `json:"view"`
+
+	// Zone The zone's absolute name, with its final dot.
+	//
+	// Examples: example.com.
+	Zone string `json:"zone"`
+}
+
+// ZonePage One page of a server group's zones, with the links to it and to the next.
+type ZonePage struct {
+	// AsOf What the zones are as of, the group's `last_success`, or null if the group was never read.
+	//
+	// Examples: 2026-10-08T01:10:02Z
+	AsOf *time.Time `json:"as_of"`
+
+	// Items The page's zones.
+	//
+	// Examples: [{"change_count":0,"netbox_serial":2026100801,"policy":"report","powerdns_serial":2026100801,"state":"in_sync","view":"_default_","zone":"example.com."}]
+	Items []Zone `json:"items"`
+
+	// Next The next page's absolute URL, or null on the last page.
+	//
+	// Examples: https://nbpdns.example.com/api/server-groups?cursor=eyJhIjoic2l0ZS1iIn0&limit=2
+	Next *string `json:"next"`
+
+	// Self This page's absolute URL.
+	//
+	// Examples: https://nbpdns.example.com/api/server-groups?limit=2
+	Self string `json:"self"`
+}
+
+// ZoneState A zone's state: `in_sync` if the primary serves it as NetBox says, `drift` if its RRsets differ, `missing` if the primary doesn't serve an active NetBox zone, `inactive_in_netbox` if the primary serves a zone that isn't active in NetBox, `ignored` if its drift policy is `ignore`, and `unmanaged` if the primary serves a zone that NetBox doesn't assign to the group.
+//
+// Examples: drift
+type ZoneState string
+
 // Cursor defines model for Cursor.
 type Cursor = string
 
@@ -414,6 +656,9 @@ type Group = string
 
 // Limit defines model for Limit.
 type Limit = int32
+
+// ZoneName defines model for ZoneName.
+type ZoneName = string
 
 // BadRequest An error, as RFC 9457 describes it.
 //
@@ -443,6 +688,39 @@ type GetServerGroupParams struct {
 	XFlowID *FlowID `json:"X-Flow-ID,omitempty"`
 }
 
+// ListZonesParams defines parameters for ListZones.
+type ListZonesParams struct {
+	// State Only the zones in these states, such as `drift,missing`. The drifted states are `drift`, `missing` and `inactive_in_netbox`.
+	State *[]ZoneState `form:"state,omitempty" json:"state,omitempty"`
+
+	// Limit The most items the page may have.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Where the page starts: a previous page's `next` link carries it. It's opaque, and only good with the same filters as the page that gave it.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// XFlowID The request's flow ID, to follow it through the logs. A request without a valid one is given one. Either way, the response returns it, and it's the request's `request_id` in nbpdns's logs.
+	XFlowID *FlowID `json:"X-Flow-ID,omitempty"`
+}
+
+// GetZoneParams defines parameters for GetZone.
+type GetZoneParams struct {
+	// XFlowID The request's flow ID, to follow it through the logs. A request without a valid one is given one. Either way, the response returns it, and it's the request's `request_id` in nbpdns's logs.
+	XFlowID *FlowID `json:"X-Flow-ID,omitempty"`
+}
+
+// ListZoneChangesParams defines parameters for ListZoneChanges.
+type ListZoneChangesParams struct {
+	// Limit The most items the page may have.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Where the page starts: a previous page's `next` link carries it. It's opaque, and only good with the same filters as the page that gave it.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// XFlowID The request's flow ID, to follow it through the logs. A request without a valid one is given one. Either way, the response returns it, and it's the request's `request_id` in nbpdns's logs.
+	XFlowID *FlowID `json:"X-Flow-ID,omitempty"`
+}
+
 // GetStatusParams defines parameters for GetStatus.
 type GetStatusParams struct {
 	// XFlowID The request's flow ID, to follow it through the logs. A request without a valid one is given one. Either way, the response returns it, and it's the request's `request_id` in nbpdns's logs.
@@ -457,6 +735,15 @@ type ServerInterface interface {
 	// GetServerGroup Get a server group
 	// (GET /server-groups/{group})
 	GetServerGroup(w http.ResponseWriter, r *http.Request, group Group, params GetServerGroupParams)
+	// ListZones List a server group's zones
+	// (GET /server-groups/{group}/zones)
+	ListZones(w http.ResponseWriter, r *http.Request, group Group, params ListZonesParams)
+	// GetZone Get a zone of a server group
+	// (GET /server-groups/{group}/zones/{zone})
+	GetZone(w http.ResponseWriter, r *http.Request, group Group, zone ZoneName, params GetZoneParams)
+	// ListZoneChanges List a zone's changes
+	// (GET /server-groups/{group}/zones/{zone}/changes)
+	ListZoneChanges(w http.ResponseWriter, r *http.Request, group Group, zone ZoneName, params ListZoneChangesParams)
 	// GetStatus Get the service's status
 	// (GET /status)
 	GetStatus(w http.ResponseWriter, r *http.Request, params GetStatusParams)
@@ -579,6 +866,239 @@ func (siw *ServerInterfaceWrapper) GetServerGroup(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetServerGroup(w, r, group, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListZones operation middleware
+func (siw *ServerInterfaceWrapper) ListZones(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "group" -------------
+	var group Group
+
+	err = runtime.BindStyledParameterWithOptions("simple", "group", r.PathValue("group"), &group, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "group", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListZonesParams
+
+	// ------------- Optional query parameter "state" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", false, false, "state", r.URL.Query(), &params.State, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "state"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Flow-ID" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Flow-ID")]; found {
+		var XFlowID FlowID
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Flow-ID", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Flow-ID", valueList[0], &XFlowID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Flow-ID", Err: err})
+			return
+		}
+
+		params.XFlowID = &XFlowID
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListZones(w, r, group, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetZone operation middleware
+func (siw *ServerInterfaceWrapper) GetZone(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "group" -------------
+	var group Group
+
+	err = runtime.BindStyledParameterWithOptions("simple", "group", r.PathValue("group"), &group, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "group", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "zone" -------------
+	var zone ZoneName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "zone", r.PathValue("zone"), &zone, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "zone", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetZoneParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Flow-ID" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Flow-ID")]; found {
+		var XFlowID FlowID
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Flow-ID", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Flow-ID", valueList[0], &XFlowID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Flow-ID", Err: err})
+			return
+		}
+
+		params.XFlowID = &XFlowID
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetZone(w, r, group, zone, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListZoneChanges operation middleware
+func (siw *ServerInterfaceWrapper) ListZoneChanges(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "group" -------------
+	var group Group
+
+	err = runtime.BindStyledParameterWithOptions("simple", "group", r.PathValue("group"), &group, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "group", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "zone" -------------
+	var zone ZoneName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "zone", r.PathValue("zone"), &zone, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "zone", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListZoneChangesParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Flow-ID" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Flow-ID")]; found {
+		var XFlowID FlowID
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Flow-ID", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Flow-ID", valueList[0], &XFlowID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Flow-ID", Err: err})
+			return
+		}
+
+		params.XFlowID = &XFlowID
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListZoneChanges(w, r, group, zone, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -752,6 +1272,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/status", wrapper.GetStatus)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/server-groups", wrapper.ListServerGroups)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/server-groups/{group}", wrapper.GetServerGroup)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/server-groups/{group}/zones", wrapper.ListZones)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/server-groups/{group}/zones/{zone}", wrapper.GetZone)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/server-groups/{group}/zones/{zone}/changes", wrapper.ListZoneChanges)
 
 	return m
 }
@@ -928,6 +1451,265 @@ func (response GetServerGroupdefaultApplicationProblemPlusJSONResponse) VisitGet
 	return err
 }
 
+type ListZonesRequestObject struct {
+	Group  Group `json:"group"`
+	Params ListZonesParams
+}
+
+type ListZonesResponseObject interface {
+	VisitListZonesResponse(w http.ResponseWriter) error
+}
+
+type ListZones200ResponseHeaders struct {
+	XFlowID *string
+}
+
+type ListZones200JSONResponse struct {
+	Body    ZonePage
+	Headers ListZones200ResponseHeaders
+}
+
+func (response ListZones200JSONResponse) VisitListZonesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListZones400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListZones400ApplicationProblemPlusJSONResponse) VisitListZonesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListZones404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ListZones404ApplicationProblemPlusJSONResponse) VisitListZonesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListZonesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	Headers    ProblemResponseHeaders
+	StatusCode int
+}
+
+func (response ListZonesdefaultApplicationProblemPlusJSONResponse) VisitListZonesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetZoneRequestObject struct {
+	Group  Group    `json:"group"`
+	Zone   ZoneName `json:"zone"`
+	Params GetZoneParams
+}
+
+type GetZoneResponseObject interface {
+	VisitGetZoneResponse(w http.ResponseWriter) error
+}
+
+type GetZone200ResponseHeaders struct {
+	XFlowID *string
+}
+
+type GetZone200JSONResponse struct {
+	Body    ZoneDetail
+	Headers GetZone200ResponseHeaders
+}
+
+func (response GetZone200JSONResponse) VisitGetZoneResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetZone404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetZone404ApplicationProblemPlusJSONResponse) VisitGetZoneResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetZonedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	Headers    ProblemResponseHeaders
+	StatusCode int
+}
+
+func (response GetZonedefaultApplicationProblemPlusJSONResponse) VisitGetZoneResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListZoneChangesRequestObject struct {
+	Group  Group    `json:"group"`
+	Zone   ZoneName `json:"zone"`
+	Params ListZoneChangesParams
+}
+
+type ListZoneChangesResponseObject interface {
+	VisitListZoneChangesResponse(w http.ResponseWriter) error
+}
+
+type ListZoneChanges200ResponseHeaders struct {
+	XFlowID *string
+}
+
+type ListZoneChanges200JSONResponse struct {
+	Body    ChangePage
+	Headers ListZoneChanges200ResponseHeaders
+}
+
+func (response ListZoneChanges200JSONResponse) VisitListZoneChangesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListZoneChanges400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListZoneChanges400ApplicationProblemPlusJSONResponse) VisitListZoneChangesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListZoneChanges404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ListZoneChanges404ApplicationProblemPlusJSONResponse) VisitListZoneChangesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListZoneChangesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	Headers    ProblemResponseHeaders
+	StatusCode int
+}
+
+func (response ListZoneChangesdefaultApplicationProblemPlusJSONResponse) VisitListZoneChangesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetStatusRequestObject struct {
 	Params GetStatusParams
 }
@@ -989,6 +1771,15 @@ type StrictServerInterface interface {
 	// GetServerGroup Get a server group
 	// (GET /server-groups/{group})
 	GetServerGroup(ctx context.Context, request GetServerGroupRequestObject) (GetServerGroupResponseObject, error)
+	// ListZones List a server group's zones
+	// (GET /server-groups/{group}/zones)
+	ListZones(ctx context.Context, request ListZonesRequestObject) (ListZonesResponseObject, error)
+	// GetZone Get a zone of a server group
+	// (GET /server-groups/{group}/zones/{zone})
+	GetZone(ctx context.Context, request GetZoneRequestObject) (GetZoneResponseObject, error)
+	// ListZoneChanges List a zone's changes
+	// (GET /server-groups/{group}/zones/{zone}/changes)
+	ListZoneChanges(ctx context.Context, request ListZoneChangesRequestObject) (ListZoneChangesResponseObject, error)
 	// GetStatus Get the service's status
 	// (GET /status)
 	GetStatus(ctx context.Context, request GetStatusRequestObject) (GetStatusResponseObject, error)
@@ -1079,6 +1870,89 @@ func (sh *strictHandler) GetServerGroup(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetServerGroupResponseObject); ok {
 		if err := validResponse.VisitGetServerGroupResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListZones operation middleware
+func (sh *strictHandler) ListZones(w http.ResponseWriter, r *http.Request, group Group, params ListZonesParams) {
+	var request ListZonesRequestObject
+
+	request.Group = group
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListZones(ctx, request.(ListZonesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListZones")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListZonesResponseObject); ok {
+		if err := validResponse.VisitListZonesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetZone operation middleware
+func (sh *strictHandler) GetZone(w http.ResponseWriter, r *http.Request, group Group, zone ZoneName, params GetZoneParams) {
+	var request GetZoneRequestObject
+
+	request.Group = group
+	request.Zone = zone
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetZone(ctx, request.(GetZoneRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetZone")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetZoneResponseObject); ok {
+		if err := validResponse.VisitGetZoneResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListZoneChanges operation middleware
+func (sh *strictHandler) ListZoneChanges(w http.ResponseWriter, r *http.Request, group Group, zone ZoneName, params ListZoneChangesParams) {
+	var request ListZoneChangesRequestObject
+
+	request.Group = group
+	request.Zone = zone
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListZoneChanges(ctx, request.(ListZoneChangesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListZoneChanges")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListZoneChangesResponseObject); ok {
+		if err := validResponse.VisitListZoneChangesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

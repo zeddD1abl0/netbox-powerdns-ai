@@ -113,6 +113,39 @@ func TestServe(t *testing.T) {
 	if code, _ := s.api("/api/server-groups/down"); code != http.StatusOK {
 		t.Errorf("/api/server-groups/down: %d", code)
 	}
+	// lab-a's drifted zones, and the drifted zone's changes: www and mail
+	// changed, and the SOA, by its contact, one missing and one extra.
+	code, page = s.api("/api/server-groups/lab-a/zones?state=drift,missing,inactive_in_netbox")
+	var zones struct {
+		Items []struct{ Zone, State string }
+	}
+	if err := json.Unmarshal([]byte(page), &zones); err != nil || code != http.StatusOK {
+		t.Fatalf("lab-a's zones: %d, %v:\n%s", code, err, page)
+	}
+	got = map[string]string{}
+	for _, z := range zones.Items {
+		got[z.Zone] = z.State
+	}
+	if !reflect.DeepEqual(got, map[string]string{f.Drift: "drift", f.Missing: "missing", f.Parked: "inactive_in_netbox"}) {
+		t.Errorf("lab-a's drifted zones in the API: %v", got)
+	}
+	code, page = s.api("/api/server-groups/lab-a/zones/" + f.Drift + "/changes")
+	var changes struct {
+		Items []struct{ Name, Type, Kind string }
+	}
+	if err := json.Unmarshal([]byte(page), &changes); err != nil || code != http.StatusOK {
+		t.Fatalf("the drifted zone's changes: %d, %v:\n%s", code, err, page)
+	}
+	kinds := map[string]int{}
+	for _, c := range changes.Items {
+		kinds[c.Kind]++
+	}
+	if !reflect.DeepEqual(kinds, map[string]int{"changed": 3, "missing": 1, "extra": 1}) {
+		t.Errorf("the drifted zone's changes in the API: %v:\n%s", kinds, page)
+	}
+	if code, _ := s.api("/api/server-groups/lab-a/zones/" + strings.TrimSuffix(f.InSync, ".")); code != http.StatusOK {
+		t.Errorf("the zone in sync, without its final dot: %d", code)
+	}
 	if code := s.stop(); code != exitOK {
 		t.Errorf("exit %d, want 0:\n%s", code, s.stderr)
 	}

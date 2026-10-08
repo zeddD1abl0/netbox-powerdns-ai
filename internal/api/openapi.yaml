@@ -178,6 +178,148 @@ paths:
           $ref: "#/components/responses/NotFound"
         default:
           $ref: "#/components/responses/Problem"
+  /server-groups/{group}/zones:
+    get:
+      operationId: listZones
+      summary: List a server group's zones
+      description: >-
+        Returns a page of the zones of a server group, as of its last
+        successful read, in canonical name order: the zones NetBox assigns
+        to it, and, with the state `unmanaged`, the zones on its primary
+        that NetBox doesn't. A group never read has none, and `as_of` is
+        null.
+      tags: [server-groups]
+      parameters:
+        - $ref: "#/components/parameters/FlowID"
+        - $ref: "#/components/parameters/Group"
+        - name: state
+          in: query
+          description: >-
+            Only the zones in these states, such as `drift,missing`. The
+            drifted states are `drift`, `missing` and `inactive_in_netbox`.
+          style: form
+          explode: false
+          schema:
+            type: array
+            uniqueItems: true
+            items:
+              $ref: "#/components/schemas/ZoneState"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of the group's zones.
+          headers:
+            X-Flow-ID:
+              $ref: "#/components/headers/FlowID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ZonePage"
+              example:
+                self: https://nbpdns.example.com/api/server-groups/site-a/zones?state=drift
+                next: null
+                as_of: "2026-10-08T01:10:02Z"
+                items:
+                  - zone: example.com.
+                    view: _default_
+                    policy: report
+                    state: drift
+                    netbox_serial: 2026100801
+                    powerdns_serial: 2026100701
+                    change_count: 2
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        default:
+          $ref: "#/components/responses/Problem"
+  /server-groups/{group}/zones/{zone}:
+    get:
+      operationId: getZone
+      summary: Get a zone of a server group
+      description: Returns one zone of a server group, as of the group's last successful read.
+      tags: [server-groups]
+      parameters:
+        - $ref: "#/components/parameters/FlowID"
+        - $ref: "#/components/parameters/Group"
+        - $ref: "#/components/parameters/ZoneName"
+      responses:
+        "200":
+          description: The zone.
+          headers:
+            X-Flow-ID:
+              $ref: "#/components/headers/FlowID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ZoneDetail"
+              example:
+                zone: example.com.
+                view: _default_
+                policy: report
+                state: drift
+                netbox_serial: 2026100801
+                powerdns_serial: 2026100701
+                change_count: 2
+                as_of: "2026-10-08T01:10:02Z"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        default:
+          $ref: "#/components/responses/Problem"
+  /server-groups/{group}/zones/{zone}/changes:
+    get:
+      operationId: listZoneChanges
+      summary: List a zone's changes
+      description: >-
+        Returns a page of the RRsets of a zone that differ between NetBox
+        and the group's primary, as of the group's last successful read, in
+        canonical order: by owner name, then the SOA, then NS, then the
+        other types. A zone in sync has none.
+      tags: [server-groups]
+      parameters:
+        - $ref: "#/components/parameters/FlowID"
+        - $ref: "#/components/parameters/Group"
+        - $ref: "#/components/parameters/ZoneName"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of the zone's changes.
+          headers:
+            X-Flow-ID:
+              $ref: "#/components/headers/FlowID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChangePage"
+              example:
+                self: https://nbpdns.example.com/api/server-groups/site-a/zones/example.com./changes
+                next: null
+                as_of: "2026-10-08T01:10:02Z"
+                items:
+                  - name: www.example.com.
+                    type: A
+                    kind: changed
+                    netbox:
+                      ttl: 300
+                      values: [192.0.2.10]
+                    powerdns:
+                      ttl: 300
+                      values: [192.0.2.99]
+                  - name: old.example.com.
+                    type: CNAME
+                    kind: extra
+                    netbox: null
+                    powerdns:
+                      ttl: 3600
+                      values: [www.example.com.]
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        default:
+          $ref: "#/components/responses/Problem"
 components:
   parameters:
     FlowID:
@@ -220,6 +362,18 @@ components:
       schema:
         type: string
         pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"
+    ZoneName:
+      name: zone
+      in: path
+      required: true
+      description: >-
+        The zone's name, with or without its final dot, such as
+        `example.com`. Internationalized names are given in their ASCII
+        form, such as `xn--bcher-kva.example`.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
   headers:
     FlowID:
       description: The request's flow ID, as sent, or as nbpdns made it.
@@ -598,10 +752,10 @@ components:
           minimum: 0
           description: Zones on the primary that NetBox doesn't assign to the group. They aren't drift.
           examples: [2]
-    ServerGroupPage:
+    PageLinks:
       type: object
-      description: One page of the server groups, with the links to it and to the next.
-      required: [self, next, items]
+      description: The links of a page of a list (Zalando [248]).
+      required: [self, next]
       properties:
         self:
           type: string
@@ -613,19 +767,191 @@ components:
           format: uri
           description: The next page's absolute URL, or null on the last page.
           examples: ["https://nbpdns.example.com/api/server-groups?cursor=eyJhIjoic2l0ZS1iIn0&limit=2"]
-        items:
+    ServerGroupPage:
+      description: One page of the server groups, with the links to it and to the next.
+      allOf:
+        - $ref: "#/components/schemas/PageLinks"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/ServerGroup"
+              description: The page's server groups.
+              examples:
+                - - name: site-a
+                    primary_url: https://pdns-a.example.com:8443
+                    views: [_default_]
+                    drift_policy: report
+                    status: unknown
+                    error: null
+                    last_success: null
+                    counts: null
+                    problem_count: null
+                    warning_count: null
+    ZoneState:
+      type: string
+      description: >-
+        A zone's state: `in_sync` if the primary serves it as NetBox says,
+        `drift` if its RRsets differ, `missing` if the primary doesn't serve
+        an active NetBox zone, `inactive_in_netbox` if the primary serves a
+        zone that isn't active in NetBox, `ignored` if its drift policy is
+        `ignore`, and `unmanaged` if the primary serves a zone that NetBox
+        doesn't assign to the group.
+      enum: [in_sync, drift, missing, inactive_in_netbox, ignored, unmanaged]
+      examples: [drift]
+    Zone:
+      type: object
+      description: A zone of a server group, as of the group's last successful read.
+      required: [zone, view, policy, state, netbox_serial, powerdns_serial, change_count]
+      properties:
+        zone:
+          type: string
+          description: The zone's absolute name, with its final dot.
+          examples: [example.com.]
+        view:
+          type: [string, "null"]
+          description: The zone's NetBox view, or null for an unmanaged zone, which NetBox doesn't have.
+          examples: [_default_]
+        policy:
+          description: The zone's drift policy, or null for an unmanaged zone.
+          examples: [report]
+          oneOf:
+            - $ref: "#/components/schemas/DriftPolicy"
+            - type: "null"
+        state:
+          $ref: "#/components/schemas/ZoneState"
+        netbox_serial:
+          type: [integer, "null"]
+          format: int64
+          minimum: 0
+          maximum: 4294967295
+          description: The zone's SOA serial in NetBox, or null. Serials aren't compared.
+          examples: [2026100801]
+        powerdns_serial:
+          type: [integer, "null"]
+          format: int64
+          minimum: 0
+          maximum: 4294967295
+          description: The zone's SOA serial on the primary, or null if it doesn't serve the zone.
+          examples: [2026100701]
+        change_count:
+          type: integer
+          format: int64
+          minimum: 0
+          description: How many of the zone's RRsets differ, which `changes` lists.
+          examples: [2]
+    ZoneDetail:
+      description: A zone of a server group, and when the group was last read.
+      allOf:
+        - $ref: "#/components/schemas/Zone"
+        - type: object
+          required: [as_of]
+          properties:
+            as_of:
+              type: string
+              format: date-time
+              description: When the group was last read and compared, its `last_success`.
+              examples: ["2026-10-08T01:10:02Z"]
+    ZonePage:
+      description: One page of a server group's zones, with the links to it and to the next.
+      allOf:
+        - $ref: "#/components/schemas/PageLinks"
+        - type: object
+          required: [as_of, items]
+          properties:
+            as_of:
+              type: [string, "null"]
+              format: date-time
+              description: What the zones are as of, the group's `last_success`, or null if the group was never read.
+              examples: ["2026-10-08T01:10:02Z"]
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Zone"
+              description: The page's zones.
+              examples:
+                - - zone: example.com.
+                    view: _default_
+                    policy: report
+                    state: in_sync
+                    netbox_serial: 2026100801
+                    powerdns_serial: 2026100801
+                    change_count: 0
+    ChangeKind:
+      type: string
+      description: >-
+        How an RRset differs: `missing` if NetBox has it and the primary
+        doesn't serve it, `extra` if the primary serves it and NetBox
+        doesn't have it, and `changed` if its values or TTL differ.
+      enum: [missing, extra, changed]
+      examples: [changed]
+    Side:
+      type: object
+      description: An RRset as one side serves it.
+      required: [ttl, values]
+      properties:
+        ttl:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 4294967295
+          description: The RRset's TTL, in seconds.
+          examples: [300]
+        values:
           type: array
           items:
-            $ref: "#/components/schemas/ServerGroup"
-          description: The page's server groups.
-          examples:
-            - - name: site-a
-                primary_url: https://pdns-a.example.com:8443
-                views: [_default_]
-                drift_policy: report
-                status: unknown
-                error: null
-                last_success: null
-                counts: null
-                problem_count: null
-                warning_count: null
+            type: string
+          description: The RRset's values, normalized and sorted.
+          examples: [[192.0.2.10]]
+    Change:
+      type: object
+      description: An RRset that differs between NetBox and the group's primary.
+      required: [name, type, kind, netbox, powerdns]
+      properties:
+        name:
+          type: string
+          description: The RRset's absolute owner name.
+          examples: [www.example.com.]
+        type:
+          type: string
+          description: The RRset's type, such as `A`.
+          examples: [A]
+        kind:
+          $ref: "#/components/schemas/ChangeKind"
+        netbox:
+          description: The RRset as NetBox has it, or null if NetBox doesn't.
+          examples: [{ttl: 300, values: [192.0.2.10]}]
+          oneOf:
+            - $ref: "#/components/schemas/Side"
+            - type: "null"
+        powerdns:
+          description: The RRset as the primary serves it, or null if it doesn't.
+          examples: [{ttl: 300, values: [192.0.2.99]}]
+          oneOf:
+            - $ref: "#/components/schemas/Side"
+            - type: "null"
+    ChangePage:
+      description: One page of a zone's changes, with the links to it and to the next.
+      allOf:
+        - $ref: "#/components/schemas/PageLinks"
+        - type: object
+          required: [as_of, items]
+          properties:
+            as_of:
+              type: string
+              format: date-time
+              description: When the group was last read and compared.
+              examples: ["2026-10-08T01:10:02Z"]
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Change"
+              description: The page's changes.
+              examples:
+                - - name: www.example.com.
+                    type: A
+                    kind: missing
+                    netbox: {ttl: 300, values: [192.0.2.10]}
+                    powerdns: null

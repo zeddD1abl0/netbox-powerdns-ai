@@ -24,7 +24,7 @@ the request's own, if it sent a valid one, or a new one. It's the request's
 | `/readyz` | `503` until the first drift refresh has finished, whatever its outcome; then `200 ready`. |
 | `/status` | The service's state, as text for a person, or as JSON with `?json=1`. |
 | `/metrics` | The metrics, in Prometheus's text format, or in OpenMetrics if the scraper asks for it. The [metrics reference](metrics.md) lists them. |
-| `/api/…` | The API, as JSON: the service's status, at `/api/status`, and the server groups, at `/api/server-groups`, each with its last-known state. Lists are paged with `limit` and `cursor`. Every operation is in the OpenAPI document. |
+| `/api/…` | The API, as JSON: the service's status, at `/api/status`; the server groups, at `/api/server-groups`; each group's zones, filtered by state; and each zone's changes. Everything is last-known state. Lists are paged with `limit` and `cursor`. Every operation is in the OpenAPI document. |
 | `/api/openapi.yaml` | The API's OpenAPI 3.1 document, `application/yaml`, which describes every operation under `/api`. |
 
 Neither `/livez` nor `/readyz` depends on NetBox or the primaries: their
