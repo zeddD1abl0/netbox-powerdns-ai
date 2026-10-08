@@ -84,6 +84,16 @@ var (
 	defRefreshDuration = def{name: "nbpdns_drift_refresh_duration_seconds", kind: histogram,
 		buckets: []float64{1, 5, 10, 30, 60, 120, 300, 600, 1200},
 		help:    "How long each drift refresh took."}
+	defZoneRefreshes = def{name: "nbpdns_drift_zone_refreshes_total", kind: counter, labels: []string{"outcome"},
+		values: map[string][]string{"outcome": Outcomes},
+		help: "Zone refreshes finished, by outcome: refreshes of only the zones that NetBox's webhooks named. " +
+			"Incomplete if a server group couldn't be read, and failed if NetBox couldn't be read. " +
+			"A webhook that asks for a full refresh is counted in `nbpdns_drift_refreshes_total`."}
+	defZoneRefreshDuration = def{name: "nbpdns_drift_zone_refresh_duration_seconds", kind: histogram,
+		buckets: []float64{0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60},
+		help:    "How long each zone refresh took."}
+	defPendingZones = def{name: "nbpdns_drift_pending_zones", kind: gauge,
+		help: "The zones that NetBox's webhooks named, waiting for their refresh."}
 	defLastRefresh = def{name: "nbpdns_drift_last_refresh_timestamp_seconds", kind: gauge,
 		help: "When the last drift refresh finished, whatever its outcome, as a Unix time. It has no value before the first."}
 	defLastComplete = def{name: "nbpdns_drift_last_complete_refresh_timestamp_seconds", kind: gauge,
@@ -134,7 +144,8 @@ var (
 		help: "1, with the running build's version, VCS revision, and Go version."}
 
 	defs = []def{
-		defRefreshes, defRefreshDuration, defLastRefresh, defLastComplete,
+		defRefreshes, defRefreshDuration, defZoneRefreshes, defZoneRefreshDuration, defPendingZones,
+		defLastRefresh, defLastComplete,
 		defZones, defRRsetChanges, defZoneDrifted, defProblems, defWarnings,
 		defNetBoxUp, defGroupUp, defGroupLastSuccess,
 		defRequests, defRequestDuration, defRetries, defAPIRequests, defAPIRequestDuration,
@@ -146,8 +157,11 @@ var (
 type Metrics struct {
 	Registry *prometheus.Registry
 
-	Refreshes       *prometheus.CounterVec
-	RefreshDuration prometheus.Histogram
+	Refreshes           *prometheus.CounterVec
+	RefreshDuration     prometheus.Histogram
+	ZoneRefreshes       *prometheus.CounterVec
+	ZoneRefreshDuration prometheus.Histogram
+	PendingZones        prometheus.Gauge
 	// LastRefresh, LastCompleteRefresh and NetBoxUp have no labels. They're
 	// vectors so that they have no series until they're first set, which
 	// would otherwise read as a refresh at 1970 and NetBox down.
@@ -179,6 +193,9 @@ func New(info version.Info) *Metrics {
 		Registry:            reg,
 		Refreshes:           register(reg, prometheus.NewCounterVec(counterOpts(defRefreshes), defRefreshes.labels)),
 		RefreshDuration:     register(reg, prometheus.NewHistogram(histogramOpts(defRefreshDuration))),
+		ZoneRefreshes:       register(reg, prometheus.NewCounterVec(counterOpts(defZoneRefreshes), defZoneRefreshes.labels)),
+		ZoneRefreshDuration: register(reg, prometheus.NewHistogram(histogramOpts(defZoneRefreshDuration))),
+		PendingZones:        register(reg, prometheus.NewGauge(gaugeOpts(defPendingZones))),
 		LastRefresh:         register(reg, prometheus.NewGaugeVec(gaugeOpts(defLastRefresh), nil)),
 		LastCompleteRefresh: register(reg, prometheus.NewGaugeVec(gaugeOpts(defLastComplete), nil)),
 		Zones:               register(reg, prometheus.NewGaugeVec(gaugeOpts(defZones), defZones.labels)),
@@ -202,6 +219,7 @@ func New(info version.Info) *Metrics {
 	// the first failure.
 	for _, o := range Outcomes {
 		m.Refreshes.WithLabelValues(o)
+		m.ZoneRefreshes.WithLabelValues(o)
 	}
 	for _, r := range WebhookResults {
 		m.webhooks.WithLabelValues(r)

@@ -15,9 +15,9 @@ import (
 
 // NetBox reads NetBox's zones for the report.
 type NetBox interface {
-	// Zones lists the zones in views, or only the one named zone if it isn't
-	// empty, without their RRsets.
-	Zones(ctx context.Context, views []string, zone string) ([]dns.Zone, error)
+	// Zones lists the zones in views, or only those with names, absolute
+	// names, if names isn't nil, without their RRsets.
+	Zones(ctx context.Context, views, names []string) ([]dns.Zone, error)
 	// Read reads zones, as Zones listed them, with their RRsets, and returns
 	// them with the problems normalization found.
 	Read(ctx context.Context, zones []dns.Zone) ([]dns.Zone, []dns.Problem, error)
@@ -49,11 +49,24 @@ func (e *ZoneNotFoundError) Error() string {
 	return fmt.Sprintf("zone %s isn't in any server group's NetBox views, or on any group's primary", e.Zone)
 }
 
+// A ZoneRef names a zone in a NetBox view.
+type ZoneRef struct {
+	View string
+	// Name is the zone's absolute name.
+	Name string
+}
+
 // Options say what Run compares, and how.
 type Options struct {
 	// Zone, if it isn't empty, is the one zone compared, as an absolute
 	// name.
 	Zone string
+	// Zones, if it isn't nil, makes Run a zone refresh (ADR-0035): each
+	// group compares only the zones of Zones in its views, by name, in each
+	// of its views, as a full comparison would compare them. A group with
+	// none isn't compared, and isn't in the report. Unlike Zone, a zone
+	// that neither side has isn't an error: it was deleted.
+	Zones []ZoneRef
 	// Concurrency is how many groups are listed, read and compared at once.
 	// Below 1, it's 1.
 	Concurrency int
@@ -66,7 +79,14 @@ type Options struct {
 	ReadNetBox bool
 }
 
-// Run compares every group, or only the zone o names. It lists NetBox's
+// A Scope is what a zone refresh compared: the zones with Names, absolute
+// names, in Views.
+type Scope struct {
+	Views []string
+	Names []string
+}
+
+// Run compares every group, or only the zones o names. It lists NetBox's
 // zones once, for every group's views, then each group's primary's zones.
 // It then reads RRsets, from NetBox once and from each primary, only for the
 // zones it compares, and compares each group. Up to o.Concurrency groups are
@@ -78,15 +98,41 @@ type Options struct {
 // sync.
 func Run(ctx context.Context, nb NetBox, groups []Group, o Options) (Report, error) {
 	zone := o.Zone
-	var views []string
-	for _, g := range groups {
+	// The names each group compares: nil for every zone.
+	names := make([][]string, len(groups))
+	switch {
+	case o.Zones != nil:
+		var kept []Group
+		var keptNames [][]string
+		for _, g := range groups {
+			if n := namesIn(o.Zones, g.Config.Views); len(n) > 0 {
+				kept, keptNames = append(kept, g), append(keptNames, n)
+			}
+		}
+		groups, names = kept, keptNames
+	case zone != "":
+		for i := range names {
+			names[i] = []string{zone}
+		}
+	}
+	var views, allNames []string
+	for i, g := range groups {
 		for _, v := range g.Config.Views {
 			if !slices.Contains(views, v) {
 				views = append(views, v)
 			}
 		}
+		for _, n := range names[i] {
+			if !slices.Contains(allNames, n) {
+				allNames = append(allNames, n)
+			}
+		}
 	}
-	listed, err := nb.Zones(ctx, views, zone)
+	if o.Zones != nil && len(groups) == 0 {
+		// No group serves them, so there's nothing to read.
+		return Report{Complete: true, Groups: []GroupReport{}, NetBox: []dns.Zone{}, Scope: &Scope{}}, nil
+	}
+	listed, err := nb.Zones(ctx, views, allNames)
 	if err != nil {
 		return Report{}, err
 	}
@@ -102,9 +148,9 @@ func Run(ctx context.Context, nb NetBox, groups []Group, o Options) (Report, err
 	states := make([]state, len(groups))
 	each(len(groups), o.Concurrency, func(i int) {
 		g, st := groups[i], &states[i]
-		st.cfg, st.nb, st.err = forZone(g.Config, zone), inViews(listed, g.Config.Views), g.Err
+		st.cfg, st.nb, st.err = forZones(g.Config, names[i]), named(inViews(listed, g.Config.Views), names[i]), g.Err
 		if st.err == nil {
-			st.pd, st.err = g.Primary.Zones(ctx, zone)
+			st.pd, st.err = listPrimary(ctx, g.Primary, names[i])
 		}
 	})
 	needed := map[id]dns.Zone{}
@@ -148,6 +194,12 @@ func Run(ctx context.Context, nb NetBox, groups []Group, o Options) (Report, err
 		reports[i] = compareGroup(ctx, g.Primary, st.cfg, nbZones, st.pd, nbProbs)
 	})
 	r := Report{Complete: true, Groups: []GroupReport{}}
+	if o.Zones != nil {
+		r.Scope = &Scope{Views: views, Names: allNames}
+		for i := range reports {
+			reports[i].Compared = names[i]
+		}
+	}
 	if o.ReadNetBox {
 		r.NetBox, r.NetBoxErr = readRest(ctx, nb, listed, read, func(z dns.Zone) bool {
 			_, ok := needed[id{z.View, z.Name}]
@@ -220,19 +272,60 @@ func each(n, limit int, fn func(i int)) {
 	wg.Wait()
 }
 
-// forZone returns g as Run compares it: with only zone's policy, if zone
-// isn't empty. Then only that zone is listed, so the other zones' policies
-// can't be checked against NetBox's.
-func forZone(g config.Group, zone string) config.Group {
-	if zone == "" {
+// forZones returns g as Run compares it: with only the policies of the
+// zones named names, unless names is nil. Then only those zones are listed,
+// so the other zones' policies can't be checked against NetBox's.
+func forZones(g config.Group, names []string) config.Group {
+	if names == nil {
 		return g
 	}
 	policies := map[string]string{}
-	if p, ok := g.ZonePolicies[zone]; ok {
-		policies[zone] = p
+	for _, n := range names {
+		if p, ok := g.ZonePolicies[n]; ok {
+			policies[n] = p
+		}
 	}
 	g.ZonePolicies = policies
 	return g
+}
+
+// namesIn returns the names of zones in views, each once, in order.
+func namesIn(zones []ZoneRef, views []string) []string {
+	var out []string
+	for _, z := range zones {
+		if slices.Contains(views, z.View) && !slices.Contains(out, z.Name) {
+			out = append(out, z.Name)
+		}
+	}
+	return out
+}
+
+// named returns the zones named names, or every zone if names is nil.
+func named(zones []dns.Zone, names []string) []dns.Zone {
+	if names == nil {
+		return zones
+	}
+	var out []dns.Zone
+	for _, z := range zones {
+		if slices.Contains(names, z.Name) {
+			out = append(out, z)
+		}
+	}
+	return out
+}
+
+// listPrimary lists p's zones named names, or every zone if names is nil.
+// One zone is looked up; any more are filtered from the list of every zone,
+// which is one request.
+func listPrimary(ctx context.Context, p Primary, names []string) ([]dns.Zone, error) {
+	if len(names) == 1 {
+		return p.Zones(ctx, names[0])
+	}
+	zones, err := p.Zones(ctx, "")
+	if err != nil {
+		return nil, err
+	}
+	return named(zones, names), nil
 }
 
 // compared reports whether g compares the NetBox zone z, if its primary has
@@ -244,7 +337,7 @@ func compared(g config.Group, z dns.Zone) bool {
 // failed returns the report of group, which couldn't be read.
 func failed(group string, err error) GroupReport {
 	return GroupReport{Group: group, Status: StatusFailed, Error: err.Error(), Zones: []ZoneReport{},
-		Unmanaged: []string{}, Problems: []dns.Problem{}, Warnings: []string{}}
+		Unmanaged: []string{}, Problems: []dns.Problem{}, Warnings: []Warning{}}
 }
 
 // compareGroup reads the RRsets of the zones that group g compares from its

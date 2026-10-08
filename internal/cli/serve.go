@@ -34,6 +34,8 @@ func newServeCmd(a *app) *cobra.Command {
 			"  /readyz   200 once the first refresh has finished\n" +
 			"  /status   the service's state, as text, or as JSON with ?json=1\n" +
 			"  /metrics  the drift, refresh and request metrics, for Prometheus\n\n" +
+			"With netbox.webhook_secret set, NetBox's signed webhooks at /api/netbox-events\n" +
+			"refresh the zones they name, once they stop coming for drift.webhook_delay.\n\n" +
 			"Each refresh is its own trace, exported if otlp.endpoint is set. nbpdns only\n" +
 			"reads, and changes nothing. It stops on SIGINT or SIGTERM, and exits 0.",
 		Args: usageArgs(cobra.NoArgs),
@@ -64,20 +66,22 @@ func newServeCmd(a *app) *cobra.Command {
 				primaries[i] = service.Group{Name: g.Name, URL: g.Primary.URL, Views: g.Views, DriftPolicy: g.DriftPolicy}
 			}
 			svc := service.New(service.Options{
-				Refresh: func(ctx context.Context) (drift.Report, error) {
+				Refresh: func(ctx context.Context, zones []drift.ZoneRef) (drift.Report, error) {
 					s.retryClients(ctx, clients)
-					// The API serves NetBox's records too (ADR-0033).
-					return s.compare(ctx, nbc, clients, drift.Options{ReadNetBox: true})
+					// The API serves NetBox's records too (ADR-0033), and a
+					// webhook's refresh compares only its zones (ADR-0035).
+					return s.compare(ctx, nbc, clients, drift.Options{ReadNetBox: true, Zones: zones})
 				},
-				Interval:  s.cfg.Drift.Interval,
-				Timeout:   s.cfg.Drift.Timeout,
-				Log:       s.log,
-				Tracer:    s.tracer,
-				Metrics:   s.metrics,
-				Version:   version.Get(),
-				NetBoxURL: s.cfg.NetBox.URL,
-				Groups:    primaries,
-				OTLP:      service.OTLP{Endpoint: s.cfg.OTLP.Endpoint, Protocol: s.cfg.OTLP.Protocol},
+				Interval:     s.cfg.Drift.Interval,
+				Timeout:      s.cfg.Drift.Timeout,
+				WebhookDelay: s.cfg.Drift.WebhookDelay,
+				Log:          s.log,
+				Tracer:       s.tracer,
+				Metrics:      s.metrics,
+				Version:      version.Get(),
+				NetBoxURL:    s.cfg.NetBox.URL,
+				Groups:       primaries,
+				OTLP:         service.OTLP{Endpoint: s.cfg.OTLP.Endpoint, Protocol: s.cfg.OTLP.Protocol},
 			})
 			return serve(ctx, s, svc)
 		})
@@ -110,8 +114,10 @@ func serve(ctx context.Context, s *session, svc *service.Service) error {
 	}
 	// The API (ADR-0033) is under /api, beside the service's own endpoints.
 	mux := http.NewServeMux()
+	// NetBox's webhooks queue the service's zone refreshes (ADR-0035).
 	mux.Handle("/api/", api.New(api.Options{
 		Source: svc, Log: s.log, Tracer: s.tracer, Metrics: s.metrics, PublicURL: s.cfg.Server.PublicURL,
+		WebhookSecret: s.cfg.NetBox.WebhookSecret, Events: svc,
 	}))
 	mux.Handle("/", svc.Handler())
 	srv := &http.Server{

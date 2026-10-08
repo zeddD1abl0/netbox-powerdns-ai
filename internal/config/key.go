@@ -217,6 +217,25 @@ func durationKeyAtLeast(dst *time.Duration, k Key, least time.Duration) Key {
 	return k
 }
 
+// durationKeyWithin is durationKey, for a duration from least to most.
+func durationKeyWithin(dst *time.Duration, k Key, least, most time.Duration) Key {
+	k = durationKeyAtLeast(dst, k, least)
+	k.typ = "duration, from `" + least.String() + "` to `" + most.String() + "`"
+	parse := k.parse
+	k.parse = func(raw any) error {
+		old := *dst
+		if err := parse(raw); err != nil {
+			return err
+		}
+		if d := *dst; d > most {
+			*dst = old
+			return fmt.Errorf("%s is longer than %s", d, most)
+		}
+		return nil
+	}
+	return k
+}
+
 // checkListen accepts a TCP address to listen on, such as :8080 or
 // 127.0.0.1:8080.
 func checkListen(s string) error {

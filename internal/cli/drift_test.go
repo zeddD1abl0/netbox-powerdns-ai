@@ -46,7 +46,7 @@ func TestWriteDrift(t *testing.T) {
 				{Zone: "d.example.", State: drift.StateIgnored},
 			},
 			Unmanaged: []string{"z.example."},
-			Warnings:  []string{"zone_policies names gone.example., which isn't in any of the group's NetBox views"},
+			Warnings:  []drift.Warning{{Zone: "gone.example.", Text: "zone_policies names gone.example., which isn't in any of the group's NetBox views"}},
 			Problems:  []dns.Problem{{Zone: "b.example.", Name: "bad.b.example.", Type: "A", Detail: "kept as given"}}},
 		{Group: "site-b", Status: drift.StatusFailed, Error: "PowerDNS at http://x/ isn't reachable"},
 	}}

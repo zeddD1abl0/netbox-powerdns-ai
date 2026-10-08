@@ -27,6 +27,9 @@ type DriftConfig struct {
 	Interval time.Duration
 	// Timeout bounds a refresh.
 	Timeout time.Duration
+	// WebhookDelay is how long `nbpdns serve` waits for NetBox's webhooks
+	// to stop before it refreshes the zones they named (ADR-0035).
+	WebhookDelay time.Duration
 }
 
 // ServerConfig configures the listener of `nbpdns serve`.
@@ -199,6 +202,14 @@ func keys(c *Config) []Key {
 				"a slow refresh says nothing about what PowerDNS serves. The next one starts on schedule.",
 			Default: "10m",
 		}),
+		durationKeyWithin(&c.Drift.WebhookDelay, Key{
+			Name:    "drift.webhook_delay",
+			Summary: "How long `nbpdns serve` waits for NetBox's webhooks to stop coming before it refreshes the zones they named.",
+			Details: "One change in NetBox sends several events, and a bulk edit sends thousands, so nbpdns gathers them, " +
+				"and refreshes once no event has come for this long, or 30 seconds after the first, whichever is sooner. " +
+				"Only with `netbox.webhook_secret` set.",
+			Default: "3s",
+		}, 100*time.Millisecond, 30*time.Second),
 		stringKey(&c.Server.Listen, "a TCP address", "address", Key{
 			Name:    "server.listen",
 			Summary: "The address `nbpdns serve` listens on, for `/livez`, `/readyz`, `/status`, `/metrics`, and the API, `/api`.",

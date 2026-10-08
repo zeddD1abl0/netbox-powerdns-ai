@@ -23,7 +23,7 @@ func threeGroups() fakeSource {
 		Group: "site-a", Status: drift.StatusOK,
 		Counts:   drift.Counts{InSync: 980, Drift: 15, Missing: 5, Ignored: 1, Unmanaged: 2},
 		Problems: []dns.Problem{{Zone: "example.com.", Detail: "a CNAME beside other data"}},
-		Warnings: []string{},
+		Warnings: []drift.Warning{},
 	}
 	return fakeSource{groups: []service.GroupView{
 		{
@@ -34,7 +34,7 @@ func threeGroups() fakeSource {
 		{
 			Group:  service.Group{Name: "site-b", URL: "https://pdns-b.example.com:8443", Views: []string{"_default_"}, DriftPolicy: "enforce"},
 			Info:   service.GroupInfo{Name: "site-b", Status: "failed", Error: "the primary isn't reachable", LastSuccess: &last},
-			Report: &drift.GroupReport{Group: "site-b", Status: drift.StatusOK, Problems: []dns.Problem{}, Warnings: []string{"w"}},
+			Report: &drift.GroupReport{Group: "site-b", Status: drift.StatusOK, Problems: []dns.Problem{}, Warnings: []drift.Warning{{Text: "w"}}},
 		},
 		{
 			Group: service.Group{Name: "site-c", URL: "http://pdns-c.example.com:8081", Views: []string{"lab"}, DriftPolicy: "ignore"},

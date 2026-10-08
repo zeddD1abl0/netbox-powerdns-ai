@@ -22,6 +22,7 @@ func filled(t *testing.T) *Metrics {
 	t.Helper()
 	m := New(info)
 	m.RefreshDuration.Observe(12)
+	m.ZoneRefreshDuration.Observe(0.3)
 	m.LastRefresh.WithLabelValues().SetToCurrentTime()
 	m.LastCompleteRefresh.WithLabelValues().SetToCurrentTime()
 	m.Zones.WithLabelValues("site-a", "in_sync").Set(3)

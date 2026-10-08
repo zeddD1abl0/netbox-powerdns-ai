@@ -127,3 +127,5 @@ jq
 [Ww]ebhook's
 CI's
 [Mm]iddleware
+netbox\.webhook_secret
+netbox-events

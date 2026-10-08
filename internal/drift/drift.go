@@ -5,6 +5,7 @@
 package drift
 
 import (
+	"encoding/json"
 	"fmt"
 	"maps"
 	"slices"
@@ -133,9 +134,29 @@ type GroupReport struct {
 	Problems []dns.Problem `json:"problems"`
 	// Warnings are problems with the configuration or NetBox's data that
 	// the report worked around.
-	Warnings []string `json:"warnings"`
-	Counts   Counts   `json:"counts"`
+	Warnings []Warning `json:"warnings"`
+	Counts   Counts    `json:"counts"`
+	// Compared, for a zone refresh (Options.Zones), are the names of the
+	// zones it compared, which Merge replaces in the group's last report.
+	// It's nil for a full comparison, and isn't part of the report's JSON.
+	Compared []string `json:"-"`
 }
+
+// A Warning is a problem with the configuration or NetBox's data that the
+// report worked around. In JSON, it's its text.
+type Warning struct {
+	// Zone is the zone it's about.
+	Zone string
+	Text string
+}
+
+func (w Warning) String() string { return w.Text }
+
+// MarshalJSON writes the warning as its text.
+func (w Warning) MarshalJSON() ([]byte, error) { return json.Marshal(w.Text) }
+
+// UnmarshalJSON reads a warning from its text.
+func (w *Warning) UnmarshalJSON(b []byte) error { return json.Unmarshal(b, &w.Text) }
 
 // A Report is the comparison of every group.
 type Report struct {
@@ -151,6 +172,10 @@ type Report struct {
 	// the report's JSON.
 	NetBox    []dns.Zone `json:"-"`
 	NetBoxErr error      `json:"-"`
+	// Scope, for a zone refresh (Options.Zones), is what it compared, and
+	// listed NetBox for: NetBox's zones with those names in those views are
+	// the ones in NetBox. It's nil for a full comparison.
+	Scope *Scope `json:"-"`
 }
 
 // Compare compares group g's NetBox zones, nb, which are the zones of its
@@ -159,7 +184,7 @@ type Report struct {
 // found in either side's zones; Compare keeps the ones of g's zones.
 func Compare(g config.Group, nb, pd []dns.Zone, probs []dns.Problem) GroupReport {
 	r := GroupReport{Group: g.Name, Status: StatusOK, Zones: []ZoneReport{}, Unmanaged: []string{},
-		Problems: []dns.Problem{}, Warnings: []string{}}
+		Problems: []dns.Problem{}, Warnings: []Warning{}}
 	primary := map[string]dns.Zone{}
 	for _, z := range pd {
 		primary[z.Name] = z
@@ -167,8 +192,8 @@ func Compare(g config.Group, nb, pd []dns.Zone, probs []dns.Problem) GroupReport
 	netbox := map[string]dns.Zone{}
 	for _, z := range sortByView(nb) {
 		if first, ok := netbox[z.Name]; ok {
-			r.Warnings = append(r.Warnings, fmt.Sprintf("zone %s is in the views %s and %s, which one server can't both serve; "+
-				"the one in %s is compared", z.Name, first.View, z.View, first.View))
+			r.Warnings = append(r.Warnings, Warning{Zone: z.Name, Text: fmt.Sprintf("zone %s is in the views %s and %s, "+
+				"which one server can't both serve; the one in %s is compared", z.Name, first.View, z.View, first.View)})
 			continue
 		}
 		netbox[z.Name] = z
@@ -207,7 +232,8 @@ func Compare(g config.Group, nb, pd []dns.Zone, probs []dns.Problem) GroupReport
 	}
 	for _, zone := range slices.Sorted(maps.Keys(g.ZonePolicies)) {
 		if _, ok := netbox[zone]; !ok {
-			r.Warnings = append(r.Warnings, fmt.Sprintf("zone_policies names %s, which isn't in any of the group's NetBox views", zone))
+			r.Warnings = append(r.Warnings, Warning{Zone: zone,
+				Text: fmt.Sprintf("zone_policies names %s, which isn't in any of the group's NetBox views", zone)})
 		}
 	}
 	// A NetBox problem is the group's only if it's in the zone compared, of

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 	"sync"
 	"time"
 
@@ -23,8 +24,10 @@ import (
 )
 
 // A RefreshFunc reads NetBox and every group's primary, and compares them,
-// as `nbpdns drift` does. Its error means NetBox couldn't be read.
-type RefreshFunc func(ctx context.Context) (drift.Report, error)
+// as `nbpdns drift` does: every zone, or, if zones isn't nil, only those, as
+// drift.Options.Zones does (ADR-0035). Its error means NetBox couldn't be
+// read.
+type RefreshFunc func(ctx context.Context, zones []drift.ZoneRef) (drift.Report, error)
 
 // Options configure a Service.
 type Options struct {
@@ -33,9 +36,12 @@ type Options struct {
 	Interval time.Duration
 	// Timeout bounds a refresh.
 	Timeout time.Duration
-	Log     *slog.Logger
-	Tracer  trace.Tracer
-	Metrics *metrics.Metrics
+	// WebhookDelay is how long the zones that NetBox's webhooks name wait
+	// for the webhooks to stop: drift.webhook_delay. Zero is 3 seconds.
+	WebhookDelay time.Duration
+	Log          *slog.Logger
+	Tracer       trace.Tracer
+	Metrics      *metrics.Metrics
 
 	// What /status and the API show besides the refreshes: the build,
 	// NetBox's URL, each group, in the configuration's order, and where
@@ -46,6 +52,9 @@ type Options struct {
 	OTLP      OTLP
 
 	now func() time.Time // time.Now if nil
+	// maxWait bounds how long webhooks' zones wait, from the first. Zero is
+	// 30 seconds.
+	maxWait time.Duration
 }
 
 // A Group is a server group's configuration, as /status and the API show
@@ -70,6 +79,10 @@ type OTLP struct {
 type Service struct {
 	o       Options
 	started time.Time
+	// views are the views that the groups serve.
+	views map[string]bool
+	// wake tells Run that a webhook has queued a refresh.
+	wake chan struct{}
 
 	mu sync.Mutex
 	st state
@@ -93,6 +106,12 @@ type state struct {
 	groups       map[string]*groupState
 	// netbox is NetBox's zones as of its last successful read.
 	netbox NetBoxView
+	// pending is what NetBox's webhooks asked to refresh, waiting.
+	pending batch
+	// lastEvent is the last webhook's event, and lastWebhookRefresh the
+	// last refresh that webhooks asked for, or nil.
+	lastEvent          *Event
+	lastWebhookRefresh *WebhookRefresh
 }
 
 // groupState is a server group's last-known state.
@@ -111,20 +130,43 @@ func New(o Options) *Service {
 	if o.now == nil {
 		o.now = time.Now
 	}
-	return &Service{o: o, started: o.now(), st: state{refreshes: map[string]int{}, groups: map[string]*groupState{}}}
+	if o.WebhookDelay == 0 {
+		o.WebhookDelay = 3 * time.Second
+	}
+	if o.maxWait == 0 {
+		o.maxWait = maxWait
+	}
+	views := map[string]bool{}
+	for _, g := range o.Groups {
+		for _, v := range g.Views {
+			views[v] = true
+		}
+	}
+	return &Service{o: o, started: o.now(), views: views, wake: make(chan struct{}, 1),
+		st: state{refreshes: map[string]int{}, groups: map[string]*groupState{}}}
 }
 
 // Run refreshes at once, then every interval, from one refresh's start to
-// the next's, until ctx is canceled. A refresh that takes longer than the
-// interval delays the next one, so refreshes never overlap.
+// the next's, until ctx is canceled. In between, it refreshes the zones that
+// NetBox's webhooks name, once they're due (ADR-0035). Refreshes never
+// overlap: one that takes longer than the interval delays the next.
 func (s *Service) Run(ctx context.Context) {
+	next := s.o.now()
 	for {
-		start := s.o.now()
-		s.refresh(ctx, start)
+		b, full := s.wait(ctx, next)
 		if ctx.Err() != nil {
 			return
 		}
-		next := start.Add(s.o.Interval)
+		start := s.o.now()
+		if !full {
+			s.refreshZones(ctx, start, b)
+			continue
+		}
+		s.refresh(ctx, start, b)
+		if ctx.Err() != nil {
+			return
+		}
+		next = start.Add(s.o.Interval)
 		if now := s.o.now(); now.After(next) {
 			s.o.Log.WarnContext(ctx, "the drift refresh took longer than drift.interval, so the next one starts now",
 				"duration_seconds", now.Sub(start).Seconds(), "interval_seconds", s.o.Interval.Seconds())
@@ -133,28 +175,61 @@ func (s *Service) Run(ctx context.Context) {
 		s.mu.Lock()
 		s.st.next = next
 		s.mu.Unlock()
-		t := time.NewTimer(next.Sub(s.o.now()))
+	}
+}
+
+// wait waits until next, when the scheduled refresh is due, or until what
+// webhooks queued is due, whichever is sooner, and takes what's queued.
+// full reports whether a full refresh is due: the scheduled one, which
+// covers every zone queued, or one that a webhook asked for.
+func (s *Service) wait(ctx context.Context, next time.Time) (b batch, full bool) {
+	for {
+		now := s.o.now()
+		until := next
+		s.mu.Lock()
+		if p := &s.st.pending; p.events > 0 {
+			until = minTime(until, p.due(s.o.WebhookDelay, s.o.maxWait))
+		}
+		s.mu.Unlock()
+		if !until.After(now) {
+			b := s.take()
+			return b, !now.Before(next) || b.full
+		}
+		t := time.NewTimer(until.Sub(now))
 		select {
 		case <-ctx.Done():
 			t.Stop()
-			return
+			return batch{}, false
+		case <-s.wake:
+			t.Stop()
 		case <-t.C:
 		}
 	}
 }
 
-// refresh runs one refresh, as its own trace with its own request ID, and
-// records it. A refresh cut short by ctx's cancellation isn't recorded.
-func (s *Service) refresh(ctx context.Context, start time.Time) {
+// refresh runs one full refresh, as its own trace with its own request ID,
+// and records it. If webhooks queued b, the refresh covers it: its trace
+// links to their spans, and its logs carry their NetBox requests. A
+// refresh cut short by ctx's cancellation isn't recorded.
+func (s *Service) refresh(ctx context.Context, start time.Time, b batch) {
 	s.mu.Lock()
 	s.st.lastStart = start
 	s.mu.Unlock()
+	log := s.o.Log
+	opts := []trace.SpanStartOption{trace.WithNewRoot()}
+	if b.events > 0 {
+		log = log.With("netbox_request_ids", b.requestIDs())
+		opts = append(opts, trace.WithLinks(b.links...), trace.WithAttributes(b.attributes()...))
+	}
 	rctx := logging.WithRequestID(ctx, rand.Text())
-	rctx, span := s.o.Tracer.Start(rctx, "drift refresh", trace.WithNewRoot())
+	rctx, span := s.o.Tracer.Start(rctx, "drift refresh", opts...)
 	defer span.End()
+	if b.full {
+		log.InfoContext(rctx, "refreshing every zone, as NetBox's webhooks asked", "reason", b.reason, "events", b.events)
+	}
 	rctx, cancel := context.WithTimeout(rctx, s.o.Timeout)
 	defer cancel()
-	r, err := s.o.Refresh(rctx)
+	r, err := s.o.Refresh(rctx, nil)
 	if ctx.Err() != nil {
 		return
 	}
@@ -167,7 +242,11 @@ func (s *Service) refresh(ctx context.Context, start time.Time) {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 	}
-	s.record(rctx, r, err, start, s.o.now())
+	end := s.o.now()
+	outcome := s.record(rctx, log, r, err, start, end)
+	if b.events > 0 {
+		s.noteWebhookRefresh(b, start, end, outcome, err)
+	}
 }
 
 // TimeoutError is the error of a refresh stopped by drift.timeout.
@@ -177,18 +256,13 @@ func (e *TimeoutError) Error() string {
 	return fmt.Sprintf("the refresh took longer than drift.timeout, %s, so it was stopped", e.Timeout)
 }
 
-// record keeps what a refresh found, sets the metrics, and logs it. A group
-// that couldn't be read keeps its last report, and if NetBox couldn't be
-// read, or the refresh ran out of time, every group does.
-func (s *Service) record(ctx context.Context, r drift.Report, err error, start, end time.Time) {
+// record keeps what a full refresh found, sets the metrics, logs it to
+// log, and returns its outcome. A group that couldn't be read keeps its
+// last report, and if NetBox couldn't be read, or the refresh ran out of
+// time, every group does.
+func (s *Service) record(ctx context.Context, log *slog.Logger, r drift.Report, err error, start, end time.Time) string {
 	m := s.o.Metrics
-	outcome := metrics.OutcomeComplete
-	switch {
-	case err != nil:
-		outcome = metrics.OutcomeFailed
-	case !r.Complete:
-		outcome = metrics.OutcomeIncomplete
-	}
+	outcome := outcomeOf(r, err)
 	m.Refreshes.WithLabelValues(outcome).Inc()
 	m.RefreshDuration.Observe(end.Sub(start).Seconds())
 	m.LastRefresh.WithLabelValues().Set(unix(end))
@@ -207,42 +281,74 @@ func (s *Service) record(ctx context.Context, r drift.Report, err error, start, 
 	if errors.As(err, &te) {
 		st.lastError = err.Error()
 		s.mu.Unlock()
-		s.o.Log.WarnContext(ctx, "the drift refresh took longer than drift.timeout, so it was stopped, and every server group keeps its last report",
+		log.WarnContext(ctx, "the drift refresh took longer than drift.timeout, so it was stopped, and every server group keeps its last report",
 			"timeout_seconds", te.Timeout.Seconds())
-		return
+		return outcome
 	}
 	if err != nil {
 		st.lastError = err.Error()
 		st.netboxUp, st.netboxError = false, err.Error()
 		s.mu.Unlock()
 		m.NetBoxUp.WithLabelValues().Set(0)
-		s.o.Log.WarnContext(ctx, "the drift refresh couldn't read NetBox, so every server group keeps its last report", "err", err)
-		return
+		log.WarnContext(ctx, "the drift refresh couldn't read NetBox, so every server group keeps its last report", "err", err)
+		return outcome
 	}
 	st.netboxUp, st.netboxError = true, ""
 	if r.NetBox != nil {
 		st.netbox = netboxView(r.NetBox, end)
 	}
 	if r.NetBoxErr != nil {
-		s.o.Log.WarnContext(ctx, "couldn't read the records of NetBox's zones that aren't compared, so the API keeps NetBox's last records",
+		log.WarnContext(ctx, "couldn't read the records of NetBox's zones that aren't compared, so the API keeps NetBox's last records",
 			"err", r.NetBoxErr)
 	}
-	type change struct {
-		g       drift.GroupReport
-		now     map[[2]string]bool
-		removed [][2]string
-	}
+	changes := s.apply(r.Groups, end, false)
+	s.mu.Unlock()
+
+	m.NetBoxUp.WithLabelValues().Set(1)
+	s.publish(ctx, log, changes, end)
+	return outcome
+}
+
+// A change is what a refresh found for a group, kept, for publish to set
+// the metrics and log once the lock is released.
+type change struct {
+	// g is the report kept: for a zone refresh, the group's last report
+	// with the zone refresh's merged in.
+	g       drift.GroupReport
+	failed  bool
+	now     map[[2]string]bool
+	removed [][2]string
+	// zones are those that a zone refresh compared, or nil.
+	zones []string
+}
+
+// apply keeps each group's report from groups, read at end, and returns the
+// changes. A group that failed keeps its last report. With merge, groups
+// are a zone refresh's, which are merged into the last reports; a group
+// with no report waits for the next full refresh. It's called with s.mu
+// held.
+func (s *Service) apply(groups []drift.GroupReport, end time.Time, merge bool) []change {
 	var changes []change
-	for _, g := range r.Groups {
-		gs := st.groups[g.Group]
+	for _, g := range groups {
+		gs := s.st.groups[g.Group]
 		if gs == nil {
+			if merge {
+				continue
+			}
 			gs = &groupState{drifted: map[[2]string]bool{}}
-			st.groups[g.Group] = gs
+			s.st.groups[g.Group] = gs
 		}
 		if g.Status != drift.StatusOK {
 			gs.up, gs.lastError = false, g.Error
-			changes = append(changes, change{g: g})
+			changes = append(changes, change{g: g, failed: true})
 			continue
+		}
+		zones := g.Compared
+		if merge {
+			if gs.lastSuccess.IsZero() {
+				continue
+			}
+			g = drift.Merge(gs.report, g)
 		}
 		gs.up, gs.lastError, gs.lastSuccess, gs.report = true, "", end, g
 		now := drifted(g)
@@ -253,30 +359,43 @@ func (s *Service) record(ctx context.Context, r drift.Report, err error, start, 
 			}
 		}
 		gs.drifted = now
-		changes = append(changes, change{g: g, now: now, removed: removed})
+		changes = append(changes, change{g: g, now: now, removed: removed, zones: zones})
 	}
-	s.mu.Unlock()
+	return changes
+}
 
-	m.NetBoxUp.WithLabelValues().Set(1)
+// publish sets each changed group's metrics, and logs it to log. A zone
+// refresh logs only its own zones' warnings and drift.
+func (s *Service) publish(ctx context.Context, log *slog.Logger, changes []change, end time.Time) {
+	m := s.o.Metrics
 	for _, c := range changes {
 		g := c.g
-		if g.Status != drift.StatusOK {
+		if c.failed {
 			m.GroupUp.WithLabelValues(g.Group).Set(0)
-			s.o.Log.WarnContext(ctx, "a server group couldn't be read, so it keeps its last report", "group", g.Group, "err", g.Error)
+			log.WarnContext(ctx, "a server group couldn't be read, so it keeps its last report", "group", g.Group, "err", g.Error)
 			continue
 		}
 		m.GroupUp.WithLabelValues(g.Group).Set(1)
 		m.GroupLastSuccess.WithLabelValues(g.Group).Set(unix(end))
 		setGroup(m, g, c.now, c.removed)
 		cs := g.Counts
-		s.o.Log.InfoContext(ctx, "drift refreshed", "group", g.Group, "in_sync", cs.InSync, "drift", cs.Drift,
-			"missing", cs.Missing, "inactive_in_netbox", cs.Inactive, "ignored", cs.Ignored, "unmanaged", cs.Unmanaged)
+		args := []any{"group", g.Group, "in_sync", cs.InSync, "drift", cs.Drift,
+			"missing", cs.Missing, "inactive_in_netbox", cs.Inactive, "ignored", cs.Ignored, "unmanaged", cs.Unmanaged}
+		ours := func(string) bool { return true }
+		if c.zones != nil {
+			ours = func(zone string) bool { return slices.Contains(c.zones, zone) }
+			log.InfoContext(ctx, "zones refreshed", append(args, "zones", c.zones)...)
+		} else {
+			log.InfoContext(ctx, "drift refreshed", args...)
+		}
 		for _, w := range g.Warnings {
-			s.o.Log.WarnContext(ctx, "the drift report worked around a problem", "group", g.Group, "warning", w)
+			if ours(w.Zone) {
+				log.WarnContext(ctx, "the drift report worked around a problem", "group", g.Group, "warning", w.Text)
+			}
 		}
 		for _, z := range g.Zones {
-			if drift.IsDrifted(z.State) {
-				s.o.Log.DebugContext(ctx, "zone drifted", "group", g.Group, "zone", z.Zone, "state", z.State, "changes", len(z.Changes))
+			if drift.IsDrifted(z.State) && ours(z.Zone) {
+				log.DebugContext(ctx, "zone drifted", "group", g.Group, "zone", z.Zone, "state", z.State, "changes", len(z.Changes))
 			}
 		}
 	}

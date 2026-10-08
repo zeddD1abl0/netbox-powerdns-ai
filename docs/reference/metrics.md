@@ -17,6 +17,9 @@ PowerDNS's own `/metrics`.
 |---|---|---|---|
 | `nbpdns_drift_refreshes_total` | counter | `outcome`: `complete`, `incomplete`, `failed` | Drift refreshes finished, by outcome. A refresh is incomplete if a server group couldn't be read, and failed if NetBox couldn't be read. |
 | `nbpdns_drift_refresh_duration_seconds` | histogram | none | How long each drift refresh took. Buckets, in seconds: 1, 5, 10, 30, 60, 120, 300, 600, 1200. |
+| `nbpdns_drift_zone_refreshes_total` | counter | `outcome`: `complete`, `incomplete`, `failed` | Zone refreshes finished, by outcome: refreshes of only the zones that NetBox's webhooks named. Incomplete if a server group couldn't be read, and failed if NetBox couldn't be read. A webhook that asks for a full refresh is counted in `nbpdns_drift_refreshes_total`. |
+| `nbpdns_drift_zone_refresh_duration_seconds` | histogram | none | How long each zone refresh took. Buckets, in seconds: 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60. |
+| `nbpdns_drift_pending_zones` | gauge | none | The zones that NetBox's webhooks named, waiting for their refresh. |
 | `nbpdns_drift_last_refresh_timestamp_seconds` | gauge | none | When the last drift refresh finished, whatever its outcome, as a Unix time. It has no value before the first. |
 | `nbpdns_drift_last_complete_refresh_timestamp_seconds` | gauge | none | When the last complete drift refresh finished, as a Unix time. It has no value before the first. |
 | `nbpdns_drift_zones` | gauge | `group`; `state`: `in_sync`, `drift`, `missing`, `inactive_in_netbox`, `ignored`, `unmanaged` | The server group's zones, by state, as of its primary's last successful read. |

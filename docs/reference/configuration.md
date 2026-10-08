@@ -32,6 +32,7 @@ a secret's value.
 | [`drift.group_concurrency`](#driftgroup_concurrency) | integer, 1 to 32 | `4` |
 | [`drift.interval`](#driftinterval) | duration, at least `10s` | `5m` |
 | [`drift.timeout`](#drifttimeout) | duration | `10m` |
+| [`drift.webhook_delay`](#driftwebhook_delay) | duration, from `100ms` to `30s` | `3s` |
 | [`log.format`](#logformat) | `json` or `text` | `json` |
 | [`log.level`](#loglevel) | `debug`, `info`, `warn` or `error` | `info` |
 | [`netbox.ca_file`](#netboxca_file) | path | none |
@@ -86,6 +87,19 @@ schedule.
 - **Default:** `10m`
 - **Environment variable:** `NBPDNS_DRIFT_TIMEOUT`
 - **Flag:** `--drift-timeout`
+
+## `drift.webhook_delay`
+
+How long `nbpdns serve` waits for NetBox's webhooks to stop coming before it
+refreshes the zones they named. One change in NetBox sends several events, and
+a bulk edit sends thousands, so nbpdns gathers them, and refreshes once no
+event has come for this long, or 30 seconds after the first, whichever is
+sooner. Only with `netbox.webhook_secret` set.
+
+- **Type:** duration, from `100ms` to `30s`
+- **Default:** `3s`
+- **Environment variable:** `NBPDNS_DRIFT_WEBHOOK_DELAY`
+- **Flag:** `--drift-webhook-delay`
 
 ## `log.format`
 
@@ -365,6 +379,7 @@ drift:
   group_concurrency: 4
   interval: 5m
   timeout: 10m
+  webhook_delay: 3s
 log:
   format: json
   level: info
