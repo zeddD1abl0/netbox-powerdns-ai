@@ -6,6 +6,11 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- A release's notes on GitLab are its version's section of the CHANGELOG.
+  The 0.1.0 release was published with empty notes.
+
 ## [0.1.0] - 2026-10-07
 
 ### Added

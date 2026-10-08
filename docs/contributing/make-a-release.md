@@ -98,7 +98,8 @@ checks on the tag, and publishes nothing.
 
 ## Check the release
 
-1. Open the release, under **Deploy > Releases**. It has both archives and
+1. Open the release, under **Deploy > Releases**. Its notes are the
+   version's section of the CHANGELOG, and it has both archives and
    `checksums.txt`. Download them, and check them:
 
    ```shell
@@ -135,5 +136,9 @@ checks on the tag, and publishes nothing.
   published, then retry the job. The build is reproducible, so a retry
   builds the same image and archives, and pushing the same image again
   changes nothing.
-- **Something was published and is wrong:** never move or delete a
+- **The release's notes are wrong or empty:** edit them in GitLab, under
+  **Deploy > Releases**, and paste the output of `releasenotes`, as in
+  [Prepare the changelog](#prepare-the-changelog). The notes aren't part
+  of what was built, so changing them changes nothing else.
+- **Something else was published and is wrong:** never move or delete a
   published tag. Fix it on a branch, and release the next patch version.

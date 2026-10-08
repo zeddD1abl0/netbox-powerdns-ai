@@ -45,9 +45,6 @@ checksum:
   name_template: checksums.txt
   algorithm: sha256
 
-changelog:
-  disable: true
-
 # The image (ADR-0030, ADR-0031): one multi-arch index, built by ko on
 # Debian's distroless static base, pinned by its index's digest, as user
 # 65532, with an SPDX SBOM. In snapshot mode, ko loads it into the Docker
@@ -82,7 +79,10 @@ kos:
 # The GitLab release, made only when GITLAB_TOKEN is set (ADR-0030): with
 # the CI job token, the archives and checksums go to the project's generic
 # package registry, and the release links to them. The release notes are the
-# CHANGELOG's section, which `make release` passes in.
+# CHANGELOG's section, which `make release` passes in with --release-notes.
+# Never set changelog.disable: it drops that file too, and the release's
+# notes come out empty, as v0.1.0's did (ITEM-0064). Snapshots skip the
+# changelog anyway.
 release:
   disable: '{{ not (isEnvSet "GITLAB_TOKEN") }}'
 

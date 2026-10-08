@@ -14,7 +14,7 @@
 | [M03](milestones/M03-drift-report.md) | Drift report | done | 7 of 7 |
 | [M04](milestones/M04-service.md) | Service | done | 10 of 10 |
 | [M05](milestones/M05-packaging.md) | Packaging | done | 5 of 5 |
-| [M06](milestones/M06-rest-api.md) | REST API | planned | — |
+| [M06](milestones/M06-rest-api.md) | REST API | planned | 1 of 1 |
 | [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | planned | — |
 | [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | planned | — |
 | [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | planned | — |
