@@ -70,6 +70,61 @@ request ID and user. The scheduled full refresh still runs as the safety net.
 
 Append-only and dated. Record what was run and what was seen.
 
+- 2026-10-08: Every item's commit passed `make check`. `make
+  test-integration` passed with `GOFLAGS=-count=1`: internal/cli 43.0 s,
+  internal/lab 1.1 s, internal/netbox 6.5 s, internal/powerdns 1.2 s, the
+  two tools modules skipped. `make test-webhooks` passed in 4.4 s, with
+  NetBox's worker's `send_webhook` jobs in its log.
+- 2026-10-08: Manual verification, on the lab started with
+  `make lab-up LAB_PROFILES=webhooks`, with `bin/nbpdns serve` on
+  `0.0.0.0:8099`, a 64-hex-digit secret in `netbox.webhook_secret_file`,
+  `drift.interval: 1h`, Jaeger for its spans, and a view `m07-verify` of
+  five zones in sync on lab-a. The webhook and the event rule were made
+  with the how-to's REST API commands, as written, with the URL
+  `http://host.docker.internal:8099/api/netbox-events`.
+  1. Changing z1's www A in NetBox made it drift, with one change, through
+     `/api`, 3.8 s after the PATCH. The PATCH sent three events (the record,
+     the zone, and its SOA record), all with NetBox's request ID, and they
+     made one zone refresh. `/status` showed the webhooks section: the last
+     event, `netbox_dns.record updated, request 990697e9-... by admin`,
+     nothing waiting, and the last refresh, complete, of
+     `m07-verify/z1.m07.example.`. Each event's log line had
+     `netbox_request_id` and `netbox_user`, and `zones refreshed` had
+     `netbox_request_ids`.
+  2. Bulk-creating 150 records across the five zones, in one API call,
+     sent 160 events, from 22:09:46 to 22:09:54, and made one zone refresh,
+     of the five zones, 3.0 s after the last, which took 0.76 s. No full
+     refresh ran. Bulk-creating 120 zones sent 360 events, and made one
+     full refresh, `more than 100 zones changed`, which restarted the
+     schedule: 120 zones missing, 5 drifted.
+  3. In Jaeger, the `drift zone refresh` trace had `FOLLOWS_FROM` links to
+     the three webhooks' traces, `netbox.request_ids`, `netbox.users`
+     `["admin"]`, `netbox.events` 3, and `nbpdns.zones`. Each
+     `POST /api/netbox-events` span had `netbox.request_id`, `netbox.user`,
+     `netbox.event` and `netbox.object_type`.
+  4. A real event with a signature made with another secret, and one with
+     none, were each a 401 problem; `nbpdns_netbox_webhooks_total` counted
+     two `bad_signature`, the log had `refused a NetBox webhook whose
+     signature didn't verify` with the address, and nothing refreshed.
+  The secret was nowhere in the log's 1,093 lines, which had no errors.
+  The data, the webhook, the event rule and Jaeger were removed after.
+- 2026-10-08: `/code-review high` found nine issues. Six are fixed in
+  ITEM-0082: NetBox is asked for 20 zone names a list, a zone refresh no
+  longer moves a group's `last_success`, a view's event needs a served
+  view, `/status` lists the zones that a waiting full refresh covers, and
+  the reference generator handles any security scheme. Three are declined,
+  with reasons in ITEM-0082: retrying failed zone refreshes, merging
+  outside the lock (3.8 ms at 20,000 zones), and limiting the refusal
+  warning. `make check`, `make test-integration` and `make test-webhooks`
+  passed again after the fixes.
+- 2026-10-08: `/security-review` ran, since M07 adds an authenticated
+  endpoint and a secret. No findings. It checked that no request reaches
+  the handler without the signature check (the route's pattern, other
+  methods, trailing slashes, redirects and escaped paths), the HMAC's
+  decoding, length check and constant-time compare, that the secret and
+  the signature reach no log, span, status or error, and that event data
+  can't add parameters to NetBox's or PowerDNS's requests.
+
 ## Approved design
 
 The plan approved on 2026-10-08, copied verbatim. Its headings are demoted two
