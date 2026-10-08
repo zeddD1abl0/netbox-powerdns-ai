@@ -16,7 +16,7 @@
 | [M04](milestones/M04-service.md) | Service | done | 10 of 10 |
 | [M05](milestones/M05-packaging.md) | Packaging | done | 5 of 5 |
 | [M06](milestones/M06-rest-api.md) | REST API | done | 10 of 10 |
-| [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | in-progress | 6 of 7 |
+| [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | in-progress | 7 of 8 |
 | [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | planned | — |
 | [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | planned | — |
 | [M10](milestones/M10-authentication.md) | Authentication | planned | 0 of 1 |
@@ -41,6 +41,7 @@
 | [ITEM-0079](items/ITEM-0079-the-lab-s-netbox-worker-and-the-webhook-tests.md) | The lab's NetBox worker and the webhook tests | task | done 2026-10-08 | — |
 | [ITEM-0080](items/ITEM-0080-the-webhook-docs-and-changelog.md) | The webhook docs and CHANGELOG | task | done 2026-10-08 | — |
 | [ITEM-0081](items/ITEM-0081-find-netbox-zones-whose-names-have-capitals.md) | Find NetBox zones whose names have capitals | bug | done 2026-10-08 | — |
+| [ITEM-0082](items/ITEM-0082-fix-the-m07-code-review-findings.md) | Fix the M07 code review findings | bug | done 2026-10-08 | — |
 
 ## Open items in other milestones
 

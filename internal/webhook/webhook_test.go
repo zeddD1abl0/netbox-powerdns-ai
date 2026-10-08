@@ -107,9 +107,9 @@ func TestRefreshOfNetBoxsEvents(t *testing.T) {
 		{"zone-renamed.json", Refresh{Zones: []Zone{{"capture-a", "renamed.example."}, {"capture-a", "capture.example."}}}},
 		{"zone-moved.json", Refresh{Full: true, Reason: "zone renamed.example. moved to another view"}},
 		{"zone-deleted.json", Refresh{Zones: []Zone{{"capture-c", "renamed.example."}}}},
-		{"view-created.json", Refresh{Full: true, Reason: "a view was created"}},
-		{"view-renamed.json", Refresh{Full: true, Reason: "a view was updated"}},
-		{"view-deleted.json", Refresh{Full: true, Reason: "a view was deleted"}},
+		{"view-created.json", Refresh{Full: true, Views: []string{"capture-a"}, Reason: "view capture-a was created"}},
+		{"view-renamed.json", Refresh{Full: true, Views: []string{"capture-c", "capture-b"}, Reason: "view capture-c was updated"}},
+		{"view-deleted.json", Refresh{Full: true, Views: []string{"capture-a"}, Reason: "view capture-a was deleted"}},
 		{"tag-created.json", Refresh{Reason: "nbpdns doesn't read extras.tag objects"}},
 	}
 	for _, tt := range tests {
@@ -162,6 +162,7 @@ func TestRefreshOfOtherEvents(t *testing.T) {
 			`{"event": "updated", "object_type": "netbox_dns.zone", "data": {"id": 1, "name": "example.com", "view": {"id": 1, "name": "v"}}, "snapshots": {"prechange": {"name": "EXAMPLE.com", "view": 1}}}`,
 			Refresh{Zones: []Zone{{"v", "example.com."}}}, ""},
 		{"no request", `{"event": "created", "object_type": "dcim.site", "data": {}}`, Refresh{Reason: "nbpdns doesn't read dcim.site objects"}, ""},
+		{"a view without a name", `{"event": "created", "object_type": "netbox_dns.view", "data": {"id": 1}}`, Refresh{}, "no name"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

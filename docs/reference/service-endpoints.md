@@ -193,7 +193,7 @@ be read:
 | `groups[].name` | string | The server group's name. Groups are in the config file's order. |
 | `groups[].url` | string | The group's primary's URL. |
 | `groups[].status` | string | `ok` or `failed`, as of the last time a refresh tried the group's primary, or `unknown` before that. A refresh that can't read NetBox doesn't try the primaries. |
-| `groups[].last_success` | time or null | When the primary was last read and compared, or `null` if it never was. |
+| `groups[].last_success` | time or null | When the primary was last read and compared in full, or `null` if it never was. A zone refresh, from NetBox's webhooks, doesn't move it. |
 | `groups[].error` | string | Why the primary couldn't be read, or empty. |
 | `groups[].counts.in_sync` | integer | The group's zones in sync, as of its last successful read, as are the other counts. |
 | `groups[].counts.drift` | integer | Its zones whose RRsets differ. |
@@ -219,15 +219,15 @@ be read:
 | `webhooks.last_event.request.id` | string | NetBox's ID for the request that made the change, or empty if no request did. |
 | `webhooks.last_event.request.user` | string | The user who made the request, or empty. |
 | `webhooks.pending.events` | integer | The webhooks whose refresh waits, or 0. |
-| `webhooks.pending.zones` | array | The zones waiting, each as `view/name`, unless a full refresh waits. |
-| `webhooks.pending.full` | Boolean | Whether a full refresh waits: for a view's change, a zone or a record that moved, or more than 100 zones. |
+| `webhooks.pending.zones` | array | The zones that webhooks named, waiting, each as `view/name`. Once a full refresh waits, it covers them, and no more are added. |
+| `webhooks.pending.full` | Boolean | Whether a full refresh waits: for a change to a view that a group serves, a zone or a record that moved, or more than 100 zones. |
 | `webhooks.pending.due` | time or null | When the refresh is due, unless the scheduled one comes first: `drift.webhook_delay` after the last webhook, or 30 seconds after the first, whichever is sooner. `null` if nothing waits. |
 | `webhooks.last_refresh` | object or null | The last refresh that webhooks asked for, or that covered the zones they named, or `null`. |
 | `webhooks.last_refresh.started` | time | When it started. |
 | `webhooks.last_refresh.finished` | time | When it finished. |
 | `webhooks.last_refresh.zones` | array or null | The zones it refreshed, each as `view/name`, or `null` for a full refresh. |
 | `webhooks.last_refresh.full` | Boolean | Whether it was a full refresh. |
-| `webhooks.last_refresh.reason` | string | Why it was full, such as `a view was updated`, or empty. |
+| `webhooks.last_refresh.reason` | string | Why it was full, such as `view internal was updated`, or empty. |
 | `webhooks.last_refresh.outcome` | string | `complete`, `incomplete`, or `failed`, as for `schedule.last_refresh.outcome`. |
 | `webhooks.last_refresh.error` | string | Why it failed, or empty. |
 | `webhooks.last_refresh.events` | integer | The webhooks it served. |

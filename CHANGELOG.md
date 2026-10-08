@@ -38,9 +38,9 @@ All notable changes to this project are recorded here. The format follows
   `nbpdns serve` takes NetBox's event-rule webhooks at
   `/api/netbox-events`, signed with that secret, and compares only the
   zones they name, once they stop coming for `drift.webhook_delay`, 3
-  seconds by default, or 30 seconds after the first. A view's change, a
-  zone or a record moved, or more than 100 zones make a full refresh
-  instead. The scheduled refresh still runs, for any webhook lost. Each
+  seconds by default, or 30 seconds after the first. A change to a view
+  that a group serves, a zone or a record moved, or more than 100 zones
+  make a full refresh instead. The scheduled refresh still runs, for any webhook lost. Each
   zone refresh is a trace linked to the webhooks' spans, with NetBox's
   request IDs and users, which its log lines carry too. New metrics:
   `nbpdns_netbox_webhooks_total`, `nbpdns_drift_zone_refreshes_total`,

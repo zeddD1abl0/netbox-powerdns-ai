@@ -58,7 +58,9 @@ type Webhooks struct {
 type Pending struct {
 	// Events counts the webhooks that queued it.
 	Events int `json:"events"`
-	// Zones are the zones waiting, each as view/name, unless Full.
+	// Zones are the zones that webhooks named, each as view/name. Once a
+	// full refresh waits, which Full marks, it covers them, and no more
+	// are added.
 	Zones []string `json:"zones"`
 	Full  bool     `json:"full"`
 	// Due is when its refresh is due, unless a scheduled one comes first,
@@ -116,7 +118,9 @@ type GroupInfo struct {
 	URL string `json:"url"`
 	// Status is ok or failed, as of the last time a refresh tried the
 	// group's primary, or unknown before that.
-	Status      string     `json:"status"`
+	Status string `json:"status"`
+	// LastSuccess is when the group was last compared in full. A zone
+	// refresh doesn't move it.
 	LastSuccess *time.Time `json:"last_success"`
 	// Error is why the primary couldn't be read, if it couldn't.
 	Error string `json:"error"`
@@ -196,10 +200,7 @@ func (s *Service) webhooks() Webhooks {
 		w.LastEvent = &copied
 	}
 	if p := &st.pending; p.events > 0 {
-		w.Pending = Pending{Events: p.events, Zones: []string{}, Full: p.full, Due: utc(p.due(s.o.WebhookDelay, s.o.maxWait))}
-		if !p.full {
-			w.Pending.Zones = p.names()
-		}
+		w.Pending = Pending{Events: p.events, Zones: p.names(), Full: p.full, Due: utc(p.due(s.o.WebhookDelay, s.o.maxWait))}
 	}
 	if r := st.lastWebhookRefresh; r != nil {
 		// A kept refresh is never changed, only replaced.

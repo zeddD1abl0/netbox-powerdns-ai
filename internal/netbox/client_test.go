@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"log/slog"
@@ -566,6 +567,47 @@ func TestZoneFilter(t *testing.T) {
 				t.Errorf("query %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestZoneFilterInChunks checks that many names are asked for a few at a
+// time, and the zones of every list are returned.
+func TestZoneFilterInChunks(t *testing.T) {
+	var lists [][]string
+	var mu sync.Mutex
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		names := r.URL.Query()["name__ie"]
+		mu.Lock()
+		lists = append(lists, names)
+		mu.Unlock()
+		results := make([]map[string]any, len(names))
+		for i, n := range names {
+			results[i] = map[string]any{"id": i, "name": n, "view": map[string]any{"id": 1, "name": "v"}}
+		}
+		b, _ := json.Marshal(map[string]any{"count": len(names), "next": nil, "results": results})
+		_, _ = w.Write(b)
+	}))
+	t.Cleanup(srv.Close)
+	c, _ := testClient(t, srv.URL, Options{})
+	var names []string
+	for i := range 45 {
+		names = append(names, fmt.Sprintf("z%d.example", i))
+	}
+	zones, err := c.Zones(t.Context(), ZoneFilter{Names: names, Views: []string{"v"}})
+	if err != nil || len(zones) != 45 {
+		t.Fatalf("%d zones, %v", len(zones), err)
+	}
+	if len(lists) != 3 || len(lists[0]) != maxNamesPerList || len(lists[2]) != 5 {
+		t.Errorf("asked for %d lists of names: %v", len(lists), lists)
+	}
+	// A DNS name's longest, at the most names per list, stays under 8 KiB.
+	long := strings.Repeat("a", 63) + "." + strings.Repeat("b", 63) + "." + strings.Repeat("c", 63) + "." + strings.Repeat("d", 61)
+	q := url.Values{}
+	for range maxNamesPerList {
+		q.Add("name__ie", long)
+	}
+	if n := len(q.Encode()); n > 6<<10 {
+		t.Errorf("a list of the longest names has a %d-byte query", n)
 	}
 }
 

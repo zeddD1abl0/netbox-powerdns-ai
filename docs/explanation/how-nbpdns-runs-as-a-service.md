@@ -61,10 +61,11 @@ events. So nbpdns gathers them:
   both sides. Each group's result replaces those zones in its last report,
   and its counts and metrics follow. A zone that neither side has any more
   leaves the report.
-- A view's change, a zone moved to another view, a record moved to another
-  zone, or more than 100 zones make a full refresh instead. An event names
-  where a moved zone or record was only by NetBox's ID, and a view's change
-  can change every zone in it.
+- A change to a view that a group serves, by its name or its old one, a
+  zone moved to another view, a record moved to another zone, or more than
+  100 zones make a full refresh instead. An event names where a moved zone
+  or record was only by NetBox's ID, and a view's change can change every
+  zone in it. A change to a view that no group serves is ignored.
 
 Zone refreshes and scheduled ones share one loop, so they never overlap. A
 scheduled refresh that comes first covers every zone waiting, and a full

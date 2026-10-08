@@ -170,7 +170,7 @@ Returns a page of a zone's RRsets as NetBox defines them, in nbpdns's normalized
 
 Receive a NetBox webhook. Operation `receiveNetBoxEvent`.
 
-Receives an event from a NetBox event rule's webhook, signed with `netbox.webhook_secret`, and queues a refresh of the zones it names, which runs once no event has come for `drift.webhook_delay`. A record's event names its zone, and a zone's event the zone, and its old name if it was renamed. A view's event, a zone moved to another view, a record moved to another zone, and more than 100 zones at once each make a full refresh instead. Events for other object types, and zones in views that no server group serves, are accepted and ignored. The endpoint is off until `netbox.webhook_secret` is set.
+Receives an event from a NetBox event rule's webhook, signed with `netbox.webhook_secret`, and queues a refresh of the zones it names, which runs once no event has come for `drift.webhook_delay`. A record's event names its zone, and a zone's event the zone, and its old name if it was renamed. An event for a view that a server group serves, by its name or its old one, a zone moved to another view, a record moved to another zone, and more than 100 zones at once each make a full refresh instead. Events for other object types, and for zones and views that no server group serves, are accepted and ignored. The endpoint is off until `netbox.webhook_secret` is set.
 
 Needs the `X-Hook-Signature` header. It's the hex HMAC-SHA512 of the request's body, keyed by `netbox.webhook_secret`, as a NetBox webhook sends it when its secret is set.
 
@@ -314,8 +314,8 @@ What NetBox's webhooks queued, waiting for its refresh.
 | Field | Type | Description |
 |---|---|---|
 | `events` | `integer` (`int64`) | The webhooks whose refresh waits. |
-| `zones` | array of `string` | The zones waiting, each as `view/name`, unless a full refresh waits. |
-| `full` | `boolean` | Whether a full refresh waits: for a view's change, a zone or a record that moved, or more than 100 zones. |
+| `zones` | array of `string` | The zones that webhooks named, waiting, each as `view/name`. Once a full refresh waits, it covers them, and no more are added. |
+| `full` | `boolean` | Whether a full refresh waits: for a change to a view that a server group serves, a zone or a record that moved, or more than 100 zones. |
 | `due` | `string` (`date-time`), or null | When the refresh is due, unless the scheduled one comes first, or null if nothing waits. |
 
 ### `WebhookRefresh`
@@ -328,7 +328,7 @@ A refresh that NetBox's webhooks asked for, or that covered the zones they named
 | `finished` | `string` (`date-time`) | When it finished. |
 | `zones` | array of `string`, or null | The zones it refreshed, each as `view/name`, or null for a full refresh. |
 | `full` | `boolean` | Whether it was a full refresh. |
-| `reason` | `string`, or null | Why it was a full refresh, such as `a view was updated`, or null. |
+| `reason` | `string`, or null | Why it was a full refresh, such as `view internal was updated`, or null. |
 | `outcome` | `complete`, `incomplete`, or `failed` | `complete` if NetBox and every group it compared were read, `incomplete` if a group's primary couldn't be, and `failed` if NetBox couldn't be, or it ran out of time. |
 | `error` | `string`, or null | Why it failed, or null. |
 | `events` | `integer` (`int64`) | The webhooks it served. |
@@ -358,8 +358,8 @@ A PowerDNS server group, with its last-known state. The counts are as of `last_s
 | `drift_policy` | [`DriftPolicy`](#driftpolicy) | What nbpdns does about a zone's drift: `report` reports it, `enforce` reports it and, from M13, corrects it, and `ignore` doesn't compare the zone. |
 | `status` | `ok`, `failed`, or `unknown` | `ok` if the last refresh that tried the group's primary read it, `failed` if it couldn't, and `unknown` before any did. |
 | `error` | `string`, or null | Why the primary couldn't be read, or null. |
-| `last_success` | `string` (`date-time`), or null | When the group was last read and compared, or null if it never was. |
-| `counts` | [`ZoneCounts`](#zonecounts), or null | The group's zones by state, as of `last_success`, or null if it was never read. |
+| `last_success` | `string` (`date-time`), or null | When the group was last read and compared in full, or null if it never was. Zones that NetBox's webhooks named may have been compared since. |
+| `counts` | [`ZoneCounts`](#zonecounts), or null | The group's zones by state, as of `last_success`, and of the zone refreshes since, or null if it was never read. |
 | `problem_count` | `integer` (`int64`), or null | How many problems normalization worked around in either side's data, as of `last_success`, or null. `nbpdns drift` lists them. |
 | `warning_count` | `integer` (`int64`), or null | How many problems with the configuration or NetBox's data the comparison worked around, as of `last_success`, or null. `nbpdns drift` lists them. |
 
@@ -424,7 +424,7 @@ The fields of [`Zone`](#zone), and:
 
 | Field | Type | Description |
 |---|---|---|
-| `as_of` | `string` (`date-time`) | When the group was last read and compared, its `last_success`. |
+| `as_of` | `string` (`date-time`) | Its group's `last_success`: when the group was last compared in full. A zone that NetBox's webhooks named may have been compared since. |
 
 ### `ZonePage`
 
@@ -434,7 +434,7 @@ The fields of [`PageLinks`](#pagelinks), and:
 
 | Field | Type | Description |
 |---|---|---|
-| `as_of` | `string` (`date-time`), or null | What the zones are as of, the group's `last_success`, or null if the group was never read. |
+| `as_of` | `string` (`date-time`), or null | What the zones are as of, the group's `last_success`, or null if the group was never read. Zones that NetBox's webhooks named may have been compared since. |
 | `items` | array of [`Zone`](#zone) | The page's zones. |
 
 ### `ChangeKind`
@@ -472,7 +472,7 @@ The fields of [`PageLinks`](#pagelinks), and:
 
 | Field | Type | Description |
 |---|---|---|
-| `as_of` | `string` (`date-time`) | When the group was last read and compared. |
+| `as_of` | `string` (`date-time`) | When the group was last compared in full. A zone that NetBox's webhooks named may have been compared since. |
 | `items` | array of [`Change`](#change) | The page's changes. |
 
 ### `Record`
@@ -503,7 +503,7 @@ The fields of [`PageLinks`](#pagelinks), and:
 
 | Field | Type | Description |
 |---|---|---|
-| `as_of` | `string` (`date-time`) | When NetBox was last read, which the RRsets are as of. |
+| `as_of` | `string` (`date-time`) | When NetBox was last read in full, which the RRsets are as of. A zone that NetBox's webhooks named may have been read since. |
 | `items` | array of [`RRset`](#rrset) | The page's RRsets. |
 
 ### `NetBoxEvent`

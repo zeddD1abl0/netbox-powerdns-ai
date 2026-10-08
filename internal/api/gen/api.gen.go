@@ -207,7 +207,7 @@ type ChangeKind string
 
 // ChangePage One page of a zone's changes, with its links.
 type ChangePage struct {
-	// AsOf When the group was last read and compared.
+	// AsOf When the group was last compared in full. A zone that NetBox's webhooks named may have been compared since.
 	//
 	// Examples: 2026-10-08T01:10:02Z
 	AsOf time.Time `json:"as_of"`
@@ -327,12 +327,12 @@ type PendingRefresh struct {
 	// Examples: 2
 	Events int64 `json:"events"`
 
-	// Full Whether a full refresh waits: for a view's change, a zone or a record that moved, or more than 100 zones.
+	// Full Whether a full refresh waits: for a change to a view that a server group serves, a zone or a record that moved, or more than 100 zones.
 	//
 	// Examples: false
 	Full bool `json:"full"`
 
-	// Zones The zones waiting, each as `view/name`, unless a full refresh waits.
+	// Zones The zones that webhooks named, waiting, each as `view/name`. Once a full refresh waits, it covers them, and no more are added.
 	//
 	// Examples: ["_default_/example.org."]
 	Zones []string `json:"zones"`
@@ -393,7 +393,7 @@ type RRset struct {
 
 // RRsetPage One page of a zone's RRsets, with its links.
 type RRsetPage struct {
-	// AsOf When NetBox was last read, which the RRsets are as of.
+	// AsOf When NetBox was last read in full, which the RRsets are as of. A zone that NetBox's webhooks named may have been read since.
 	//
 	// Examples: 2026-10-08T01:10:00Z
 	AsOf time.Time `json:"as_of"`
@@ -509,7 +509,7 @@ type Schedule struct {
 
 // ServerGroup A PowerDNS server group, with its last-known state. The counts are as of `last_success`.
 type ServerGroup struct {
-	// Counts The group's zones by state, as of `last_success`, or null if it was never read.
+	// Counts The group's zones by state, as of `last_success`, and of the zone refreshes since, or null if it was never read.
 	//
 	// Examples: {"drift":15,"ignored":1,"in_sync":980,"inactive_in_netbox":0,"missing":5,"unmanaged":2}
 	Counts *ZoneCounts `json:"counts"`
@@ -524,7 +524,7 @@ type ServerGroup struct {
 	// Examples: null
 	Error *string `json:"error"`
 
-	// LastSuccess When the group was last read and compared, or null if it never was.
+	// LastSuccess When the group was last read and compared in full, or null if it never was. Zones that NetBox's webhooks named may have been compared since.
 	//
 	// Examples: 2026-10-08T01:10:02Z
 	LastSuccess *time.Time `json:"last_success"`
@@ -705,7 +705,7 @@ type WebhookRefresh struct {
 	// Examples: complete
 	Outcome WebhookRefreshOutcome `json:"outcome"`
 
-	// Reason Why it was a full refresh, such as `a view was updated`, or null.
+	// Reason Why it was a full refresh, such as `view internal was updated`, or null.
 	//
 	// Examples: null
 	Reason *string `json:"reason"`
@@ -831,7 +831,7 @@ type ZoneCounts struct {
 
 // ZoneDetail A zone of a server group, and when the group was last read.
 type ZoneDetail struct {
-	// AsOf When the group was last read and compared, its `last_success`.
+	// AsOf Its group's `last_success`: when the group was last compared in full. A zone that NetBox's webhooks named may have been compared since.
 	//
 	// Examples: 2026-10-08T01:10:02Z
 	AsOf time.Time `json:"as_of"`
@@ -879,7 +879,7 @@ type ZoneDetail struct {
 
 // ZonePage One page of a server group's zones, with its links.
 type ZonePage struct {
-	// AsOf What the zones are as of, the group's `last_success`, or null if the group was never read.
+	// AsOf What the zones are as of, the group's `last_success`, or null if the group was never read. Zones that NetBox's webhooks named may have been compared since.
 	//
 	// Examples: 2026-10-08T01:10:02Z
 	AsOf *time.Time `json:"as_of"`

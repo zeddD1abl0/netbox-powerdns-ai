@@ -413,11 +413,12 @@ paths:
         `netbox.webhook_secret`, and queues a refresh of the zones it names,
         which runs once no event has come for `drift.webhook_delay`. A
         record's event names its zone, and a zone's event the zone, and its
-        old name if it was renamed. A view's event, a zone moved to another
-        view, a record moved to another zone, and more than 100 zones at
-        once each make a full refresh instead. Events for other object
-        types, and zones in views that no server group serves, are accepted
-        and ignored. The endpoint is off until `netbox.webhook_secret` is
+        old name if it was renamed. An event for a view that a server group
+        serves, by its name or its old one, a zone moved to another view, a
+        record moved to another zone, and more than 100 zones at once each
+        make a full refresh instead. Events for other object types, and for
+        zones and views that no server group serves, are accepted and
+        ignored. The endpoint is off until `netbox.webhook_secret` is
         set.
       tags: [netbox]
       security:
@@ -955,13 +956,16 @@ components:
           type: array
           items:
             type: string
-          description: The zones waiting, each as `view/name`, unless a full refresh waits.
+          description: >-
+            The zones that webhooks named, waiting, each as `view/name`. Once
+            a full refresh waits, it covers them, and no more are added.
           examples: [[_default_/example.org.]]
         full:
           type: boolean
           description: >-
-            Whether a full refresh waits: for a view's change, a zone or a
-            record that moved, or more than 100 zones.
+            Whether a full refresh waits: for a change to a view that a
+            server group serves, a zone or a record that moved, or more than
+            100 zones.
           examples: [false]
         due:
           type: [string, "null"]
@@ -997,7 +1001,7 @@ components:
           examples: [false]
         reason:
           type: [string, "null"]
-          description: Why it was a full refresh, such as `a view was updated`, or null.
+          description: Why it was a full refresh, such as `view internal was updated`, or null.
           examples: [null]
         outcome:
           type: string
@@ -1076,10 +1080,15 @@ components:
         last_success:
           type: [string, "null"]
           format: date-time
-          description: When the group was last read and compared, or null if it never was.
+          description: >-
+            When the group was last read and compared in full, or null if it
+            never was. Zones that NetBox's webhooks named may have been
+            compared since.
           examples: ["2026-10-08T01:10:02Z"]
         counts:
-          description: The group's zones by state, as of `last_success`, or null if it was never read.
+          description: >-
+            The group's zones by state, as of `last_success`, and of the zone
+            refreshes since, or null if it was never read.
           examples:
             - {in_sync: 980, drift: 15, missing: 5, inactive_in_netbox: 0, ignored: 1, unmanaged: 2}
           oneOf:
@@ -1253,7 +1262,10 @@ components:
             as_of:
               type: string
               format: date-time
-              description: When the group was last read and compared, its `last_success`.
+              description: >-
+                Its group's `last_success`: when the group was last compared
+                in full. A zone that NetBox's webhooks named may have been
+                compared since.
               examples: ["2026-10-08T01:10:02Z"]
     ZonePage:
       description: One page of a server group's zones, with its links.
@@ -1265,7 +1277,10 @@ components:
             as_of:
               type: [string, "null"]
               format: date-time
-              description: What the zones are as of, the group's `last_success`, or null if the group was never read.
+              description: >-
+                What the zones are as of, the group's `last_success`, or null
+                if the group was never read. Zones that NetBox's webhooks
+                named may have been compared since.
               examples: ["2026-10-08T01:10:02Z"]
             items:
               type: array
@@ -1344,7 +1359,9 @@ components:
             as_of:
               type: string
               format: date-time
-              description: When the group was last read and compared.
+              description: >-
+                When the group was last compared in full. A zone that
+                NetBox's webhooks named may have been compared since.
               examples: ["2026-10-08T01:10:02Z"]
             items:
               type: array
@@ -1411,7 +1428,10 @@ components:
             as_of:
               type: string
               format: date-time
-              description: When NetBox was last read, which the RRsets are as of.
+              description: >-
+                When NetBox was last read in full, which the RRsets are as
+                of. A zone that NetBox's webhooks named may have been read
+                since.
               examples: ["2026-10-08T01:10:00Z"]
             items:
               type: array

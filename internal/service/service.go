@@ -352,7 +352,12 @@ func (s *Service) apply(groups []drift.GroupReport, end time.Time, merge bool) [
 			}
 			g = drift.Merge(gs.report, g)
 		}
-		gs.up, gs.lastError, gs.lastSuccess, gs.report = true, "", end, g
+		// The last success is the last full comparison's: a zone refresh
+		// compares only some zones, and the rest of the report is as old.
+		gs.up, gs.lastError, gs.report = true, "", g
+		if !merge {
+			gs.lastSuccess = end
+		}
 		now := drifted(g)
 		var removed [][2]string
 		for k := range gs.drifted {
@@ -378,7 +383,9 @@ func (s *Service) publish(ctx context.Context, log *slog.Logger, changes []chang
 			continue
 		}
 		m.GroupUp.WithLabelValues(g.Group).Set(1)
-		m.GroupLastSuccess.WithLabelValues(g.Group).Set(unix(end))
+		if c.zones == nil {
+			m.GroupLastSuccess.WithLabelValues(g.Group).Set(unix(end))
+		}
 		setGroup(m, g, c.now, c.removed)
 		cs := g.Counts
 		args := []any{"group", g.Group, "in_sync", cs.InSync, "drift", cs.Drift,

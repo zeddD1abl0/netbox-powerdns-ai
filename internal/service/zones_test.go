@@ -47,6 +47,9 @@ func TestNotify(t *testing.T) {
 	if s.Notify(t.Context(), event("r1", "alice"), webhook.Refresh{Zones: []webhook.Zone{{View: "other", Name: "a.example."}}}) {
 		t.Error("a zone in a view that no group serves was queued")
 	}
+	if s.Notify(t.Context(), event("r1", "alice"), webhook.Refresh{Full: true, Views: []string{"other", "elsewhere"}, Reason: "a view was updated"}) {
+		t.Error("a view that no group serves made a full refresh")
+	}
 	if !s.Notify(t.Context(), event("r1", "alice"), zonesOf("a.example.", "b.example.")) ||
 		!s.Notify(t.Context(), event("r1", "alice"), zonesOf("a.example.")) ||
 		!s.Notify(t.Context(), event("r2", "bob"), zonesOf("c.example.")) {
@@ -69,7 +72,8 @@ func TestNotify(t *testing.T) {
 
 	t.Run("a full refresh", func(t *testing.T) {
 		s.Notify(t.Context(), event("r3", ""), zonesOf("a.example."))
-		s.Notify(t.Context(), event("r3", ""), webhook.Refresh{Full: true, Reason: "a view was updated"})
+		// A view that a group serves, by its old name.
+		s.Notify(t.Context(), event("r3", ""), webhook.Refresh{Full: true, Views: []string{"renamed", "v"}, Reason: "a view was updated"})
 		if b := s.take(); !b.full || b.reason != "a view was updated" {
 			t.Errorf("batch %+v", b)
 		}
@@ -368,8 +372,12 @@ func TestRecordZones(t *testing.T) {
 	// c.example. left the zones, for the unmanaged ones.
 	if !slices.Equal(states, []string{"a.example.=in_sync", "b.example.=in_sync"}) ||
 		a.Report.Counts != (drift.Counts{InSync: 2, Unmanaged: 1}) || !slices.Equal(a.Report.Unmanaged, []string{"c.example."}) ||
-		*a.Info.LastSuccess != t1 {
+		*a.Info.LastSuccess != t0 {
 		t.Errorf("site-a: zones %v, counts %+v, unmanaged %v, last success %v", states, a.Report.Counts, a.Report.Unmanaged, a.Info.LastSuccess)
+	}
+	// The group's last success is still the full refresh's.
+	if got := testutil.ToFloat64(s.o.Metrics.GroupLastSuccess.WithLabelValues("site-a")); got != unix(t0) {
+		t.Errorf("site-a's last success %v, want the full refresh's %v", got, unix(t0))
 	}
 	// The drifted zone's series is gone.
 	if n := testutil.CollectAndCount(s.o.Metrics.ZoneDrifted); n != 0 {
@@ -493,6 +501,12 @@ func TestStatusShowsTheWebhooks(t *testing.T) {
 		if !strings.Contains(page, want) {
 			t.Errorf("no %q in the status page:\n%s", want, page)
 		}
+	}
+	// A full refresh waiting covers the zones gathered, which still show.
+	s.Notify(t.Context(), event("r2", ""), webhook.Refresh{Full: true, Views: []string{"v"}, Reason: "view v was updated"})
+	if p := s.Status().Webhooks.Pending; !p.Full || !slices.Equal(p.Zones, []string{"v/a.example."}) ||
+		testutil.ToFloat64(s.o.Metrics.PendingZones) != 1 {
+		t.Errorf("pending %+v", p)
 	}
 	s.noteWebhookRefresh(s.take(), false, time.Now(), time.Now(), metrics.OutcomeComplete, nil)
 	if page := text(s); !strings.Contains(page, "complete, of v/a.example.") || !strings.Contains(page, "waiting:       nothing") {

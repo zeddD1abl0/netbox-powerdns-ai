@@ -64,7 +64,12 @@ func WriteReference(w io.Writer) error {
 			for _, req := range contentOf(node(op, "security")) {
 				for name := range pairs(req) {
 					scheme := node(node(node(root, "components"), "securitySchemes"), name)
-					p("Needs the `%s` %s. %s\n\n", node(scheme, "name").Value, node(scheme, "in").Value, oneLine(node(scheme, "description")))
+					// An API key names where it goes; other schemes don't.
+					if key, in := node(scheme, "name"), node(scheme, "in"); key != nil && in != nil {
+						p("Needs the `%s` %s. %s\n\n", key.Value, in.Value, oneLine(node(scheme, "description")))
+					} else {
+						p("Needs the security scheme `%s`. %s\n\n", name, oneLine(node(scheme, "description")))
+					}
 				}
 			}
 			p("| Parameter | In | Type | Description |\n|---|---|---|---|\n")

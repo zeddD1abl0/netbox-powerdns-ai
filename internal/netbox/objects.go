@@ -191,6 +191,11 @@ func (c *Client) Nameservers(ctx context.Context) ([]Nameserver, error) {
 }
 
 // A ZoneFilter selects zones. Each field that isn't empty must match.
+// maxNamesPerList is the most zone names that one list asks for: at 253
+// characters each, the most a DNS name has, the query stays under 6 KiB, and
+// within the 8 KiB that proxies such as nginx take by default.
+const maxNamesPerList = 20
+
 type ZoneFilter struct {
 	// Names are zones' names, as ZoneName returns them; a zone with any of
 	// them matches, whatever its case. The DNS plugin keeps the case a
@@ -204,6 +209,21 @@ type ZoneFilter struct {
 
 // Zones lists the zones that f selects.
 func (c *Client) Zones(ctx context.Context, f ZoneFilter) ([]Zone, error) {
+	// Many names would make a URL longer than a proxy takes, so they're
+	// asked for a few at a time.
+	if len(f.Names) > maxNamesPerList {
+		var out []Zone
+		for names := range slices.Chunk(f.Names, maxNamesPerList) {
+			part := f
+			part.Names = names
+			zones, err := c.Zones(ctx, part)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, zones...)
+		}
+		return out, nil
+	}
 	q := url.Values{}
 	if f.Status != "" {
 		q.Set("status", f.Status)

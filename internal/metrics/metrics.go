@@ -93,7 +93,8 @@ var (
 		buckets: []float64{0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60},
 		help:    "How long each zone refresh took."}
 	defPendingZones = def{name: "nbpdns_drift_pending_zones", kind: gauge,
-		help: "The zones that NetBox's webhooks named, waiting for their refresh."}
+		help: "The zones that NetBox's webhooks named, waiting for their refresh. " +
+			"Once a full refresh waits instead, for a view or past 100 zones, no more are added."}
 	defLastRefresh = def{name: "nbpdns_drift_last_refresh_timestamp_seconds", kind: gauge,
 		help: "When the last drift refresh finished, whatever its outcome, as a Unix time. It has no value before the first."}
 	defLastComplete = def{name: "nbpdns_drift_last_complete_refresh_timestamp_seconds", kind: gauge,
@@ -116,7 +117,7 @@ var (
 	defGroupUp = def{name: "nbpdns_server_group_up", kind: gauge, labels: []string{"group"},
 		help: "1 if the server group's primary could be read the last time a refresh tried, else 0. A refresh that can't read NetBox doesn't try the primaries."}
 	defGroupLastSuccess = def{name: "nbpdns_server_group_last_success_timestamp_seconds", kind: gauge, labels: []string{"group"},
-		help: "When the server group's primary was last read and compared, as a Unix time."}
+		help: "When the server group's primary was last read and compared in full, as a Unix time. A zone refresh, from NetBox's webhooks, doesn't move it."}
 	defRequests = def{name: "nbpdns_http_client_requests_total", kind: counter, labels: []string{"service", "target", "method", "code"},
 		values: map[string][]string{"service": services, "method": methods},
 		help: "Requests to NetBox and to each primary, one per attempt. The target is `netbox`, or the server group's name, " +

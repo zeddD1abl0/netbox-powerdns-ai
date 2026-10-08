@@ -131,9 +131,9 @@ func (b *batch) refs() []drift.ZoneRef {
 }
 
 // names returns the names of b's zones, as the logs and spans show them:
-// each in its view, as view/name.
+// each in its view, as view/name. They're never nil.
 func (b *batch) names() []string {
-	var out []string
+	out := []string{}
 	for _, z := range b.refs() {
 		out = append(out, z.View+"/"+z.Name)
 	}
@@ -174,7 +174,7 @@ func (b *batch) attributes() []attribute.KeyValue {
 
 // Notify queues the refresh that a NetBox event, e, asks for, r (ADR-0035),
 // and reports whether it queued anything: not if r asks for nothing, or
-// names only zones in views that no group serves. It implements
+// names only zones, or a view, that no group serves. It implements
 // api.Notifier. ctx carries the webhook's span, which the refresh links
 // to.
 func (s *Service) Notify(ctx context.Context, e webhook.Event, r webhook.Refresh) bool {
@@ -189,6 +189,10 @@ func (s *Service) Notify(ctx context.Context, e webhook.Event, r webhook.Refresh
 	s.st.lastEvent = &Event{Received: now.UTC(), Event: e.Event, ObjectType: e.ObjectType, Request: Request{ID: e.RequestID(), User: e.User()}}
 	s.mu.Unlock()
 	if !r.Full && len(zones) == 0 {
+		return false
+	}
+	// A view that no group serves changes nothing that nbpdns compares.
+	if r.Views != nil && !slices.ContainsFunc(r.Views, func(v string) bool { return s.views[v] }) {
 		return false
 	}
 	s.mu.Lock()

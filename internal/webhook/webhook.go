@@ -109,6 +109,10 @@ type Refresh struct {
 	// Full asks for a full refresh: the event changed a view, or moved a
 	// zone or a record from a place that it names only by its ID.
 	Full bool
+	// Views, for a view's event, are the view's name, and its old name if
+	// it was renamed: the full refresh is needed only if a group serves
+	// one of them.
+	Views []string
 	// Reason says why it's a full refresh, or why it asks for nothing.
 	Reason string
 }
@@ -141,9 +145,9 @@ func (z *zone) target() (Zone, error) {
 //   - a record's event names its zone, in the zone's view;
 //   - a zone's event names the zone, in its view, and its old name too, if
 //     the change renamed it;
-//   - a view's event asks for a full refresh, as does a zone that moved to
-//     another view, or a record that moved to another zone, since the
-//     event names where they were only by ID;
+//   - a view's event asks for a full refresh, with the view's names, as
+//     does a zone that moved to another view, or a record that moved to
+//     another zone, since the event names where they were only by ID;
 //   - any other type's event asks for nothing.
 func (e Event) Refresh() (Refresh, error) {
 	if e.Event == "" || e.ObjectType == "" {
@@ -151,7 +155,23 @@ func (e Event) Refresh() (Refresh, error) {
 	}
 	switch e.ObjectType {
 	case TypeView:
-		return Refresh{Full: true, Reason: "a view was " + e.Event}, nil
+		var now, before struct {
+			Name string `json:"name"`
+		}
+		if err := decode(e.Data, &now); err != nil {
+			return Refresh{}, fmt.Errorf("a %s event's data: %w", e.ObjectType, err)
+		}
+		if now.Name == "" {
+			return Refresh{}, fmt.Errorf("a %s event's data has no name", e.ObjectType)
+		}
+		if err := decodeSnapshot(e.Snapshots, &before); err != nil {
+			return Refresh{}, fmt.Errorf("a %s event's prechange snapshot: %w", e.ObjectType, err)
+		}
+		views := []string{now.Name}
+		if before.Name != "" && before.Name != now.Name {
+			views = append(views, before.Name)
+		}
+		return Refresh{Full: true, Views: views, Reason: "view " + now.Name + " was " + e.Event}, nil
 	case TypeZone:
 		var now zone
 		if err := decode(e.Data, &now); err != nil {
