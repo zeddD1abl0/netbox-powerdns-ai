@@ -238,6 +238,12 @@ Append-only and dated. Record what was run and what was seen.
   are the old `main`, `ec048d8`, and the branch tip, `1500830`, so every
   per-item commit is kept (ADR-0018). `main`'s pipelines, GitLab 785 and
   GitHub Actions run 37749673802, were running when this was recorded.
+- 2026-10-08: **`main`'s pipelines on `c07c0cc`.** GitHub Actions run
+  37749673802 passed. GitLab pipeline 785 passed after a retry. Its first
+  `integration-test`, job 4288, was killed as job 4253 had been: "system
+  failure", with the job's pod failed, 8 minutes after the lab came up,
+  with no test failing. The retry, 4294, passed in 23m33s. M07's ITEM-0075
+  runs the integration tests apart from the unit tests, to stop it.
 
 ## Approved design
 
