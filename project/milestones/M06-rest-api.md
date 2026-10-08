@@ -71,8 +71,8 @@ reference at `/api/docs`.
   CHANGELOG is updated.
 - [x] `/code-review high` has run, and `/security-review` too, since M06
   opens an unauthenticated API.
-- [ ] The manual verification is recorded. The pipelines pass, and the user
-  has merged through an MR with a merge commit.
+- [x] The manual verification is recorded. The pipelines pass, and the user
+  has merged through an MR with a merge commit: `c07c0cc`, on 2026-10-08.
 
 ## Decided after approval
 
@@ -233,6 +233,11 @@ Append-only and dated. Record what was run and what was seen.
 - 2026-10-08: **Closed**, with every item done. ITEM-0074 is M10's. Left for
   the user: merging through a GitLab merge request with a merge commit.
   The merge, and its pipelines, are recorded on the next branch.
+- 2026-10-08: **Merged.** The user merged `m06-rest-api` through a GitLab
+  merge request. `main` is at the merge commit `c07c0cc`, whose parents
+  are the old `main`, `ec048d8`, and the branch tip, `1500830`, so every
+  per-item commit is kept (ADR-0018). `main`'s pipelines, GitLab 785 and
+  GitHub Actions run 37749673802, were running when this was recorded.
 
 ## Approved design
 
