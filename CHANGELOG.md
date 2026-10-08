@@ -71,6 +71,13 @@ All notable changes to this project are recorded here. The format follows
 - A release's notes on GitLab are its version's section of the CHANGELOG.
   The 0.1.0 release was published with empty notes.
 
+### Security
+
+- nbpdns is built with Go 1.27.2 and `golang.org/x/net` v0.60.0, which fix
+  GO-2026-6617, a race in the HTTP/2 server's HPACK encoder that can crash
+  it. `nbpdns serve` listens without TLS, where Go's server speaks only
+  HTTP/1.1, so it wasn't exposed.
+
 ## [0.1.0] - 2026-10-07
 
 ### Added

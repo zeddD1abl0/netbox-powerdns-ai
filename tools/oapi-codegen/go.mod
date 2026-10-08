@@ -2,7 +2,7 @@ module github.com/zeddD1abl0/netbox-powerdns-ai/tools/oapi-codegen
 
 go 1.27.0
 
-toolchain go1.27.1
+toolchain go1.27.2
 
 tool github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
 

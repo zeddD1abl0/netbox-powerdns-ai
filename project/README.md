@@ -16,7 +16,7 @@
 | [M04](milestones/M04-service.md) | Service | done | 10 of 10 |
 | [M05](milestones/M05-packaging.md) | Packaging | done | 5 of 5 |
 | [M06](milestones/M06-rest-api.md) | REST API | done | 10 of 10 |
-| [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | in-progress | 8 of 8 |
+| [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | in-progress | 9 of 9 |
 | [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | planned | — |
 | [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | planned | — |
 | [M10](milestones/M10-authentication.md) | Authentication | planned | 0 of 1 |
@@ -42,6 +42,7 @@
 | [ITEM-0080](items/ITEM-0080-the-webhook-docs-and-changelog.md) | The webhook docs and CHANGELOG | task | done 2026-10-08 | — |
 | [ITEM-0081](items/ITEM-0081-find-netbox-zones-whose-names-have-capitals.md) | Find NetBox zones whose names have capitals | bug | done 2026-10-08 | — |
 | [ITEM-0082](items/ITEM-0082-fix-the-m07-code-review-findings.md) | Fix the M07 code review findings | bug | done 2026-10-08 | — |
+| [ITEM-0083](items/ITEM-0083-update-go-to-1-27-2-and-x-net-to-v0-60-0-for-go-20.md) | Update Go to 1.27.2 and x/net to v0.60.0 for GO-2026-6617 | debt | done 2026-10-09 | — |
 
 ## Open items in other milestones
 
