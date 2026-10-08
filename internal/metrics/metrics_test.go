@@ -35,6 +35,7 @@ func filled(t *testing.T) *Metrics {
 	o := m.Observer("NetBox", "netbox")
 	o.Request(http.MethodGet, 200, 30*time.Millisecond)
 	o.Retry()
+	m.APIRequest("getStatus", 200, time.Millisecond)
 	return m
 }
 

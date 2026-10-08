@@ -11,8 +11,14 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"net/url"
+	"strings"
+
+	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/api/gen"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/metrics"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/service"
 )
 
@@ -34,22 +40,42 @@ type Source interface {
 type Options struct {
 	Source Source
 	Log    *slog.Logger
+	// Tracer starts each request's span. If nil, there are none.
+	Tracer trace.Tracer
+	// Metrics counts the requests. If nil, they aren't counted.
+	Metrics *metrics.Metrics
+	// PublicURL, server.public_url, is where clients reach the service, for
+	// the API's absolute links. If empty, links use the request's host.
+	PublicURL string
 }
 
-// New returns the handler for /api and everything under it.
+// base is the API's path, where the spec's server is.
+const base = "/api"
+
+// New returns the handler for /api and everything under it. Every response
+// carries the request's X-Flow-ID, and Cache-Control: no-store, since it's
+// the state as of the last refresh, which the next can change.
 func New(o Options) http.Handler {
+	if o.Tracer == nil {
+		o.Tracer = noop.NewTracerProvider().Tracer("")
+	}
+	ops, err := operations(spec, base)
+	if err != nil {
+		// The spec is embedded, and the tests parse it.
+		panic("the embedded OpenAPI document: " + err.Error())
+	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/openapi.yaml", serveSpec)
+	mux.HandleFunc("GET "+base+"/openapi.yaml", serveSpec)
 	strict := gen.NewStrictHandlerWithOptions(&server{o: o}, nil, gen.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc:  badRequest,
 		ResponseErrorHandlerFunc: o.failed,
 	})
 	gen.HandlerWithOptions(strict, gen.StdHTTPServerOptions{
-		BaseURL:          "/api",
+		BaseURL:          base,
 		BaseRouter:       mux,
 		ErrorHandlerFunc: badRequest,
 	})
-	return noStore(mux)
+	return &handler{o: o, mux: mux, ops: ops}
 }
 
 // server implements the generated interface.
@@ -57,13 +83,18 @@ type server struct{ o Options }
 
 var _ gen.StrictServerInterface = (*server)(nil)
 
-// noStore marks every response as one not to cache: it's the state as of
-// the last refresh, which the next can change.
-func noStore(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "no-store")
-		h.ServeHTTP(w, r)
-	})
+// link returns the absolute URL of path, with query, as a client reaches it
+// (Zalando [217]): under PublicURL, or else the request's host, over http.
+func (o Options) link(r *http.Request, path string, query url.Values) string {
+	root := "http://" + r.Host
+	if o.PublicURL != "" {
+		root = strings.TrimSuffix(o.PublicURL, "/")
+	}
+	u := root + path
+	if q := query.Encode(); q != "" {
+		u += "?" + q
+	}
+	return u
 }
 
 // serveSpec serves the API's OpenAPI document.
@@ -82,7 +113,7 @@ func badRequest(w http.ResponseWriter, r *http.Request, err error) {
 // returned: it may say more about nbpdns than a client should see.
 func (o Options) failed(w http.ResponseWriter, r *http.Request, err error) {
 	o.Log.ErrorContext(r.Context(), "an API request failed", "path", r.URL.Path, "error", err)
-	writeProblem(w, r, http.StatusInternalServerError, "")
+	writeProblem(w, r, http.StatusInternalServerError, "The request failed; nbpdns's log has why, under its X-Flow-ID.")
 }
 
 // problem returns an RFC 9457 problem of type about:blank, for status, with

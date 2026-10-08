@@ -47,7 +47,8 @@ in the [configuration reference](configuration.md).
 | `--otlp-timeout` | `duration` | `10s` | How long one export may take, and how long a command waits to send its last spans as it ends. |
 | `--powerdns-concurrency` | `integer` | `4` | How many requests to each PowerDNS API may be in flight at once. |
 | `--powerdns-timeout` | `duration` | `30s` | How long one request to a PowerDNS API may take. |
-| `--server-listen` | `address` | `:8080` | The address `nbpdns serve` listens on, for `/livez`, `/readyz`, `/status` and `/metrics`. |
+| `--server-listen` | `address` | `:8080` | The address `nbpdns serve` listens on, for `/livez`, `/readyz`, `/status`, `/metrics`, and the API, `/api`. |
+| `--server-public-url` | `url` | none | The URL that clients reach `nbpdns serve` at, such as `https://nbpdns.example.com`, for the API's absolute links. |
 
 ## Commands
 

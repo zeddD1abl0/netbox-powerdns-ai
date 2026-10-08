@@ -9,6 +9,11 @@ weight: 50
 over plain HTTP. Each answers `GET` and `HEAD`; another method gets `405`,
 and another path `404`. None changes anything.
 
+Under `/api`, every error, those included, is an RFC 9457 problem, as
+`application/problem+json`. Every response there carries an `X-Flow-ID`:
+the request's own, if it sent a valid one, or a new one. It's the request's
+`request_id` in the logs. A request's W3C `traceparent` continues its trace.
+
 > [!WARNING]
 > The endpoints have no authentication until M10, and they name your server
 > groups, zones, and URLs. Keep the port on a trusted network.

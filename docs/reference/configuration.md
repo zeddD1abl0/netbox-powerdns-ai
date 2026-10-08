@@ -48,6 +48,7 @@ a secret's value.
 | [`powerdns.concurrency`](#powerdnsconcurrency) | integer, 1 to 32 | `4` |
 | [`powerdns.timeout`](#powerdnstimeout) | duration | `30s` |
 | [`server.listen`](#serverlisten) | a TCP address | `:8080` |
+| [`server.public_url`](#serverpublic_url) | an `http` or `https` URL | none |
 | [`powerdns.groups`](#powerdnsgroups) | list of server groups, config file only | none |
 
 ## `drift.group_concurrency`
@@ -253,9 +254,9 @@ How long one request to a PowerDNS API may take. Write it with a unit, such as
 
 ## `server.listen`
 
-The address `nbpdns serve` listens on, for `/livez`, `/readyz`, `/status` and
-`/metrics`. Such as `:8080` for every interface, or `127.0.0.1:8080` for this
-host only.
+The address `nbpdns serve` listens on, for `/livez`, `/readyz`, `/status`,
+`/metrics`, and the API, `/api`. Such as `:8080` for every interface, or
+`127.0.0.1:8080` for this host only.
 
 - **Type:** a TCP address
 - **Default:** `:8080`
@@ -265,6 +266,20 @@ host only.
 > [!WARNING]
 > The listener has no authentication until M10, and its pages name your server
 > groups, zones, and URLs. Keep the port on a trusted network.
+
+## `server.public_url`
+
+The URL that clients reach `nbpdns serve` at, such as
+`https://nbpdns.example.com`, for the API's absolute links. Set it when clients
+reach nbpdns through a proxy, or by another name than the one they send. Its
+path is kept, so `https://example.com/nbpdns` makes links such as
+`https://example.com/nbpdns/api/server-groups`. If it's unset, the API's links
+use the host that each request names, over `http`.
+
+- **Type:** an `http` or `https` URL
+- **Default:** none
+- **Environment variable:** `NBPDNS_SERVER_PUBLIC_URL`
+- **Flag:** `--server-public-url`
 
 ## `powerdns.groups`
 
@@ -348,4 +363,5 @@ powerdns:
   timeout: 30s
 server:
   listen: :8080
+  public_url: ""
 ```

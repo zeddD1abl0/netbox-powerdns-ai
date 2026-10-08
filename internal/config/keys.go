@@ -32,6 +32,9 @@ type DriftConfig struct {
 type ServerConfig struct {
 	// Listen is the TCP address to listen on.
 	Listen string
+	// PublicURL is where clients reach the listener, for the API's
+	// absolute links. Empty means the host each request names.
+	PublicURL string
 }
 
 // LogConfig configures the operational log, written to standard error.
@@ -176,12 +179,19 @@ func keys(c *Config) []Key {
 		}),
 		stringKey(&c.Server.Listen, "a TCP address", "address", Key{
 			Name:    "server.listen",
-			Summary: "The address `nbpdns serve` listens on, for `/livez`, `/readyz`, `/status` and `/metrics`.",
+			Summary: "The address `nbpdns serve` listens on, for `/livez`, `/readyz`, `/status`, `/metrics`, and the API, `/api`.",
 			Details: "Such as `:8080` for every interface, or `127.0.0.1:8080` for this host only.",
 			Warning: "The listener has no authentication until M10, and its pages name your server groups, " +
 				"zones, and URLs. Keep the port on a trusted network.",
 			Default: ":8080",
 		}, checkListen),
+		stringKey(&c.Server.PublicURL, "an `http` or `https` URL", "url", Key{
+			Name:    "server.public_url",
+			Summary: "The URL that clients reach `nbpdns serve` at, such as `https://nbpdns.example.com`, for the API's absolute links.",
+			Details: "Set it when clients reach nbpdns through a proxy, or by another name than the one they send. " +
+				"Its path is kept, so `https://example.com/nbpdns` makes links such as `https://example.com/nbpdns/api/server-groups`. " +
+				"If it's unset, the API's links use the host that each request names, over `http`.",
+		}, checkURL),
 		stringKey(&c.OTLP.Endpoint, "an `http` or `https` URL", "url", Key{
 			Name:    "otlp.endpoint",
 			Summary: "The URL of the OpenTelemetry collector that nbpdns exports its spans to, over OTLP.",

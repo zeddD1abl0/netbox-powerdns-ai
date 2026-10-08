@@ -109,7 +109,9 @@ func serve(ctx context.Context, s *session, svc *service.Service) error {
 	}
 	// The API (ADR-0033) is under /api, beside the service's own endpoints.
 	mux := http.NewServeMux()
-	mux.Handle("/api/", api.New(api.Options{Source: svc, Log: s.log}))
+	mux.Handle("/api/", api.New(api.Options{
+		Source: svc, Log: s.log, Tracer: s.tracer, Metrics: s.metrics, PublicURL: s.cfg.Server.PublicURL,
+	}))
 	mux.Handle("/", svc.Handler())
 	srv := &http.Server{
 		Handler:           mux,

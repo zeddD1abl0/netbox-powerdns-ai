@@ -10,9 +10,13 @@ All notable changes to this project are recorded here. The format follows
 
 - An API, at `/api` on `server.listen`, described by its OpenAPI 3.1
   document, `api/openapi.yaml`, which the service serves at
-  `/api/openapi.yaml`. `/api/status` gives the service's state. The API
-  only reads, and has no authentication until M10, so keep it on a trusted
-  network.
+  `/api/openapi.yaml`. `/api/status` gives the service's state. Every
+  error is an RFC 9457 problem. Each request takes, or is given, an
+  `X-Flow-ID`, which is its request ID in the logs, continues the client's
+  W3C `traceparent`, and is counted in `nbpdns_api_requests_total` and
+  `nbpdns_api_request_duration_seconds`. `server.public_url` sets the host
+  of the API's links, for a service behind a proxy. The API only reads,
+  and has no authentication until M10, so keep it on a trusted network.
 
 ### Fixed
 
