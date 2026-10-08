@@ -103,7 +103,8 @@ var (
 		help:   "Requests to NetBox and to each primary that were tried again."}
 	defAPIRequests = def{name: "nbpdns_api_requests_total", kind: counter, labels: []string{"operation", "code"},
 		help: "Requests to the API. The operation is the request's `operationId` in `api/openapi.yaml`, such as `getStatus`, " +
-			"or `openapi` for the OpenAPI document, or `unmatched` for any other path or method. The code is the answer's status."}
+			"or `openapi` for the OpenAPI document, `docs` for the API reference, or `unmatched` for any other path or method. " +
+			"The code is the answer's status."}
 	defAPIRequestDuration = def{name: "nbpdns_api_request_duration_seconds", kind: histogram, labels: []string{"operation"},
 		buckets: []float64{0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5},
 		help:    "How long the API took to answer each request."}

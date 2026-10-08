@@ -267,6 +267,26 @@ api-lint: $(VACUUM) ## Lint api/openapi.yaml against the Zalando ruleset, and se
 	echo "api ruleset: self-test passed"
 	@if [ -f api/openapi.yaml ]; then $(VACUUM_LINT) api/openapi.yaml; else echo "api/openapi.yaml doesn't exist yet (M06)"; fi
 
+# Scalar's API reference (ADR-0034), vendored into internal/api/docs: its
+# standalone bundle, gzipped as the binary serves it, and its license, each
+# checked by SHA-256. The npm package has no license file, so it comes from
+# Scalar's repository.
+SCALAR_VERSION        := 1.73.1
+SCALAR_SHA256         := 424d2f1e55df6c6a485a374bcebbab32c1945b7f2028219b425d79a07b3b15c6
+SCALAR_LICENSE_SHA256 := 380cd0a6ad700e1f821f2a509f0dd9ff835041cee2d43daf5dedc1adb2bcc620
+
+.PHONY: vendor-scalar
+vendor-scalar: ## Fetch the pinned Scalar API reference into internal/api/docs (needs network)
+	@tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' EXIT; \
+	curl -fsSL -o "$$tmp/scalar.tgz" https://registry.npmjs.org/@scalar/api-reference/-/api-reference-$(SCALAR_VERSION).tgz; \
+	echo "$(SCALAR_SHA256)  $$tmp/scalar.tgz" | sha256sum --check --quiet; \
+	tar -xzf "$$tmp/scalar.tgz" -C "$$tmp" package/dist/browser/standalone.js; \
+	gzip -9 -n -c "$$tmp/package/dist/browser/standalone.js" > internal/api/docs/scalar.js.gz; \
+	curl -fsSL -o "$$tmp/LICENSE" https://raw.githubusercontent.com/scalar/scalar/main/LICENSE; \
+	echo "$(SCALAR_LICENSE_SHA256)  $$tmp/LICENSE" | sha256sum --check --quiet; \
+	cp "$$tmp/LICENSE" internal/api/docs/LICENSE.scalar; \
+	echo "vendor-scalar: Scalar $(SCALAR_VERSION) in internal/api/docs"
+
 .PHONY: vale-sync
 vale-sync: $(VALE) ## Refresh the vendored Vale style packages (needs network)
 	$(VALE) sync

@@ -160,9 +160,12 @@ func TestRequestMetrics(t *testing.T) {
 	in.do(t, http.MethodGet, "/api/openapi.yaml", nil)
 	in.do(t, http.MethodGet, "/api/nope", nil)
 	in.do(t, http.MethodPost, "/api/status", nil)
+	in.do(t, http.MethodGet, "/api/docs", nil)
+	in.do(t, http.MethodGet, "/api/docs/init.js", nil)
 	want := `
-# HELP nbpdns_api_requests_total Requests to the API. The operation is the request's ` + "`operationId`" + ` in ` + "`api/openapi.yaml`" + `, such as ` + "`getStatus`" + `, or ` + "`openapi`" + ` for the OpenAPI document, or ` + "`unmatched`" + ` for any other path or method. The code is the answer's status.
+# HELP nbpdns_api_requests_total Requests to the API. The operation is the request's ` + "`operationId`" + ` in ` + "`api/openapi.yaml`" + `, such as ` + "`getStatus`" + `, or ` + "`openapi`" + ` for the OpenAPI document, ` + "`docs`" + ` for the API reference, or ` + "`unmatched`" + ` for any other path or method. The code is the answer's status.
 # TYPE nbpdns_api_requests_total counter
+nbpdns_api_requests_total{code="200",operation="docs"} 2
 nbpdns_api_requests_total{code="200",operation="getStatus"} 2
 nbpdns_api_requests_total{code="200",operation="openapi"} 1
 nbpdns_api_requests_total{code="404",operation="unmatched"} 1
@@ -171,7 +174,7 @@ nbpdns_api_requests_total{code="405",operation="unmatched"} 1
 	if err := testutil.GatherAndCompare(in.metrics.Registry, strings.NewReader(want), "nbpdns_api_requests_total"); err != nil {
 		t.Error(err)
 	}
-	if n := testutil.CollectAndCount(in.metrics.Registry, "nbpdns_api_request_duration_seconds"); n != 3 {
+	if n := testutil.CollectAndCount(in.metrics.Registry, "nbpdns_api_request_duration_seconds"); n != 4 {
 		t.Errorf("%d duration series, want one for each operation", n)
 	}
 }

@@ -68,6 +68,8 @@ func New(o Options) http.Handler {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET "+base+"/openapi.yaml", serveSpec)
+	mux.HandleFunc("GET "+base+"/docs", serveDocs)
+	mux.HandleFunc("GET "+base+"/docs/{file}", serveAsset)
 	strict := gen.NewStrictHandlerWithOptions(&server{o: o}, []gen.StrictMiddlewareFunc{withRequest}, gen.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc:  badRequest,
 		ResponseErrorHandlerFunc: o.failed,

@@ -26,6 +26,7 @@ the request's own, if it sent a valid one, or a new one. It's the request's
 | `/metrics` | The metrics, in Prometheus's text format, or in OpenMetrics if the scraper asks for it. The [metrics reference](metrics.md) lists them. |
 | `/api/…` | The API, as JSON: the service's status, at `/api/status`; the server groups, at `/api/server-groups`; each group's zones, filtered by state; each zone's changes; and each zone's records as NetBox defines them, at `…/rrsets`. Everything is last-known state. Lists are paged with `limit` and `cursor`. Every operation is in the OpenAPI document. |
 | `/api/openapi.yaml` | The API's OpenAPI 3.1 document, `application/yaml`, which describes every operation under `/api`. |
+| `/api/docs` | The API's reference, for a browser: Scalar's, built into nbpdns, reading `/api/openapi.yaml`. Its Content-Security-Policy lets it reach no other host. |
 
 Neither `/livez` nor `/readyz` depends on NetBox or the primaries: their
 failures show on `/status`, in the metrics, and in the logs.

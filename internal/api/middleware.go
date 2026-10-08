@@ -24,6 +24,8 @@ var flowIDRE = regexp.MustCompile(`^[A-Za-z0-9._:+/=-]{1,128}$`)
 const (
 	// opSpec is a request for the OpenAPI document itself.
 	opSpec = "openapi"
+	// opDocs is a request for the API reference, or one of its files.
+	opDocs = "docs"
 	// opUnmatched is a request for no operation: an unknown path or method.
 	opUnmatched = "unmatched"
 )
@@ -78,7 +80,11 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	op, route := opUnmatched, ""
 	if pattern != "" {
 		op, route = h.ops[pattern], strings.TrimPrefix(pattern, r.Method+" ")
-		if op == "" {
+		switch {
+		case op != "":
+		case strings.HasPrefix(route, base+"/docs"):
+			op = opDocs
+		default:
 			op = opSpec
 		}
 	}
