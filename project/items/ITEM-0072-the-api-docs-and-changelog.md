@@ -2,12 +2,12 @@
 id: ITEM-0072
 title: The API docs and CHANGELOG
 type: task # feature | bug | debt | task
-status: in-progress # open | in-progress | blocked | done | wontfix
+status: done # open | in-progress | blocked | done | wontfix
 milestone: M06
 requirements: [REQ-018, REQ-046, REQ-047]
 depends_on: [ITEM-0070, ITEM-0071]
 created: 2026-10-08
-closed:
+closed: 2026-10-08
 ---
 
 # ITEM-0072: The API docs and CHANGELOG
@@ -21,7 +21,7 @@ through the API, an explanation of the API's design, and the CHANGELOG.
 ## Acceptance criteria
 
 - [x] `docs/reference/api.md` is generated from the spec by `gendocs`, and `generate-check` covers it.
-- [ ] The how-to and the explanation exist, and "Service endpoints" lists `/api`, `/api/openapi.yaml` and `/api/docs`.
+- [x] The how-to and the explanation exist, and "Service endpoints" lists `/api`, `/api/openapi.yaml` and `/api/docs`.
 - [x] The CHANGELOG has the API under Unreleased.
 
 ## Notes
@@ -66,3 +66,15 @@ through the API, an explanation of the API's design, and the CHANGELOG.
     reference.
   - **The CHANGELOG** has a documentation line, and the vocabulary gains
     `jq`.
+- 2026-10-08: Done. Every command in the how-to ran against `serve` on the
+  scale data set (ITEM-0070), on real drift:
+  - **Status:** ready, the last refresh complete, NetBox up.
+  - **Groups:** one group, `ok`, 15 in drift. Real times carry
+    nanoseconds, so the example now does too.
+  - **Drifted zones:** the planted 15 in drift and 5 missing.
+  - **Changes:** z0000's changed A record, and z0010's extra TXT.
+  - **Records:** the missing zone z0995 gave 100 zone-file lines, with SOA
+    and NS left out as managed.
+  - **Paging:** 102 RRsets in four pages, at limit 30.
+  - **Flow ID:** `check-1234` came back in the response, with the 404
+    problem, and was the request ID of one log line.

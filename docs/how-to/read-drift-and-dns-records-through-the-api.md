@@ -55,8 +55,8 @@ curl -s "$NBPDNS/api/server-groups" |
 ```
 
 ```text
-site-a	ok	2	2026-10-08T01:10:02Z
-site-b	failed	0	2026-10-08T00:55:02Z
+site-a	ok	2	2026-10-08T01:10:02.601192065Z
+site-b	failed	0	2026-10-08T00:55:02.114376180Z
 ```
 
 A group that `failed` keeps its last-known state, as of its `last_success`.
