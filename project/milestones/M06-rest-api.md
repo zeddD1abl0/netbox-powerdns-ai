@@ -211,6 +211,9 @@ Append-only and dated. Record what was run and what was seen.
   - `make docs-links` passes, on 73 pages.
   - The stripped binary is 21.1 MB, from 19.8 MB at M05's end: +1.31 MB
     for Scalar's gzipped bundle, and the API.
+- 2026-10-08: The scale data set is gone from the lab: NetBox's `scale`
+  view, its 1,000 zones and their records, and the name server. lab-a is
+  back to its one zone.
 
 ## Approved design
 
