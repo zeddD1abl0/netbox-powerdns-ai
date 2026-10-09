@@ -241,7 +241,7 @@ type ChangeRequest struct {
 	User *string `json:"user"`
 }
 
-// DriftPolicy What nbpdns does about a zone's drift: `report` reports it, `enforce` reports it and, from M13, corrects it, and `ignore` doesn't compare the zone.
+// DriftPolicy What nbpdns does about a zone's drift: `report` reports it, `enforce` reports it and, from M14, corrects it, and `ignore` doesn't compare the zone.
 //
 // Examples: report
 type DriftPolicy string
@@ -514,7 +514,7 @@ type ServerGroup struct {
 	// Examples: {"drift":15,"ignored":1,"in_sync":980,"inactive_in_netbox":0,"missing":5,"unmanaged":2}
 	Counts *ZoneCounts `json:"counts"`
 
-	// DriftPolicy What nbpdns does about a zone's drift: `report` reports it, `enforce` reports it and, from M13, corrects it, and `ignore` doesn't compare the zone.
+	// DriftPolicy What nbpdns does about a zone's drift: `report` reports it, `enforce` reports it and, from M14, corrects it, and `ignore` doesn't compare the zone.
 	//
 	// Examples: report
 	DriftPolicy DriftPolicy `json:"drift_policy"`

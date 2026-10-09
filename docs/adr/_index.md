@@ -50,5 +50,12 @@ from [`template.md`](template.md).
 | [0034](0034-a-vendored-locked-down-scalar-viewer-at-api-docs.md) | A vendored, locked-down Scalar viewer at /api/docs | accepted |
 | [0035](0035-refresh-the-zones-that-netbox-s-webhooks-name.md) | Refresh the zones that NetBox's webhooks name | superseded by ADR-0036 |
 | [0036](0036-refresh-the-zones-that-netbox-s-webhooks-name-rest.md) | Refresh the zones that NetBox's webhooks name, restated as built | accepted |
+| [0037](0037-plan-milestones-ahead-with-gitlab-milestones-and-i.md) | Plan milestones ahead, with GitLab milestones and issues as their view | accepted |
+| [0038](0038-an-embedded-sqlite-store-with-goose-and-sqlc.md) | An embedded SQLite store, with goose and sqlc | proposed |
+| [0039](0039-a-hash-chained-audit-trail.md) | A hash-chained audit trail | proposed |
+| [0040](0040-runtime-settings-and-managed-resources.md) | Runtime settings and managed resources | proposed |
+| [0041](0041-secrets-encrypted-at-rest.md) | Secrets encrypted at rest | proposed |
+| [0042](0042-drift-history.md) | Drift history | proposed |
+| [0043](0043-re-plan-m11-to-m20-roles-then-sign-in-then-the-web.md) | Re-plan M11 to M20: roles, then sign-in, then the web UI | accepted |
 
 <!-- projctl:adr-index:end -->

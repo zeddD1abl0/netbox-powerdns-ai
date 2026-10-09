@@ -1,12 +1,12 @@
 ---
-id: M18
+id: M19
 title: Terraform/OpenTofu provider
 status: planned # planned | in-progress | done
 started:
 closed:
 ---
 
-# M18: Terraform/OpenTofu provider
+# M19: Terraform/OpenTofu provider
 
 ## Goal
 
@@ -20,4 +20,4 @@ Manage nbpdns's own configuration as code with Terraform and OpenTofu (REQ-017).
 ## Design, non-goals and acceptance criteria
 
 To be written in this milestone's plan-mode session, before implementation
-starts. The milestone's branch is `m18-terraform-provider` (ADR-0010).
+starts. The milestone's branch is `m19-terraform-provider` (ADR-0010).

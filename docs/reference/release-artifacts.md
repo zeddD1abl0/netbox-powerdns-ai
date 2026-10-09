@@ -67,7 +67,7 @@ snapshot build:
 696386ef9352a234aca1d7d3554ed0e118cff6f6abe30a847d1cd564c2fae57b  nbpdns_0.0.0-SNAPSHOT-db441f1_linux_arm64.tar.gz
 ```
 
-The archives and `checksums.txt` aren't signed until M17.
+The archives and `checksums.txt` aren't signed until M18.
 
 ## Container image
 

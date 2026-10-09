@@ -6,6 +6,11 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-09
+
+The first release since 0.1.0, with the REST API of M06 and the
+refreshes from NetBox's webhooks of M07.
+
 ### Added
 
 - An API, at `/api` on `server.listen`, described by its OpenAPI 3.1

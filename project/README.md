@@ -16,48 +16,56 @@
 | [M05](milestones/M05-packaging.md) | Packaging | done | 5 of 5 |
 | [M06](milestones/M06-rest-api.md) | REST API | done | 10 of 10 |
 | [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | done | 9 of 9 |
-| [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | planned | — |
-| [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | planned | — |
-| [M10](milestones/M10-authentication.md) | Authentication | planned | 0 of 1 |
-| [M11](milestones/M11-sso-and-rbac.md) | SSO and RBAC | planned | — |
-| [M12](milestones/M12-web-ui.md) | Web UI | planned | — |
-| [M13](milestones/M13-write-path-plan-and-apply.md) | Write path: plan and apply | planned | 0 of 1 |
-| [M14](milestones/M14-change-safety.md) | Change safety | planned | — |
-| [M15](milestones/M15-brownfield-import.md) | Brownfield import | planned | — |
-| [M16](milestones/M16-siem-export.md) | SIEM export | planned | — |
-| [M17](milestones/M17-production-hardening.md) | Production hardening | planned | 0 of 1 |
-| [M18](milestones/M18-terraform-provider.md) | Terraform/OpenTofu provider | planned | — |
-| [M19](milestones/M19-ansible-collection-v1.md) | Ansible collection and v1.0 | planned | — |
+| [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | planned | 1 of 11 |
+| [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | planned | 1 of 1 |
+| [M10](milestones/M10-authentication.md) | Authentication | planned | 1 of 2 |
+| [M11](milestones/M11-roles-and-permissions.md) | Roles and permissions | planned | 1 of 1 |
+| [M12](milestones/M12-sign-in.md) | Sign-in | planned | 1 of 1 |
+| [M13](milestones/M13-web-ui.md) | Web UI | planned | 1 of 1 |
+| [M14](milestones/M14-write-path-plan-and-apply.md) | Write path: plan and apply | planned | 0 of 1 |
+| [M15](milestones/M15-change-safety.md) | Change safety | planned | — |
+| [M16](milestones/M16-brownfield-import.md) | Brownfield import | planned | — |
+| [M17](milestones/M17-siem-export.md) | SIEM export | planned | — |
+| [M18](milestones/M18-production-hardening.md) | Production hardening | planned | 0 of 1 |
+| [M19](milestones/M19-terraform-provider.md) | Terraform/OpenTofu provider | planned | — |
+| [M20](milestones/M20-ansible-collection-v1.md) | Ansible collection and v1 | planned | — |
 
 ## Open items in other milestones
 
 | Item | Title | Type | Status | Waiting on |
 |---|---|---|---|---|
+| [ITEM-0084](items/ITEM-0084-plan-milestones-ahead-with-gitlab-as-their-view.md) | Plan milestones ahead, with GitLab as their view | task | in-progress | — |
 | [ITEM-0040](items/ITEM-0040-write-record-values-to-powerdns-in-its-own-text-fo.md) | Write record values to PowerDNS in its own text form | task | open | — |
 | [ITEM-0062](items/ITEM-0062-keep-the-image-s-latest-tag-on-the-newest-release.md) | Keep the image's latest tag on the newest release | debt | open | — |
 | [ITEM-0074](items/ITEM-0074-refuse-requests-whose-host-isn-t-server-public-url.md) | Refuse requests whose Host isn't server.public_url's | debt | open | — |
+| [ITEM-0086](items/ITEM-0086-the-sqlite-store-driver-migrations-sqlc-and-the-lo.md) | The SQLite store: driver, migrations, sqlc and the lock | feature | open | — |
+| [ITEM-0087](items/ITEM-0087-the-audit-core-events-chain-retention-and-nbpdns-a.md) | The audit core: events, chain, retention and nbpdns audit | feature | open | ITEM-0086 |
+| [ITEM-0088](items/ITEM-0088-drift-history-and-restore-at-start.md) | Drift history and restore at start | feature | open | ITEM-0087 |
+| [ITEM-0089](items/ITEM-0089-drift-history-in-the-api-and-the-cli.md) | Drift history in the API and the CLI | feature | open | ITEM-0088 |
+| [ITEM-0090](items/ITEM-0090-runtime-settings-key-kinds-precedence-and-live-app.md) | Runtime settings: key kinds, precedence and live application | feature | open | ITEM-0087 |
+| [ITEM-0091](items/ITEM-0091-server-groups-in-the-database-with-managed-by.md) | Server groups in the database, with managed_by | feature | open | ITEM-0090 |
+| [ITEM-0092](items/ITEM-0092-secrets-encrypted-at-rest-and-master-key-rotation.md) | Secrets encrypted at rest, and master key rotation | feature | open | ITEM-0090, ITEM-0091 |
+| [ITEM-0093](items/ITEM-0093-the-m08-integration-tests-and-the-image-s-volume.md) | The M08 integration tests and the image's volume | task | open | ITEM-0089, ITEM-0091, ITEM-0092 |
+| [ITEM-0094](items/ITEM-0094-the-m08-docs-and-changelog.md) | The M08 docs and CHANGELOG | task | open | ITEM-0093 |
 
 ## Open questions
 
-23 open (0 blocking), 34 answered. The questions and their proposed defaults are in [requirements.md](requirements.md#open-questions).
+10 open (0 blocking), 52 answered. The questions and their proposed defaults are in [requirements.md](requirements.md#open-questions).
 
 | Needed by | Open questions |
 |---|---|
-| M08 | Q-012, Q-023, Q-024, Q-035, Q-036 |
-| M08 (migrations), M17 (rest) | Q-026 |
-| M10 | Q-029, Q-031, Q-040 |
-| M11 | Q-015, Q-028, Q-030, Q-032 |
-| M12 | Q-016, Q-050, Q-051 |
-| M13 | Q-011 |
-| M14 | Q-013, Q-014 |
-| M15 | Q-057 |
-| M16 | Q-033, Q-034 |
-| M18 | Q-042 |
+| M10 | Q-031 |
+| M14 | Q-011, Q-059 |
+| M15 | Q-013, Q-014 |
+| M16 | Q-057 |
+| M17 | Q-033, Q-034 |
+| M18 | Q-058 |
+| M19 | Q-042 |
 
 ## Requirements
 
-48 requirements, listed in [requirements.md](requirements.md#requirements). 14 aren't referenced by any item yet: REQ-004, REQ-007, REQ-008, REQ-009, REQ-010, REQ-011, REQ-015, REQ-016, REQ-017, REQ-023, REQ-032, REQ-033, REQ-034, REQ-035.
+58 requirements, listed in [requirements.md](requirements.md#requirements). 11 aren't referenced by any item yet: REQ-004, REQ-007, REQ-008, REQ-009, REQ-010, REQ-015, REQ-016, REQ-017, REQ-023, REQ-034, REQ-035.
 
 ## Decisions
 
-36 ADRs (27 accepted, 9 superseded), listed in [docs/adr](../docs/adr/_index.md).
+43 ADRs (29 accepted, 5 proposed, 9 superseded), listed in [docs/adr](../docs/adr/_index.md).

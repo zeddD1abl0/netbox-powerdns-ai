@@ -18,4 +18,4 @@ For individual design decisions, see the [decision records](../adr/).
 - [How nbpdns's API is designed](how-nbpdns-api-is-designed.md)
 - [Configuration sources and precedence](configuration-sources-and-precedence.md)
 
-The threat model is planned for M17.
+The threat model is planned for M18.

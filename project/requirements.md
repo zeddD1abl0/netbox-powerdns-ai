@@ -64,63 +64,63 @@ When a question is answered:
 | REQ-046 | nbpdns serves a read-only API, documented by `api/openapi.yaml`, of each server group's drift, its zones and their changes, and the service's status. Unauthenticated until M10. | Q-041, [ADR-0033](../docs/adr/0033-a-read-only-api-spec-first-generated-with-oapi-cod.md), [ADR-0034](../docs/adr/0034-a-vendored-locked-down-scalar-viewer-at-api-docs.md) |
 | REQ-047 | The API serves each zone's DNS records as NetBox defines them, in nbpdns's normalized form, for IaC to read, for example to publish them through other providers. Records are written only in NetBox. | Q-041, [ADR-0033](../docs/adr/0033-a-read-only-api-spec-first-generated-with-oapi-cod.md) |
 | REQ-048 | A NetBox webhook, signed with a shared secret, makes nbpdns compare the zones it names within seconds. The scheduled full refresh remains the safety net. | Q-054, [ADR-0035](../docs/adr/0035-refresh-the-zones-that-netbox-s-webhooks-name.md), restated by [ADR-0036](../docs/adr/0036-refresh-the-zones-that-netbox-s-webhooks-name-rest.md) |
+| REQ-049 | Every change to nbpdns's configuration, and every change of a zone's drift, is an audit event in a hash-chained trail, kept for a configurable time, by default seven years. | Q-035, Q-036, [ADR-0039](../docs/adr/0039-a-hash-chained-audit-trail.md) (proposed) |
+| REQ-050 | Runtime settings and server groups live in the database, each with its owner, and take effect without a restart. | Q-024, Q-043, [ADR-0040](../docs/adr/0040-runtime-settings-and-managed-resources.md) (proposed) |
+| REQ-051 | Secrets stored in the database are encrypted at rest with ASD-approved algorithms. | Q-023, [ADR-0041](../docs/adr/0041-secrets-encrypted-at-rest.md) (proposed) |
+| REQ-052 | nbpdns keeps each zone's drift history, with its changes, for a configurable time. | M08's design, [ADR-0042](../docs/adr/0042-drift-history.md) (proposed) |
+| REQ-053 | nbpdns is built to support the Essential Eight and the ISM, ISO 27001, and SOC 2 or PCI DSS; where they differ, the strictest default wins. | Q-036, [ADR-0039](../docs/adr/0039-a-hash-chained-audit-trail.md) (proposed) |
+| REQ-054 | Data is stored in PostgreSQL 18, as well as SQLite. More releases are added as the CI runners have room to test them. | Q-060, M09's roadmap |
+| REQ-055 | From M10, every `/api` path, `/status` and `/metrics` need a token; only `/livez` and `/readyz` are open. | M10's roadmap |
+| REQ-056 | Local users authenticate with WebAuthn only, which resists phishing, as the Essential Eight asks; no TOTP. | Q-029, Q-036, M10's roadmap |
+| REQ-057 | Permissions are checked per action, through built-in and custom roles, granted globally or for chosen server groups. | Q-015, Q-030, M11's roadmap |
+| REQ-058 | People sign in with WebAuthn-only local accounts, or through OIDC, SAML or trusted proxy headers, and SCIM provisions them. | Q-028, Q-029, Q-032, M12's roadmap |
 
 ## Open questions
 
 **Blocking** questions must be answered before M1 is designed. **Needed by**
 names the milestone that needs the answer, from the milestone list in
-[ADR-0019](../docs/adr/0019-re-slice-the-milestones-into-smaller-steps.md).
+[ADR-0019](../docs/adr/0019-re-slice-the-milestones-into-smaller-steps.md), as
+[ADR-0043](../docs/adr/0043-re-plan-m11-to-m20-roles-then-sign-in-then-the-web.md) re-planned it.
 
 ### Product and domain
 
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
-| Q-011 | Where does data that NetBox doesn't model live: TSIG keys, zone metadata (ALLOW-AXFR-FROM, ALSO-NOTIFY, SOA-EDIT-API), serial policy, DNSSEC key rollover? | In NetBox wherever the plugin models it. Everything else is per-zone or per-group config in this app. | M13 |
-| Q-012 | Does "change settings" mean this app's settings only, or PowerDNS server config (`pdns.conf`) too? | This app's settings plus per-zone PowerDNS metadata. `pdns.conf` stays with Ansible. | M08 |
-| Q-013 | What change safety is needed: dry-run diff, four-eyes approval, change windows, blast-radius limits, rollback? | Every sync computes a plan and auto-applies below thresholds. Above a threshold (such as more than N deletes, or NS/SOA changes) it needs approval. | M14 |
-| Q-014 | What validation runs before and after changes? | Pre-flight checks (CNAME at apex, dangling NS, TTL bounds, syntax). After apply, query every server for the SOA serial and sample records. | M14 |
-| Q-015 | Is multi-tenancy needed: are permissions scoped to zone, NetBox tenant or server group? | Global roles in v1, scoped by server group. Tenant scoping is a later ADR. | M11 |
-| Q-016 | What is the web UI's scope? | Settings, ops dashboard (sync status, drift, per-server health), approvals, audit viewer, users and roles. **No record editor**, since NetBox is the editor. | M12 |
-| Q-057 | How are existing PowerDNS zones adopted into NetBox (brownfield import)? This is Q-054's import part. | An import tool for first adoption, with imported zones starting in report mode. | M15 |
+| Q-011 | Where does data that NetBox doesn't model live: TSIG keys, zone metadata (ALLOW-AXFR-FROM, ALSO-NOTIFY, SOA-EDIT-API), serial policy, DNSSEC key rollover? | In NetBox wherever the plugin models it. Everything else is per-zone or per-group config in this app. | M14 |
+| Q-013 | What change safety is needed: dry-run diff, four-eyes approval, change windows, blast-radius limits, rollback? | Every sync computes a plan and auto-applies below thresholds. Above a threshold (such as more than N deletes, or NS/SOA changes) it needs approval. | M15 |
+| Q-014 | What validation runs before and after changes? | Pre-flight checks (CNAME at apex, dangling NS, TTL bounds, syntax). After apply, query every server for the SOA serial and sample records. | M15 |
+| Q-057 | How are existing PowerDNS zones adopted into NetBox (brownfield import)? This is Q-054's import part. | An import tool for first adoption, with imported zones starting in report mode. | M16 |
+| Q-059 | How is per-zone PowerDNS metadata managed (ALSO-NOTIFY, ALLOW-AXFR-FROM, SOA-EDIT-API)? This is Q-012's metadata part. | Per zone or per group in this app, where NetBox doesn't model it (see Q-011). `pdns.conf` stays with Ansible. | M14 |
 
 ### Architecture and deployment
 
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
-| Q-023 | How are secrets stored at rest (PowerDNS API keys, TSIG, OIDC client secrets)? | Envelope encryption with a master key from env or file. Vault/OpenBao later. | M08 |
-| Q-024 | When the UI and IaC both manage a setting, which one owns it? | A `managed_by` field on each resource. Resources owned by IaC are read-only in the UI. | M08 |
-| Q-026 | How are upgrades, backup and restore, and config export handled? | Forward-only migrations. `export` and `import` commands for app config. | M08 (migrations), M17 (rest) |
+| Q-058 | How are backup and restore, and config export and import, handled? This is Q-026's part after migrations. | `export` and `import` commands for app config, and a documented backup and restore of each database. | M18 |
 
 ### Identity and access
 
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
-| Q-028 | Which IdP and protocols? | Authentik, with OIDC, SAML and trusted proxy headers, each toggled independently. No LDAP in v1. | M11 |
-| Q-029 | Are local users, MFA and break-glass access needed? | Local users with TOTP/WebAuthn, plus an env-only break-glass token. Every use is audited. | M10 |
-| Q-030 | What RBAC model? | Viewer, Operator and Admin built in. Custom roles. IdP group → role mapping. Permissions checked per action. | M11 |
 | Q-031 | How do Terraform, Ansible and CI pipelines authenticate? | Scoped, expiring, hashed API tokens and service accounts. OIDC workload identity (CI JWTs) later. | M10 |
-| Q-032 | Is SCIM provisioning needed? | Not in v1. | M11 |
 
 ### Audit, logging and SIEM
 
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
-| Q-033 | Which SIEMs or log platforms must be supported (Splunk, Elastic, Sentinel, Wazuh, Graylog, Loki, QRadar)? | Sinks: stdout JSON, file, syslog RFC 5424 over TLS, HTTP (HEC-compatible), OTLP logs. | M16 |
-| Q-034 | What wire format? | Native versioned JSON first. OCSF and CEF mappings are ADR candidates. | M16 |
-| Q-035 | What audit coverage, retention and tamper evidence are needed, and what happens when the SIEM is down? | All auth, config, RBAC, token, plan, apply, drift and approval events. Hash-chained. Retention configurable. An outbox buffers events, with an alert on backlog. | M08 |
-| Q-036 | Which compliance frameworks apply (ISO 27001, SOC 2, PCI DSS, Essential Eight/ISM, NIS2)? | Needs an answer. It affects retention, crypto and MFA. | M08 |
+| Q-033 | Which SIEMs or log platforms must be supported (Splunk, Elastic, Sentinel, Wazuh, Graylog, Loki, QRadar)? | Sinks: stdout JSON, file, syslog RFC 5424 over TLS, HTTP (HEC-compatible), OTLP logs. | M17 |
+| Q-034 | What wire format? | Native versioned JSON first. OCSF and CEF mappings are ADR candidates. | M17 |
 
 ### API, metrics and extensibility
 
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
-| Q-040 | Are rate limits and quotas needed? | Limits per token and per IP. | M10 |
 
 ### IaC
 
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
-| Q-042 | Where do the Terraform/OpenTofu provider and the Ansible collection live, and which registries do they publish to? | Separate repos in later milestones, built with terraform-plugin-framework. The API is designed for them from M1: declarative, idempotent, stable IDs, import support. | M18 |
+| Q-042 | Where do the Terraform/OpenTofu provider and the Ansible collection live, and which registries do they publish to? | Separate repos in later milestones, built with terraform-plugin-framework. The API is designed for them from M1: declarative, idempotent, stable IDs, import support. | M19 |
 
 ### Documentation
 
@@ -131,8 +131,6 @@ names the milestone that needs the answer, from the milestone list in
 
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
-| Q-050 | Which UI technology? | Server-rendered templ + htmx with vendored assets and no Node build, embedded in the binary. | M12 |
-| Q-051 | What accessibility and localisation level? | WCAG 2.2 AA. English only. | M12 |
 
 ## Answered
 
@@ -165,10 +163,28 @@ names the milestone that needs the answer, from the milestone list in
 | Q-039 | How will the app be extended in future? | No backend interface or plugin runtime yet. The PowerDNS client returns the shared model, and M03, the first code using two sources, defines the interface it needs. A plugin runtime needs its own ADR. | 2026-10-06 | [ADR-0024](../docs/adr/0024-read-powerdns-through-its-api-from-server-groups-i.md) |
 | Q-043 | Is a declarative config file (GitOps) needed? | Server groups are declared in the config file. When M08 stores resources in the database, those from the file become `managed_by=file`. | 2026-10-06 | [ADR-0024](../docs/adr/0024-read-powerdns-through-its-api-from-server-groups-i.md) |
 | Q-053 | Which PowerDNS Authoritative versions must be supported? | 5.1 and 5.0. 4.9 reached end of life around September 2026. Later the same day, narrowed to 5.1 only, since the CI runners couldn't fit both. | 2026-10-06 | REQ-041, [ADR-0024](../docs/adr/0024-read-powerdns-through-its-api-from-server-groups-i.md), [ADR-0026](../docs/adr/0026-read-powerdns-through-its-api-with-powerdns-5-1-on.md) |
-| Q-017 | What are the scale targets: servers, zones, records, change rate, propagation latency from NetBox to servers? | 1,000 zones and 100,000 records per run for now, tested and measured; raised when a deployment needs more. Propagation latency applies once nbpdns writes (M13). | 2026-10-06 | REQ-043, [ADR-0027](../docs/adr/0027-report-drift-between-netbox-and-each-server-group.md) |
+| Q-017 | What are the scale targets: servers, zones, records, change rate, propagation latency from NetBox to servers? | 1,000 zones and 100,000 records per run for now, tested and measured; raised when a deployment needs more. Propagation latency applies once nbpdns writes (M14). | 2026-10-06 | REQ-043, [ADR-0027](../docs/adr/0027-report-drift-between-netbox-and-each-server-group.md) |
 | Q-027 | What happens when things fail? | For the command line (M03): if NetBox can't be read, the run fails; if a group's primary can't be read, that group is marked failed and the others are still compared, and the run fails as incomplete. Keeping the last-known state and alerting come with the service (M04) and the database (M08). | 2026-10-06 | [ADR-0027](../docs/adr/0027-report-drift-between-netbox-and-each-server-group.md) |
-| Q-038 | Do "clearly defined metrics" cover this app only, or PowerDNS stats too? | This app's only: drift per server group and per drifted zone, refreshes, and requests to NetBox and PowerDNS, through `prometheus/client_golang`. PowerDNS's statistics stay on PowerDNS's own `/metrics`. Sync lag and plan size come with writes (M13), and serial lag on secondaries with M14. | 2026-10-07 | REQ-044, [ADR-0029](../docs/adr/0029-run-nbpdns-as-a-service-with-prometheus-metrics-an.md) |
-| Q-025 | What packaging is needed? | For M05: static linux amd64 and arm64 binaries with SHA-256 checksums, and a multi-arch distroless static non-root image with an SBOM, built by GoReleaser and ko, and published to GitLab on version tags. Signing comes with M17, as do the Helm chart, systemd unit, compose example and air-gap bundle. Linux only. | 2026-10-07 | REQ-045, [ADR-0030](../docs/adr/0030-release-with-goreleaser-and-ko-to-gitlab-on-versio.md), [ADR-0031](../docs/adr/0031-debian-images-for-ci-with-a-distroless-static-runt.md) |
+| Q-038 | Do "clearly defined metrics" cover this app only, or PowerDNS stats too? | This app's only: drift per server group and per drifted zone, refreshes, and requests to NetBox and PowerDNS, through `prometheus/client_golang`. PowerDNS's statistics stay on PowerDNS's own `/metrics`. Sync lag and plan size come with writes (M14), and serial lag on secondaries with M15. | 2026-10-07 | REQ-044, [ADR-0029](../docs/adr/0029-run-nbpdns-as-a-service-with-prometheus-metrics-an.md) |
+| Q-025 | What packaging is needed? | For M05: static linux amd64 and arm64 binaries with SHA-256 checksums, and a multi-arch distroless static non-root image with an SBOM, built by GoReleaser and ko, and published to GitLab on version tags. Signing comes with M18, as do the Helm chart, systemd unit, compose example and air-gap bundle. Linux only. | 2026-10-07 | REQ-045, [ADR-0030](../docs/adr/0030-release-with-goreleaser-and-ko-to-gitlab-on-versio.md), [ADR-0031](../docs/adr/0031-debian-images-for-ci-with-a-distroless-static-runt.md) |
 | Q-041 | What does IaC manage? With NetBox as the source of truth, DNS records go through NetBox's own Terraform provider. | nbpdns's own configuration (server groups, sync policies, sinks, roles, tokens and settings), plus reading DNS records through the API, for example for Terraform to read a zone's records and push them to other providers. Records are written only in NetBox. | 2026-10-08 | REQ-046, REQ-047, [ADR-0033](../docs/adr/0033-a-read-only-api-spec-first-generated-with-oapi-cod.md) |
 | Q-054 | The parts of Q-010 not yet answered: how is a sync triggered, and how are existing PowerDNS zones adopted into NetBox (brownfield import)? | The trigger: a NetBox event-rule webhook, signed, makes nbpdns compare only the zones it names, after a short quiet spell that gathers a burst; a view's change makes a full refresh; the scheduled full refresh stays as the safety net. The import part moved to Q-057. | 2026-10-08 | REQ-048, [ADR-0035](../docs/adr/0035-refresh-the-zones-that-netbox-s-webhooks-name.md) |
-| Q-037 | How far does traceability go? | From M07, NetBox's request ID and user, from each webhook, are in the zone refresh's trace, logs and status. The rest of the chain (apply, each server, verification), and NetBox's change IDs, come with writes in M13. | 2026-10-08 | [ADR-0035](../docs/adr/0035-refresh-the-zones-that-netbox-s-webhooks-name.md) |
+| Q-037 | How far does traceability go? | From M07, NetBox's request ID and user, from each webhook, are in the zone refresh's trace, logs and status. The rest of the chain (apply, each server, verification), and NetBox's change IDs, come with writes in M14. | 2026-10-08 | [ADR-0035](../docs/adr/0035-refresh-the-zones-that-netbox-s-webhooks-name.md) |
+| Q-012 | Does "change settings" mean this app's settings only, or PowerDNS server config (`pdns.conf`) too? | This app's settings, as runtime settings in the database from M08, changed with the CLI until M10's API. `pdns.conf` stays with Ansible. Per-zone PowerDNS metadata moved to Q-059. | 2026-10-09 | REQ-050, [ADR-0040](../docs/adr/0040-runtime-settings-and-managed-resources.md) (proposed) |
+| Q-023 | How are secrets stored at rest (PowerDNS API keys, TSIG, OIDC client secrets)? | Envelope encryption: each secret sealed with its own AES-256-GCM data key, wrapped by a master key from a file or the environment, which rotates. Vault or OpenBao later. | 2026-10-09 | REQ-051, [ADR-0041](../docs/adr/0041-secrets-encrypted-at-rest.md) (proposed) |
+| Q-024 | When the UI and IaC both manage a setting, which one owns it? | A `managed_by` field on each resource; only its manager changes it. From M08, server groups are `file` or `cli`; the API, the UI and Terraform add theirs later. | 2026-10-09 | REQ-050, [ADR-0040](../docs/adr/0040-runtime-settings-and-managed-resources.md) (proposed) |
+| Q-026 | How are upgrades, backup and restore, and config export handled? | Upgrades: forward-only goose migrations, embedded, applied at `serve`'s start. Backup, restore, export and import moved to Q-058. | 2026-10-09 | [ADR-0038](../docs/adr/0038-an-embedded-sqlite-store-with-goose-and-sqlc.md) (proposed) |
+| Q-035 | What audit coverage, retention and tamper evidence are needed, and what happens when the SIEM is down? | Every state change is an event, in a SHA-384 hash chain from the first, kept by default for seven years; `nbpdns audit verify` checks it. The SIEM's outbox comes with M17. | 2026-10-09 | REQ-049, [ADR-0039](../docs/adr/0039-a-hash-chained-audit-trail.md) (proposed) |
+| Q-036 | Which compliance frameworks apply (ISO 27001, SOC 2, PCI DSS, Essential Eight/ISM, NIS2)? | Built to support the Essential Eight and the ISM, ISO 27001, and SOC 2 or PCI DSS; where they differ, the strictest default wins, such as seven years of audit events and ASD-approved cryptography. | 2026-10-09 | REQ-053, [ADR-0039](../docs/adr/0039-a-hash-chained-audit-trail.md) (proposed) |
+| Q-060 | Which PostgreSQL releases are supported? | 18, tested in CI against a database in the lab's existing PostgreSQL; more as the runners have room, as for NetBox and PowerDNS. | 2026-10-09 | REQ-054, M09's roadmap |
+| Q-061 | Can an existing SQLite install move to PostgreSQL? | No: an install that changes to PostgreSQL starts with an empty database. | 2026-10-09 | M09's roadmap |
+| Q-062 | How do the replicas choose the one that runs refreshes and writes? | A PostgreSQL session advisory lock, held on its own connection, as ADR-0009 intended; a takeover within about 30 seconds. | 2026-10-09 | M09's roadmap |
+| Q-029 | Are local users, MFA and break-glass access needed? | Yes: local users with WebAuthn only, from M12, with its sign-in page (ADR-0043); and an env-only break-glass token, from M10. Every use is audited. | 2026-10-09 | REQ-056, M10's and M12's roadmaps |
+| Q-040 | Are rate limits and quotas needed? | Limits per token and per client address, with failed authentications counted against the address. | 2026-10-09 | M10's roadmap |
+| Q-015 | Is multi-tenancy needed: are permissions scoped to zone, NetBox tenant or server group? | Roles are granted globally or for chosen server groups; tenant scoping is a later ADR. | 2026-10-09 | REQ-057, M11's roadmap |
+| Q-016 | What is the web UI's scope? | An ops dashboard (drift, refreshes, each group's health), settings and groups, the audit viewer, and users, roles and tokens; approvals with change safety, M15. No record editor: NetBox is the editor. | 2026-10-09 | M13's roadmap |
+| Q-028 | Which IdP and protocols? | OIDC, SAML and trusted proxy headers, each turned on separately, with Authentik as the reference provider; no LDAP in v1. From M12, with sign-in. | 2026-10-09 | REQ-058, [ADR-0043](../docs/adr/0043-re-plan-m11-to-m20-roles-then-sign-in-then-the-web.md), M12's roadmap |
+| Q-030 | What RBAC model? | Viewer, Operator and Admin built in, and custom roles; each permission checked per action; identity-provider groups mapped to roles, from M12. | 2026-10-09 | REQ-057, M11's roadmap |
+| Q-032 | Is SCIM provisioning needed? | Yes, with SSO, in M12: the identity provider pushes users and groups, so that someone removed there loses access at once. | 2026-10-09 | REQ-058, M12's roadmap |
+| Q-050 | Which UI technology? | Server-rendered templ templates, generated and type-checked, with htmx; assets vendored and embedded; no Node build. | 2026-10-09 | M13's roadmap |
+| Q-051 | What accessibility and localisation level? | WCAG 2.2 AA, checked in CI; English only, with text kept in one place for later translation. | 2026-10-09 | M13's roadmap |

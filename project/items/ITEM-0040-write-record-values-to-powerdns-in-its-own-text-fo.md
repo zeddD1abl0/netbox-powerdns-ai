@@ -3,7 +3,7 @@ id: ITEM-0040
 title: Write record values to PowerDNS in its own text form
 type: task # feature | bug | debt | task
 status: open # open | in-progress | blocked | done | wontfix
-milestone: M13
+milestone: M14
 requirements: [REQ-028]
 depends_on: []
 created: 2026-10-06

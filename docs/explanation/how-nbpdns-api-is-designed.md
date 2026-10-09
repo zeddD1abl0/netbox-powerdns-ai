@@ -7,8 +7,8 @@ weight: 19
 
 `nbpdns serve` has an API at `/api`. It changes nothing for now: it reads,
 and it receives NetBox's webhooks, which make nbpdns read again. Its clients are
-scripts, and from later milestones, the web UI (M12), and the
-Terraform/OpenTofu provider and Ansible collection (M18 and M19). This page explains how it's
+scripts, and from later milestones, the web UI (M13), and the
+Terraform/OpenTofu provider and Ansible collection (M19 and M20). This page explains how it's
 built, how it can grow without breaking them, and what its answers mean.
 [ADR-0012](../adr/0012-api-standard.md) and
 [ADR-0033](../adr/0033-a-read-only-api-spec-first-generated-with-oapi-cod.md)
@@ -72,11 +72,11 @@ Every resource is a `GET`:
 | `…/zones/{zone}/rrsets` | A zone's records as NetBox defines them |
 
 A server group's name and a zone's name are their IDs. They're stable, so
-IaC can refer to them, and import them, as M18 is to do.
+IaC can refer to them, and import them, as M19 is to do.
 
 The records serve IaC that reads DNS data from nbpdns, for example to
 publish a zone through another provider (Q-041). nbpdns never writes
-records: NetBox stays the source of truth (ADR-0004), and from M13, nbpdns
+records: NetBox stays the source of truth (ADR-0004), and from M14, nbpdns
 writes only to PowerDNS.
 
 ## Everything is last-known state

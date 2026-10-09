@@ -3,7 +3,7 @@ id: ITEM-0062
 title: Keep the image's latest tag on the newest release
 type: debt # feature | bug | debt | task
 status: open # open | in-progress | blocked | done | wontfix
-milestone: M17
+milestone: M18
 requirements: [REQ-045]
 depends_on: []
 created: 2026-10-07

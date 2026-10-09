@@ -1,12 +1,12 @@
 ---
-id: M14
+id: M15
 title: Change safety
 status: planned # planned | in-progress | done
 started:
 closed:
 ---
 
-# M14: Change safety
+# M15: Change safety
 
 ## Goal
 
@@ -20,4 +20,4 @@ Stop bad or oversized changes before they reach DNS, and prove that each change 
 ## Design, non-goals and acceptance criteria
 
 To be written in this milestone's plan-mode session, before implementation
-starts. The milestone's branch is `m14-change-safety` (ADR-0010).
+starts. The milestone's branch is `m15-change-safety` (ADR-0010).

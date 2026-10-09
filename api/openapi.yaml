@@ -1037,7 +1037,7 @@ components:
       type: string
       description: >-
         What nbpdns does about a zone's drift: `report` reports it, `enforce`
-        reports it and, from M13, corrects it, and `ignore` doesn't compare
+        reports it and, from M14, corrects it, and `ignore` doesn't compare
         the zone.
       enum: [enforce, report, ignore]
       examples: [report]

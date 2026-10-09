@@ -31,23 +31,31 @@ You need:
 
 ## Choose the version
 
-Versions are [semantic](https://semver.org/), and stay 0.x until 1.0:
+Versions are [semantic](https://semver.org/), and each milestone is a
+release
+([ADR-0037](../adr/0037-plan-milestones-ahead-with-gitlab-milestones-and-i.md)):
 
-- a new minor version, such as `0.2.0`, for a release with new features;
-- a new patch version, such as `0.1.1`, for one with fixes only.
+- a milestone's merge is the minor version of its number, without the
+  leading zero: `0.8.0` for M08, `0.10.0` for M10;
+- a release with fixes only, between milestones, is a patch version, such as
+  `0.8.1`;
+- the versions stay 0.x until the project is judged stable and secure, and
+  are `1.NN.0` from the milestone after that.
 
-The tag is the version with a `v`: `v0.2.0`. A tag with anything more, such
-as `v0.2.0-rc.1`, publishes nothing.
+The releases are internal: nothing is meant for use before 1.x.
+
+The tag is the version with a `v`: `v0.8.0`. A tag with anything more, such
+as `v0.8.0-rc.1`, publishes nothing.
 
 Release from `main`, in version order. Each release moves the image's
-`latest` tag to itself, so a release of an older version, such as 0.1.2
-after 0.2.0, would move `latest` back. Releases of older versions aren't
+`latest` tag to itself, so a release of an older version, such as 0.7.1
+after 0.8.0, would move `latest` back. Releases of older versions aren't
 supported yet.
 
 ## Prepare the changelog
 
 Do this on the branch whose merge request makes the release, so that
-it's reviewed with the rest.
+it's reviewed with the rest: for a milestone, when it closes.
 
 1. In `CHANGELOG.md`, rename `## [Unreleased]` to the version and today's
    date, and add an empty `## [Unreleased]` before it:
@@ -55,7 +63,7 @@ it's reviewed with the rest.
    ```markdown
    ## [Unreleased]
 
-   ## [0.2.0] - 2026-11-02
+   ## [0.8.0] - 2026-11-02
 
    ### Added
    ```
@@ -63,7 +71,7 @@ it's reviewed with the rest.
 2. Check the release notes that `make release` publishes:
 
    ```shell
-   go run ./internal/cmd/releasenotes -tag v0.2.0 CHANGELOG.md
+   go run ./internal/cmd/releasenotes -tag v0.8.0 CHANGELOG.md
    ```
 
    It prints the version's section, without its heading. It fails if the
@@ -78,8 +86,8 @@ it's reviewed with the rest.
    ```shell
    git switch main
    git pull
-   git tag -a v0.2.0 -m "nbpdns 0.2.0"
-   git push origin v0.2.0
+   git tag -a v0.8.0 -m "nbpdns 0.8.0"
+   git push origin v0.8.0
    ```
 
 2. Watch the tag's pipeline. It runs every check, `release-check`
@@ -87,7 +95,7 @@ it's reviewed with the rest.
 
    - it refuses to run unless the commit has exactly one `v` tag, the
      version's, and the CHANGELOG has its section;
-   - it pushes the image, tagged `0.2.0`, `0.2`, and `latest`, with its
+   - it pushes the image, tagged `0.8.0`, `0.8`, and `latest`, with its
      SBOMs, to the project's container registry;
    - it makes the GitLab release, named after the tag, with the
      version's section of the CHANGELOG as its notes, and the archives
@@ -107,14 +115,14 @@ checks on the tag, and publishes nothing.
    ```
 
    ```text
-   nbpdns_0.2.0_linux_amd64.tar.gz: OK
-   nbpdns_0.2.0_linux_arm64.tar.gz: OK
+   nbpdns_0.8.0_linux_amd64.tar.gz: OK
+   nbpdns_0.8.0_linux_arm64.tar.gz: OK
    ```
 
 2. Check that the image covers both platforms:
 
    ```shell
-   docker buildx imagetools inspect registry.example.com/group/netbox-powerdns-ai:0.2.0
+   docker buildx imagetools inspect registry.example.com/group/netbox-powerdns-ai:0.8.0
    ```
 
    It lists `linux/amd64` and `linux/arm64/v8` under **Manifests**.
@@ -122,10 +130,10 @@ checks on the tag, and publishes nothing.
 3. Check the version it reports:
 
    ```shell
-   docker run --rm registry.example.com/group/netbox-powerdns-ai:0.2.0 version
+   docker run --rm registry.example.com/group/netbox-powerdns-ai:0.8.0 version
    ```
 
-   It reports `v0.2.0`, and `modified false`.
+   It reports `v0.8.0`, and `modified false`.
 
 ## If the release job fails
 
