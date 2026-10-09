@@ -18,7 +18,7 @@
 | [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | done | 9 of 9 |
 | [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | planned | 1 of 11 |
 | [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | planned | 1 of 1 |
-| [M10](milestones/M10-authentication.md) | Authentication | planned | 0 of 1 |
+| [M10](milestones/M10-authentication.md) | Authentication | planned | 1 of 2 |
 | [M11](milestones/M11-sso-and-rbac.md) | SSO and RBAC | planned | — |
 | [M12](milestones/M12-web-ui.md) | Web UI | planned | — |
 | [M13](milestones/M13-write-path-plan-and-apply.md) | Write path: plan and apply | planned | 0 of 1 |
@@ -49,11 +49,11 @@
 
 ## Open questions
 
-19 open (0 blocking), 43 answered. The questions and their proposed defaults are in [requirements.md](requirements.md#open-questions).
+17 open (0 blocking), 45 answered. The questions and their proposed defaults are in [requirements.md](requirements.md#open-questions).
 
 | Needed by | Open questions |
 |---|---|
-| M10 | Q-029, Q-031, Q-040 |
+| M10 | Q-031 |
 | M11 | Q-015, Q-028, Q-030, Q-032 |
 | M12 | Q-016, Q-050, Q-051 |
 | M13 | Q-011, Q-059 |
@@ -65,7 +65,7 @@
 
 ## Requirements
 
-54 requirements, listed in [requirements.md](requirements.md#requirements). 11 aren't referenced by any item yet: REQ-004, REQ-007, REQ-008, REQ-009, REQ-010, REQ-015, REQ-016, REQ-017, REQ-023, REQ-034, REQ-035.
+56 requirements, listed in [requirements.md](requirements.md#requirements). 11 aren't referenced by any item yet: REQ-004, REQ-007, REQ-008, REQ-009, REQ-010, REQ-015, REQ-016, REQ-017, REQ-023, REQ-034, REQ-035.
 
 ## Decisions
 

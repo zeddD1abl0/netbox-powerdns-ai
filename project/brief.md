@@ -391,3 +391,12 @@ waiting until each is next. For M09:
 | Q-060: which PostgreSQL releases? | "18, more as runners allow". |
 | Q-061: can a SQLite install move to PostgreSQL? | "Not supported": a move starts with an empty database. |
 | Q-062: how is the leader chosen? | "A PostgreSQL advisory lock". |
+
+### M10's roadmap, 2026-10-09
+
+| Question | Answer |
+|---|---|
+| When should local users, MFA and sessions arrive, given they need a sign-in page? | "With M12's UI": M10 is tokens, service accounts and the break-glass token. |
+| Q-029, with the Essential Eight: which MFA methods? | "WebAuthn only". |
+| Once the API needs a token, what stays open? | "Only /livez and /readyz". |
+| Q-040: rate limits? | "Per token and per IP". |

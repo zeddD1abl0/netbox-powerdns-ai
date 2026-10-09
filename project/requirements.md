@@ -70,6 +70,8 @@ When a question is answered:
 | REQ-052 | nbpdns keeps each zone's drift history, with its changes, for a configurable time. | M08's design, [ADR-0042](../docs/adr/0042-drift-history.md) (proposed) |
 | REQ-053 | nbpdns is built to support the Essential Eight and the ISM, ISO 27001, and SOC 2 or PCI DSS; where they differ, the strictest default wins. | Q-036, [ADR-0039](../docs/adr/0039-a-hash-chained-audit-trail.md) (proposed) |
 | REQ-054 | Data is stored in PostgreSQL 18, as well as SQLite. More releases are added as the CI runners have room to test them. | Q-060, M09's roadmap |
+| REQ-055 | From M10, every `/api` path, `/status` and `/metrics` need a token; only `/livez` and `/readyz` are open. | M10's roadmap |
+| REQ-056 | Local users authenticate with WebAuthn only, which resists phishing, as the Essential Eight asks; no TOTP. | Q-029, Q-036, M10's roadmap |
 
 ## Open questions
 
@@ -100,7 +102,6 @@ names the milestone that needs the answer, from the milestone list in
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
 | Q-028 | Which IdP and protocols? | Authentik, with OIDC, SAML and trusted proxy headers, each toggled independently. No LDAP in v1. | M11 |
-| Q-029 | Are local users, MFA and break-glass access needed? | Local users with TOTP/WebAuthn, plus an env-only break-glass token. Every use is audited. | M10 |
 | Q-030 | What RBAC model? | Viewer, Operator and Admin built in. Custom roles. IdP group → role mapping. Permissions checked per action. | M11 |
 | Q-031 | How do Terraform, Ansible and CI pipelines authenticate? | Scoped, expiring, hashed API tokens and service accounts. OIDC workload identity (CI JWTs) later. | M10 |
 | Q-032 | Is SCIM provisioning needed? | Not in v1. | M11 |
@@ -116,7 +117,6 @@ names the milestone that needs the answer, from the milestone list in
 
 | ID | Question | Proposed default | Needed by |
 |---|---|---|---|
-| Q-040 | Are rate limits and quotas needed? | Limits per token and per IP. | M10 |
 
 ### IaC
 
@@ -183,3 +183,5 @@ names the milestone that needs the answer, from the milestone list in
 | Q-060 | Which PostgreSQL releases are supported? | 18, tested in CI against a database in the lab's existing PostgreSQL; more as the runners have room, as for NetBox and PowerDNS. | 2026-10-09 | REQ-054, M09's roadmap |
 | Q-061 | Can an existing SQLite install move to PostgreSQL? | No: an install that changes to PostgreSQL starts with an empty database. | 2026-10-09 | M09's roadmap |
 | Q-062 | How do the replicas choose the one that runs refreshes and writes? | A PostgreSQL session advisory lock, held on its own connection, as ADR-0009 intended; a takeover within about 30 seconds. | 2026-10-09 | M09's roadmap |
+| Q-029 | Are local users, MFA and break-glass access needed? | Yes: local users with WebAuthn only, from M12, with the UI's sign-in page; and an env-only break-glass token, from M10. Every use is audited. | 2026-10-09 | REQ-056, M10's and M12's roadmaps |
+| Q-040 | Are rate limits and quotas needed? | Limits per token and per client address, with failed authentications counted against the address. | 2026-10-09 | M10's roadmap |
