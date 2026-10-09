@@ -44,3 +44,12 @@ Each milestone that the branch designs has an item of its own.
   date that isn't after the start date, so those done in a day (M02, M04,
   M06) have only a due date. M08 to M19 are open. The user's test
   milestone and issue, `claude-test`, are left as they are.
+- 2026-10-09: The branch is ready to close. It planned M08 in full and M09
+  to M13 as roadmap entries, and re-planned M11 to M20 (ADR-0043). Checks:
+  `make check` passed; `make test-integration` passed (internal/cli 47.5 s,
+  internal/netbox 9.1 s, internal/lab 1.1 s, internal/powerdns 1.2 s); the
+  live docs name the new milestone numbers, leaving them only in ADR-0043's
+  mapping and in history. The user chose to close it without `/code-review
+  high`, since its code changes are one string and comments. This item's
+  last criterion waits for the merge and the `v0.7.0` tag; the `[0.7.0]`
+  section is dated 2026-10-09, the day it's meant to merge.
