@@ -380,3 +380,14 @@ ADR-0042, proposed until M08 starts; REQ-049 to REQ-053; and Q-012's
 settings part, Q-023, Q-024, Q-026's migrations part, Q-035 and Q-036
 answered. Q-012's metadata part is Q-059, for M13, and Q-026's backup and
 export part is Q-058, for M17.
+
+### M09's roadmap, 2026-10-09
+
+The user chose roadmap entries for M09 to M12 on this branch, full designs
+waiting until each is next. For M09:
+
+| Question | Answer |
+|---|---|
+| Q-060: which PostgreSQL releases? | "18, more as runners allow". |
+| Q-061: can a SQLite install move to PostgreSQL? | "Not supported": a move starts with an empty database. |
+| Q-062: how is the leader chosen? | "A PostgreSQL advisory lock". |

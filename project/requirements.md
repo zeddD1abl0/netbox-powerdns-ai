@@ -69,6 +69,7 @@ When a question is answered:
 | REQ-051 | Secrets stored in the database are encrypted at rest with ASD-approved algorithms. | Q-023, [ADR-0041](../docs/adr/0041-secrets-encrypted-at-rest.md) (proposed) |
 | REQ-052 | nbpdns keeps each zone's drift history, with its changes, for a configurable time. | M08's design, [ADR-0042](../docs/adr/0042-drift-history.md) (proposed) |
 | REQ-053 | nbpdns is built to support the Essential Eight and the ISM, ISO 27001, and SOC 2 or PCI DSS; where they differ, the strictest default wins. | Q-036, [ADR-0039](../docs/adr/0039-a-hash-chained-audit-trail.md) (proposed) |
+| REQ-054 | Data is stored in PostgreSQL 18, as well as SQLite. More releases are added as the CI runners have room to test them. | Q-060, M09's roadmap |
 
 ## Open questions
 
@@ -179,3 +180,6 @@ names the milestone that needs the answer, from the milestone list in
 | Q-026 | How are upgrades, backup and restore, and config export handled? | Upgrades: forward-only goose migrations, embedded, applied at `serve`'s start. Backup, restore, export and import moved to Q-058. | 2026-10-09 | [ADR-0038](../docs/adr/0038-an-embedded-sqlite-store-with-goose-and-sqlc.md) (proposed) |
 | Q-035 | What audit coverage, retention and tamper evidence are needed, and what happens when the SIEM is down? | Every state change is an event, in a SHA-384 hash chain from the first, kept by default for seven years; `nbpdns audit verify` checks it. The SIEM's outbox comes with M16. | 2026-10-09 | REQ-049, [ADR-0039](../docs/adr/0039-a-hash-chained-audit-trail.md) (proposed) |
 | Q-036 | Which compliance frameworks apply (ISO 27001, SOC 2, PCI DSS, Essential Eight/ISM, NIS2)? | Built to support the Essential Eight and the ISM, ISO 27001, and SOC 2 or PCI DSS; where they differ, the strictest default wins, such as seven years of audit events and ASD-approved cryptography. | 2026-10-09 | REQ-053, [ADR-0039](../docs/adr/0039-a-hash-chained-audit-trail.md) (proposed) |
+| Q-060 | Which PostgreSQL releases are supported? | 18, tested in CI against a database in the lab's existing PostgreSQL; more as the runners have room, as for NetBox and PowerDNS. | 2026-10-09 | REQ-054, M09's roadmap |
+| Q-061 | Can an existing SQLite install move to PostgreSQL? | No: an install that changes to PostgreSQL starts with an empty database. | 2026-10-09 | M09's roadmap |
+| Q-062 | How do the replicas choose the one that runs refreshes and writes? | A PostgreSQL session advisory lock, held on its own connection, as ADR-0009 intended; a takeover within about 30 seconds. | 2026-10-09 | M09's roadmap |
