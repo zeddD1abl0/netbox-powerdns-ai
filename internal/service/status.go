@@ -35,6 +35,37 @@ type Status struct {
 	NetBox        NetBox      `json:"netbox"`
 	Groups        []GroupInfo `json:"groups"`
 	Tracing       Tracing     `json:"tracing"`
+	Webhooks      Webhooks    `json:"webhooks"`
+}
+
+// Webhooks is the state of NetBox's webhooks (ADR-0036).
+type Webhooks struct {
+	// Enabled is whether netbox.webhook_secret is set, so that
+	// /api/netbox-events takes NetBox's webhooks.
+	Enabled bool `json:"enabled"`
+	// DelaySeconds is drift.webhook_delay.
+	DelaySeconds float64 `json:"delay_seconds"`
+	// LastEvent is the last event received, or null.
+	LastEvent *Event `json:"last_event"`
+	// Pending is what waits for its refresh.
+	Pending Pending `json:"pending"`
+	// LastRefresh is the last refresh that webhooks asked for, or that
+	// covered the zones they named, or null.
+	LastRefresh *WebhookRefresh `json:"last_refresh"`
+}
+
+// Pending is what NetBox's webhooks queued, waiting for its refresh.
+type Pending struct {
+	// Events counts the webhooks that queued it.
+	Events int `json:"events"`
+	// Zones are the zones that webhooks named, each as view/name. Once a
+	// full refresh waits, which Full marks, it covers them, and no more
+	// are added.
+	Zones []string `json:"zones"`
+	Full  bool     `json:"full"`
+	// Due is when its refresh is due, unless a scheduled one comes first,
+	// or null if nothing waits.
+	Due *time.Time `json:"due"`
 }
 
 // Schedule is the refreshes' schedule, and how they went.
@@ -87,7 +118,9 @@ type GroupInfo struct {
 	URL string `json:"url"`
 	// Status is ok or failed, as of the last time a refresh tried the
 	// group's primary, or unknown before that.
-	Status      string     `json:"status"`
+	Status string `json:"status"`
+	// LastSuccess is when the group was last compared in full. A zone
+	// refresh doesn't move it.
 	LastSuccess *time.Time `json:"last_success"`
 	// Error is why the primary couldn't be read, if it couldn't.
 	Error string `json:"error"`
@@ -132,9 +165,10 @@ func (s *Service) Status() Status {
 				Failed: st.refreshes[metrics.OutcomeFailed],
 			},
 		},
-		NetBox:  NetBox{URL: s.o.NetBoxURL, Error: st.netboxError},
-		Groups:  []GroupInfo{},
-		Tracing: Tracing{Exported: s.o.OTLP.Endpoint != "", Endpoint: s.o.OTLP.Endpoint, Protocol: s.o.OTLP.Protocol},
+		NetBox:   NetBox{URL: s.o.NetBoxURL, Error: st.netboxError},
+		Groups:   []GroupInfo{},
+		Tracing:  Tracing{Exported: s.o.OTLP.Endpoint != "", Endpoint: s.o.OTLP.Endpoint, Protocol: s.o.OTLP.Protocol},
+		Webhooks: s.webhooks(),
 	}
 	if st.ready {
 		out.Schedule.LastRefresh = &Refresh{
@@ -155,6 +189,25 @@ func (s *Service) Status() Status {
 		out.Groups = append(out.Groups, groupInfo(g, st.groups[g.Name]))
 	}
 	return out
+}
+
+// webhooks returns the webhooks' state. It's called with s.mu held.
+func (s *Service) webhooks() Webhooks {
+	st := &s.st
+	w := Webhooks{Enabled: s.o.Webhooks, DelaySeconds: s.o.WebhookDelay.Seconds(), Pending: Pending{Zones: []string{}}}
+	if e := st.lastEvent; e != nil {
+		copied := *e
+		w.LastEvent = &copied
+	}
+	if p := &st.pending; p.events > 0 {
+		w.Pending = Pending{Events: p.events, Zones: p.names(), Full: p.full, Due: utc(p.due(s.o.WebhookDelay, s.o.maxWait))}
+	}
+	if r := st.lastWebhookRefresh; r != nil {
+		// A kept refresh is never changed, only replaced.
+		copied := *r
+		w.LastRefresh = &copied
+	}
+	return w
 }
 
 // groupInfo returns g's info, from gs, its state, which is nil before any
@@ -282,6 +335,7 @@ func writeStatus(w io.Writer, st Status) error {
 		}
 	}
 	p("NetBox at %s: %s\n\n", st.NetBox.URL, nb)
+	writeWebhooks(p, st.Webhooks)
 
 	tw := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(tw, "GROUP\tSTATUS\tLAST SUCCESS\tIN SYNC\tDRIFT\tMISSING\tINACTIVE\tIGNORED\tUNMANAGED\tPROBLEMS\tWARNINGS\tPRIMARY")
@@ -324,6 +378,45 @@ func writeStatus(w io.Writer, st Status) error {
 	p("\nFor this page as JSON, add ?json=1. For each RRset's changes, run nbpdns drift.\n")
 	_, err := io.WriteString(w, b.String())
 	return err
+}
+
+// writeWebhooks writes the webhooks' state with p.
+func writeWebhooks(p func(string, ...any), w Webhooks) {
+	if !w.Enabled {
+		p("NetBox's webhooks are off; set netbox.webhook_secret to have them refresh the zones they name.\n\n")
+		return
+	}
+	p("NetBox's webhooks, each zone refreshed once they stop for %s:\n", seconds(w.DelaySeconds))
+	if e := w.LastEvent; e != nil {
+		by := ""
+		if e.Request.ID != "" {
+			by = fmt.Sprintf(", request %s by %s", e.Request.ID, e.Request.User)
+		}
+		p("  last event:    %s, %s %s%s\n", when(&e.Received), e.ObjectType, e.Event, by)
+	} else {
+		p("  last event:    none yet\n")
+	}
+	switch pd := w.Pending; {
+	case pd.Events == 0:
+		p("  waiting:       nothing\n")
+	case pd.Full:
+		p("  waiting:       a full refresh, due %s\n", when(pd.Due))
+	default:
+		p("  waiting:       %s, due %s\n", strings.Join(pd.Zones, ", "), when(pd.Due))
+	}
+	if r := w.LastRefresh; r != nil {
+		what := strings.Join(r.Zones, ", ")
+		if r.Full {
+			what = "every zone, as " + r.Reason
+		}
+		p("  last refresh:  %s, %s, of %s\n", when(&r.Finished), r.Outcome, what)
+		if r.Error != "" {
+			p("                 %s\n", r.Error)
+		}
+	} else {
+		p("  last refresh:  none yet\n")
+	}
+	p("\n")
 }
 
 // when writes t in RFC 3339 form, or "none" if it's nil.

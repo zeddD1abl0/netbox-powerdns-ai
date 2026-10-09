@@ -15,7 +15,7 @@
 | [M04](milestones/M04-service.md) | Service | done | 10 of 10 |
 | [M05](milestones/M05-packaging.md) | Packaging | done | 5 of 5 |
 | [M06](milestones/M06-rest-api.md) | REST API | done | 10 of 10 |
-| [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | planned | — |
+| [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | done | 9 of 9 |
 | [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | planned | — |
 | [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | planned | — |
 | [M10](milestones/M10-authentication.md) | Authentication | planned | 0 of 1 |
@@ -39,12 +39,10 @@
 
 ## Open questions
 
-24 open (0 blocking), 32 answered. The questions and their proposed defaults are in [requirements.md](requirements.md#open-questions).
+23 open (0 blocking), 34 answered. The questions and their proposed defaults are in [requirements.md](requirements.md#open-questions).
 
 | Needed by | Open questions |
 |---|---|
-| M07 | Q-037 |
-| M07 (triggers), M15 (import) | Q-054 |
 | M08 | Q-012, Q-023, Q-024, Q-035, Q-036 |
 | M08 (migrations), M17 (rest) | Q-026 |
 | M10 | Q-029, Q-031, Q-040 |
@@ -52,13 +50,14 @@
 | M12 | Q-016, Q-050, Q-051 |
 | M13 | Q-011 |
 | M14 | Q-013, Q-014 |
+| M15 | Q-057 |
 | M16 | Q-033, Q-034 |
 | M18 | Q-042 |
 
 ## Requirements
 
-47 requirements, listed in [requirements.md](requirements.md#requirements). 14 aren't referenced by any item yet: REQ-004, REQ-007, REQ-008, REQ-009, REQ-010, REQ-011, REQ-015, REQ-016, REQ-017, REQ-023, REQ-032, REQ-033, REQ-034, REQ-035.
+48 requirements, listed in [requirements.md](requirements.md#requirements). 14 aren't referenced by any item yet: REQ-004, REQ-007, REQ-008, REQ-009, REQ-010, REQ-011, REQ-015, REQ-016, REQ-017, REQ-023, REQ-032, REQ-033, REQ-034, REQ-035.
 
 ## Decisions
 
-34 ADRs (26 accepted, 8 superseded), listed in [docs/adr](../docs/adr/_index.md).
+36 ADRs (27 accepted, 9 superseded), listed in [docs/adr](../docs/adr/_index.md).

@@ -17,6 +17,9 @@ PowerDNS's own `/metrics`.
 |---|---|---|---|
 | `nbpdns_drift_refreshes_total` | counter | `outcome`: `complete`, `incomplete`, `failed` | Drift refreshes finished, by outcome. A refresh is incomplete if a server group couldn't be read, and failed if NetBox couldn't be read. |
 | `nbpdns_drift_refresh_duration_seconds` | histogram | none | How long each drift refresh took. Buckets, in seconds: 1, 5, 10, 30, 60, 120, 300, 600, 1200. |
+| `nbpdns_drift_zone_refreshes_total` | counter | `outcome`: `complete`, `incomplete`, `failed` | Zone refreshes finished, by outcome: refreshes of only the zones that NetBox's webhooks named. Incomplete if a server group couldn't be read, and failed if NetBox couldn't be read. A webhook that asks for a full refresh is counted in `nbpdns_drift_refreshes_total`. |
+| `nbpdns_drift_zone_refresh_duration_seconds` | histogram | none | How long each zone refresh took. Buckets, in seconds: 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60. |
+| `nbpdns_drift_pending_zones` | gauge | none | The zones that NetBox's webhooks named, waiting for their refresh. Once a full refresh waits instead, for a view or past 100 zones, no more are added. |
 | `nbpdns_drift_last_refresh_timestamp_seconds` | gauge | none | When the last drift refresh finished, whatever its outcome, as a Unix time. It has no value before the first. |
 | `nbpdns_drift_last_complete_refresh_timestamp_seconds` | gauge | none | When the last complete drift refresh finished, as a Unix time. It has no value before the first. |
 | `nbpdns_drift_zones` | gauge | `group`; `state`: `in_sync`, `drift`, `missing`, `inactive_in_netbox`, `ignored`, `unmanaged` | The server group's zones, by state, as of its primary's last successful read. |
@@ -26,12 +29,13 @@ PowerDNS's own `/metrics`.
 | `nbpdns_drift_warnings` | gauge | `group` | Warnings about the configuration or NetBox's zones, for the server group. |
 | `nbpdns_netbox_up` | gauge | none | 1 if the last drift refresh could read NetBox, else 0. It has no value before the first refresh, nor after one stopped by drift.timeout, which keeps the value before it. |
 | `nbpdns_server_group_up` | gauge | `group` | 1 if the server group's primary could be read the last time a refresh tried, else 0. A refresh that can't read NetBox doesn't try the primaries. |
-| `nbpdns_server_group_last_success_timestamp_seconds` | gauge | `group` | When the server group's primary was last read and compared, as a Unix time. |
+| `nbpdns_server_group_last_success_timestamp_seconds` | gauge | `group` | When the server group's primary was last read and compared in full, as a Unix time. A zone refresh, from NetBox's webhooks, doesn't move it. |
 | `nbpdns_http_client_requests_total` | counter | `service`: `NetBox`, `PowerDNS`; `target`; `method`: `GET`; `code` | Requests to NetBox and to each primary, one per attempt. The target is `netbox`, or the server group's name, and the code is the answer's status, or `error` if none came. |
 | `nbpdns_http_client_request_duration_seconds` | histogram | `service`: `NetBox`, `PowerDNS`; `target`; `method`: `GET` | How long each request took to answer, or to fail. Buckets, in seconds: 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30. |
 | `nbpdns_http_client_retries_total` | counter | `service`: `NetBox`, `PowerDNS`; `target` | Requests to NetBox and to each primary that were tried again. |
 | `nbpdns_api_requests_total` | counter | `operation`; `code` | Requests to the API. The operation is the request's `operationId` in `api/openapi.yaml`, such as `getStatus`, or `openapi` for the OpenAPI document, `docs` for the API reference, or `unmatched` for any other path or method. The code is the answer's status. |
 | `nbpdns_api_request_duration_seconds` | histogram | `operation` | How long the API took to answer each request. Buckets, in seconds: 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5. |
+| `nbpdns_netbox_webhooks_total` | counter | `result`: `accepted`, `ignored`, `bad_signature`, `invalid` | Requests to `/api/netbox-events`, NetBox's webhooks, by result: `accepted` if the event queued a refresh, `ignored` if it named nothing that a server group serves, `bad_signature` if its signature didn't verify, and `invalid` if it wasn't an event that NetBox sends, or was over 1 MiB. Requests while webhooks are off aren't counted. |
 | `nbpdns_build_info` | gauge | `version`; `revision`; `goversion` | 1, with the running build's version, VCS revision, and Go version. |
 
 The Prometheus client's standard collectors add the `go_*` metrics of the Go

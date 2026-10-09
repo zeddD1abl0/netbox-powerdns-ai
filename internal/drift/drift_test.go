@@ -153,8 +153,9 @@ func TestCompareGroup(t *testing.T) {
 	if len(r.Problems) != 2 || r.Problems[0].Detail != "kept" || r.Problems[1].Detail != "kept from NetBox" {
 		t.Errorf("problems %v", r.Problems)
 	}
-	if len(r.Warnings) != 2 || !strings.Contains(r.Warnings[0], "shared.example. is in the views v and w") ||
-		!strings.Contains(r.Warnings[1], "zone_policies names gone.example.") {
+	if len(r.Warnings) != 2 || !strings.Contains(r.Warnings[0].Text, "shared.example. is in the views v and w") ||
+		r.Warnings[0].Zone != "shared.example." ||
+		!strings.Contains(r.Warnings[1].Text, "zone_policies names gone.example.") || r.Warnings[1].Zone != "gone.example." {
 		t.Errorf("warnings %q", r.Warnings)
 	}
 	if r.Counts != (Counts{InSync: 2, Missing: 1, Unmanaged: 2}) || !r.Counts.Drifted() || r.Status != StatusOK {
@@ -174,12 +175,17 @@ type memory struct {
 	failZone string
 	mu       sync.Mutex
 	read     []string
+	// lists are the names that each list asked for: "" for every zone.
+	lists []string
 }
 
 func (m *memory) list(zone string) []dns.Zone {
+	m.mu.Lock()
+	m.lists = append(m.lists, zone)
+	m.mu.Unlock()
 	var out []dns.Zone
 	for _, z := range m.zones {
-		if zone == "" || z.Name == zone {
+		if zone == "" || slices.Contains(strings.Split(zone, ","), z.Name) {
 			bare := z
 			bare.RRsets = nil
 			out = append(out, bare)
@@ -219,12 +225,12 @@ func (m *memory) Read(_ context.Context, zones []dns.Zone) ([]dns.Zone, []dns.Pr
 
 type memNetBox struct{ *memory }
 
-func (m memNetBox) Zones(_ context.Context, views []string, zone string) ([]dns.Zone, error) {
+func (m memNetBox) Zones(_ context.Context, views, names []string) ([]dns.Zone, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
 	var out []dns.Zone
-	for _, z := range m.list(zone) {
+	for _, z := range m.list(strings.Join(names, ",")) {
 		if slices.Contains(views, z.View) {
 			out = append(out, z)
 		}

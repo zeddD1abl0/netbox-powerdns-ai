@@ -12,7 +12,7 @@ comma := ,
 
 # The image CI runs in, pinned by digest. `make project-lint` checks that both
 # forges' CI files use exactly this image (ADR-0032).
-CI_IMAGE := golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
+CI_IMAGE := golang:1.27.2@sha256:5bc7f572bbaa98885a3a1fd9c0aa76b59e3e14e8628bfc316bbfd0c701e4818c
 
 ##@ Tools
 
@@ -94,11 +94,12 @@ endef
 fmt: $(GOLANGCI_LINT) ## Format Go code with the configured formatters (gofmt, goimports)
 	$(call each_module,$(GOLANGCI_LINT) fmt --config $(ROOT)/.golangci.yml ./...)
 
-# Integration tests carry the "integration" build tag. vet and lint check them
-# too; otherwise they'd skip those files.
+# Integration tests carry the "integration" build tag, and the end-to-end
+# webhook test "webhooks" too. vet and lint check them as well; otherwise
+# they'd skip those files.
 .PHONY: vet
 vet: ## Run go vet
-	$(call each_module,go vet -tags integration$(comma)release ./...)
+	$(call each_module,go vet -tags integration$(comma)release$(comma)webhooks ./...)
 
 # The hook tests in tools/hooktest run the pinned jq and golangci-lint.
 TEST_TOOLS := $(JQ) $(GOLANGCI_LINT)
@@ -118,10 +119,34 @@ test: $(TEST_TOOLS) ## Run unit tests with the race detector
 	$(need_cgo)
 	$(call each_module,$(TEST_ENV) go test -race ./...)
 
+# The integration tests run only the packages that have them: in each module,
+# those whose test files change when the "integration" tag is set. Every other
+# package's tests run only in `make test`, so CI's integration job, which
+# shares its runner with the lab, compiles and runs no more than it needs
+# (ITEM-0075).
+TEST_FILES := go list -f '{{.ImportPath}} {{.TestGoFiles}} {{.XTestGoFiles}}'
+
 .PHONY: test-integration
-test-integration: lab-up $(TEST_TOOLS) ## Start the lab, then run the integration tests (build tag "integration")
+test-integration: lab-up ## Start the lab, then run the integration tests (build tag "integration")
 	$(need_cgo)
-	$(call each_module,$(TEST_ENV) go test -race -tags integration ./...)
+	@found=; for m in $(GO_MODULES); do \
+		pkgs=$$(cd $$m && { $(TEST_FILES) ./...; $(TEST_FILES) -tags integration ./...; } | sort | uniq -u | cut -d' ' -f1 | sort -u); \
+		if [ -z "$$pkgs" ]; then echo "$$m: no integration tests, skipped"; continue; fi; \
+		found=1; \
+		echo "$$m: go test -race -tags integration" $$pkgs; \
+		( cd $$m && go test -race -tags integration $$pkgs ); \
+	done; \
+	[ -n "$$found" ] || { echo "No package has integration tests: is the build tag still \"integration\"?"; exit 1; }
+
+# The end-to-end webhook test (ADR-0036) has the lab's NetBox send its own
+# webhooks to nbpdns serve, through the worker of the profile webhooks. It
+# needs a local Docker host, which the worker reaches nbpdns on, so it's not
+# part of `make ci`; the integration tests replay NetBox's webhooks instead.
+.PHONY: test-webhooks
+test-webhooks: LAB_PROFILES = webhooks
+test-webhooks: lab-up ## Start the lab with NetBox's worker, then have NetBox send webhooks to nbpdns serve (local only)
+	$(need_cgo)
+	go test -race -count=1 -tags integration,webhooks -run '^TestWebhooksFromNetBox$$' ./internal/cli/
 
 ##@ Build
 
@@ -212,7 +237,10 @@ LAB_DIR := deploy/dev
 # reached by name, so they listen on every interface there.
 LAB_LOOPBACK := tcp://localhost tcp://localhost:% tcp://127.% tcp://[::1] tcp://[::1]:%
 LAB_BIND_ADDRESS := $(if $(filter-out $(LAB_LOOPBACK),$(filter tcp://%,$(DOCKER_HOST))),0.0.0.0,127.0.0.1)
-LAB_COMPOSE = LAB_BIND_ADDRESS=$(LAB_BIND_ADDRESS) $(DOCKER_COMPOSE) --file $(LAB_DIR)/compose.yaml
+# Compose profiles to start with the lab, such as webhooks, which adds
+# NetBox's worker, which sends its webhooks (ADR-0036). CI starts none.
+LAB_PROFILES ?=
+LAB_COMPOSE = LAB_BIND_ADDRESS=$(LAB_BIND_ADDRESS) $(DOCKER_COMPOSE) --file $(LAB_DIR)/compose.yaml $(foreach p,$(LAB_PROFILES),--profile $(p))
 
 .PHONY: lab-up
 lab-up: $(DOCKER_COMPOSE) ## Start the NetBox lab, and wait until it's healthy
@@ -225,8 +253,8 @@ lab-up: $(DOCKER_COMPOSE) ## Start the NetBox lab, and wait until it's healthy
 	$(LAB_COMPOSE) up --detach --wait --wait-timeout 1200
 
 .PHONY: lab-down
-lab-down: $(DOCKER_COMPOSE) ## Remove the NetBox lab and its data
-	$(LAB_COMPOSE) down --volumes --remove-orphans
+lab-down: $(DOCKER_COMPOSE) ## Remove the NetBox lab and its data, in every profile
+	$(LAB_COMPOSE) --profile '*' down --volumes --remove-orphans
 
 ##@ Security
 

@@ -77,7 +77,7 @@ func newDriftCmd(a *app) *cobra.Command {
 			}
 			for _, g := range r.Groups {
 				for _, w := range g.Warnings {
-					s.log.WarnContext(ctx, "the drift report worked around a problem", "group", g.Group, "warning", w)
+					s.log.WarnContext(ctx, "the drift report worked around a problem", "group", g.Group, "warning", w.Text)
 				}
 			}
 			if *output == outputJSON {
@@ -215,7 +215,7 @@ func writeDrift(w io.Writer, r drift.Report) error {
 			problems = append(problems, []string{g.Group, p.Zone, strings.TrimSpace(p.Name + " " + p.Type), p.Detail})
 		}
 		for _, w := range g.Warnings {
-			warnings = append(warnings, []string{g.Group, w})
+			warnings = append(warnings, []string{g.Group, w.Text})
 		}
 	}
 	sections := []struct {
@@ -267,8 +267,12 @@ type netboxSource struct {
 	zones map[[2]string]netbox.Zone // by view and absolute name
 }
 
-func (n *netboxSource) Zones(ctx context.Context, views []string, zone string) ([]dns.Zone, error) {
-	zones, err := n.c.Zones(ctx, netbox.ZoneFilter{Name: strings.TrimSuffix(zone, "."), Views: views})
+func (n *netboxSource) Zones(ctx context.Context, views, names []string) ([]dns.Zone, error) {
+	f := netbox.ZoneFilter{Views: views}
+	for _, name := range names {
+		f.Names = append(f.Names, strings.TrimSuffix(name, "."))
+	}
+	zones, err := n.c.Zones(ctx, f)
 	if err != nil {
 		return nil, err
 	}

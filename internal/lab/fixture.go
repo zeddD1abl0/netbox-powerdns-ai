@@ -123,6 +123,20 @@ func CreateFixture(t testing.TB, nb NetBox, id string) *Fixture {
 	return f
 }
 
+// AdminDo sends a request to path, under nb's API, as its admin, and decodes
+// the answer into out, if it isn't nil. It fails t on any error.
+func AdminDo(t testing.TB, nb NetBox, method, path string, body, out any) {
+	t.Helper()
+	(&adminClient{t: t, nb: nb}).do(method, path, body, out)
+}
+
+// AdminCreate creates an object at path, under nb's API, as its admin,
+// returns its ID, and deletes it when the test ends.
+func AdminCreate(t testing.TB, nb NetBox, path string, fields any) int {
+	t.Helper()
+	return (&adminClient{t: t, nb: nb}).create(path, fields)
+}
+
 // adminClient calls a lab NetBox's API as its admin, failing the test on any
 // error.
 type adminClient struct {

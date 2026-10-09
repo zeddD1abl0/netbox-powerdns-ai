@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"log/slog"
@@ -22,6 +23,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"slices"
 	"strconv"
@@ -530,6 +532,82 @@ func TestListChecksCounts(t *testing.T) {
 				t.Errorf("%d records, want 39", len(records))
 			}
 		})
+	}
+}
+
+// TestZoneFilter checks the query that each filter sends.
+func TestZoneFilter(t *testing.T) {
+	tests := []struct {
+		name string
+		f    ZoneFilter
+		want url.Values
+	}{
+		{"everything", ZoneFilter{}, url.Values{}},
+		{"names, whatever their case, in views", ZoneFilter{Names: []string{"a.example", "b.example"}, Views: []string{"v", "w"}, Status: "active"},
+			url.Values{"name__ie": {"a.example", "b.example"}, "view": {"v", "w"}, "status": {"active"}}},
+		{"empty names and views", ZoneFilter{Names: []string{""}, Views: []string{""}}, url.Values{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got url.Values
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				got = r.URL.Query()
+				_, _ = w.Write([]byte(`{"count": 0, "next": null, "results": []}`))
+			}))
+			t.Cleanup(srv.Close)
+			c, _ := testClient(t, srv.URL, Options{})
+			if _, err := c.Zones(t.Context(), tt.f); err != nil {
+				t.Fatal(err)
+			}
+			// Every list pages in a stable order.
+			for _, k := range []string{"limit", "offset", "ordering"} {
+				got.Del(k)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("query %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestZoneFilterInChunks checks that many names are asked for a few at a
+// time, and the zones of every list are returned.
+func TestZoneFilterInChunks(t *testing.T) {
+	var lists [][]string
+	var mu sync.Mutex
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		names := r.URL.Query()["name__ie"]
+		mu.Lock()
+		lists = append(lists, names)
+		mu.Unlock()
+		results := make([]map[string]any, len(names))
+		for i, n := range names {
+			results[i] = map[string]any{"id": i, "name": n, "view": map[string]any{"id": 1, "name": "v"}}
+		}
+		b, _ := json.Marshal(map[string]any{"count": len(names), "next": nil, "results": results})
+		_, _ = w.Write(b)
+	}))
+	t.Cleanup(srv.Close)
+	c, _ := testClient(t, srv.URL, Options{})
+	var names []string
+	for i := range 45 {
+		names = append(names, fmt.Sprintf("z%d.example", i))
+	}
+	zones, err := c.Zones(t.Context(), ZoneFilter{Names: names, Views: []string{"v"}})
+	if err != nil || len(zones) != 45 {
+		t.Fatalf("%d zones, %v", len(zones), err)
+	}
+	if len(lists) != 3 || len(lists[0]) != maxNamesPerList || len(lists[2]) != 5 {
+		t.Errorf("asked for %d lists of names: %v", len(lists), lists)
+	}
+	// A DNS name's longest, at the most names per list, stays under 8 KiB.
+	long := strings.Repeat("a", 63) + "." + strings.Repeat("b", 63) + "." + strings.Repeat("c", 63) + "." + strings.Repeat("d", 61)
+	q := url.Values{}
+	for range maxNamesPerList {
+		q.Add("name__ie", long)
+	}
+	if n := len(q.Encode()); n > 6<<10 {
+		t.Errorf("a list of the longest names has a %d-byte query", n)
 	}
 }
 

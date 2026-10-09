@@ -34,10 +34,49 @@ All notable changes to this project are recorded here. The format follows
   of the API's links, for a service behind a proxy. The API only reads,
   and has no authentication until M10, so keep it on a trusted network.
 
+- Refreshes from NetBox's webhooks. With `netbox.webhook_secret` set,
+  `nbpdns serve` takes NetBox's event-rule webhooks at
+  `/api/netbox-events`, signed with that secret, and compares only the
+  zones they name, once they stop coming for `drift.webhook_delay`, 3
+  seconds by default, or 30 seconds after the first. A change to a view
+  that a group serves, a zone or a record moved, or more than 100 zones
+  make a full refresh instead. The scheduled refresh still runs, for any webhook lost. Each
+  zone refresh is a trace linked to the webhooks' spans, with NetBox's
+  request IDs and users, which its log lines carry too. New metrics:
+  `nbpdns_netbox_webhooks_total`, `nbpdns_drift_zone_refreshes_total`,
+  `nbpdns_drift_zone_refresh_duration_seconds` and
+  `nbpdns_drift_pending_zones`. `/status` and `/api/status` gain a
+  `webhooks` section: whether they're on, the last event, what waits, and
+  the last refresh they asked for. The API's version is 1.1.0. The how-to
+  "Refresh drift as NetBox changes" sets them up in NetBox, by its web
+  interface or its REST API, with the event rule in Terraform if you like.
+
+- The development lab's profile `webhooks`, which adds NetBox's worker, so
+  that the lab's NetBox sends webhooks: `make lab-up LAB_PROFILES=webhooks`.
+  `make test-webhooks` uses it to have NetBox send webhooks to
+  `nbpdns serve`, on a local Docker host. The integration tests replay
+  NetBox's webhooks instead, so CI doesn't run the worker.
+
+### Changed
+
+- `make test-integration` tests only the packages that have integration
+  tests, and CI's integration job runs after the unit tests, not beside
+  them, so the two don't compete for the runner's memory.
+
 ### Fixed
 
+- `nbpdns drift --zone` and `nbpdns netbox records --zone` find a NetBox
+  zone whatever the case of its name. The DNS plugin keeps the case a
+  zone's name was given in, so a zone named `Example.com` wasn't found.
 - A release's notes on GitLab are its version's section of the CHANGELOG.
   The 0.1.0 release was published with empty notes.
+
+### Security
+
+- nbpdns is built with Go 1.27.2 and `golang.org/x/net` v0.60.0, which fix
+  GO-2026-6617, a race in the HTTP/2 server's HPACK encoder that can crash
+  it. `nbpdns serve` listens without TLS, where Go's server speaks only
+  HTTP/1.1, so it wasn't exposed.
 
 ## [0.1.0] - 2026-10-07
 

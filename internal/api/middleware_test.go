@@ -184,13 +184,15 @@ func TestOperations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ops["GET /api/status"] != "getStatus" {
+	if ops["GET /api/status"] != (operation{id: "getStatus"}) {
 		t.Errorf("operations %v", ops)
 	}
-	// Every route of the generated server has its operationId.
-	for pattern := range ops {
-		if !strings.HasPrefix(pattern, "GET "+base+"/") {
-			t.Errorf("route %q", pattern)
+	// Every route of the generated server has its operationId. Only
+	// NetBox's events are posted, and need NetBox's signature.
+	for pattern, op := range ops {
+		events := pattern == "POST "+base+"/netbox-events"
+		if !events && !strings.HasPrefix(pattern, "GET "+base+"/") || op.signed != events || op.signed != (op.id == "receiveNetBoxEvent") {
+			t.Errorf("route %q: %+v", pattern, op)
 		}
 	}
 }

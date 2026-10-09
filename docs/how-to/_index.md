@@ -18,5 +18,6 @@ its goal and prerequisites, then gives numbered steps.
 - [Set a zone's drift policy](set-a-zones-drift-policy.md)
 - [Run nbpdns in a container](run-nbpdns-in-a-container.md)
 - [Read drift and DNS records through the API](read-drift-and-dns-records-through-the-api.md)
+- [Refresh drift as NetBox changes](refresh-drift-as-netbox-changes.md)
 - [Monitor drift with Prometheus](monitor-drift-with-prometheus.md)
 - [Export traces to an OpenTelemetry collector](export-traces-to-an-opentelemetry-collector.md)

@@ -5,7 +5,8 @@ weight: 19
 
 # How nbpdns's API is designed
 
-`nbpdns serve` has an API at `/api`. It's read-only for now. Its clients are
+`nbpdns serve` has an API at `/api`. It changes nothing for now: it reads,
+and it receives NetBox's webhooks, which make nbpdns read again. Its clients are
 scripts, and from later milestones, the web UI (M12), and the
 Terraform/OpenTofu provider and Ansible collection (M18 and M19). This page explains how it's
 built, how it can grow without breaking them, and what its answers mean.
@@ -118,12 +119,21 @@ one, or a new one, which the response returns. It's the request's
 `request_id` in nbpdns's logs. A request that sends a W3C `traceparent`
 continues its trace, so the API's span joins the client's.
 
-## No authentication yet
+## No authentication yet, but for NetBox's webhooks
 
 Until M10, anyone who can reach `server.listen` can read the API, as they
 can read `/status` and `/metrics`. The spec says so, as an empty security
 requirement, rather than hiding it. Keep the listener on a trusted network.
 M10 adds tokens, and from then, the API requires them.
+
+One operation is the exception: `POST /api/netbox-events`, which receives
+NetBox's webhooks
+([ADR-0036](../adr/0036-refresh-the-zones-that-netbox-s-webhooks-name-rest.md)).
+Its security scheme in the spec is NetBox's signature, `X-Hook-Signature`,
+the HMAC-SHA512 of the body keyed by `netbox.webhook_secret`. The server
+checks it before it decodes the body, so a request that NetBox didn't sign
+is refused without a word about what's in it. Until the secret is set, the
+operation answers `404`.
 
 ## The reference at /api/docs
 

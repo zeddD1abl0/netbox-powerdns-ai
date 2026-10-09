@@ -117,6 +117,19 @@ func TestStatus(t *testing.T) {
 	failed.NetBox.Up, failed.NetBox.Error = ptr(false), "connection refused"
 	exporting := failed
 	exporting.Tracing = service.Tracing{Exported: true, Endpoint: "https://otel.example.com:4318", Protocol: "grpc"}
+	hooked := failed
+	hooked.Webhooks = service.Webhooks{
+		Enabled: true, DelaySeconds: 3,
+		LastEvent: &service.Event{Received: at("2026-10-08T01:11:58Z"), Event: "deleted", ObjectType: "netbox_dns.zone"},
+		Pending:   service.Pending{Events: 1, Full: true, Zones: []string{}, Due: ptr(at("2026-10-08T01:12:01Z"))},
+		LastRefresh: &service.WebhookRefresh{
+			Started: at("2026-10-08T01:11:00Z"), Finished: at("2026-10-08T01:11:01Z"), Zones: []string{"_default_/example.com."},
+			Outcome: "incomplete", Events: 2, Requests: []service.Request{{ID: "3bd63b08-a526-45f3-a819-aa7c507dd31f", User: "admin"}},
+		},
+	}
+	fullRefresh := hooked
+	fullRefresh.Webhooks.LastRefresh = &service.WebhookRefresh{Started: at("2026-10-08T01:11:00Z"), Finished: at("2026-10-08T01:11:01Z"),
+		Full: true, Reason: "a view was updated", Outcome: "failed", Error: "NetBox isn't reachable", Requests: []service.Request{}}
 
 	tests := []struct {
 		name   string
@@ -134,6 +147,19 @@ func TestStatus(t *testing.T) {
 		}},
 		{"not exporting spans", failed, []string{`"tracing":{"endpoint":null,"exported":false,"protocol":null}`}},
 		{"exporting spans", exporting, []string{`"tracing":{"endpoint":"https://otel.example.com:4318","exported":true,"protocol":"grpc"}`}},
+		{"webhooks off", before, []string{
+			`"webhooks":{"delay_seconds":0,"enabled":false,"last_event":null,"last_refresh":null,"pending":{"due":null,"events":0,"full":false,"zones":[]}}`,
+		}},
+		{"webhooks", hooked, []string{
+			`"last_event":{"event":"deleted","object_type":"netbox_dns.zone","received":"2026-10-08T01:11:58Z","request":{"id":null,"user":null}}`,
+			`"pending":{"due":"2026-10-08T01:12:01Z","events":1,"full":true,"zones":[]}`,
+			`"last_refresh":{"error":null,"events":2,"finished":"2026-10-08T01:11:01Z","full":false,"outcome":"incomplete","reason":null,` +
+				`"requests":[{"id":"3bd63b08-a526-45f3-a819-aa7c507dd31f","user":"admin"}],"started":"2026-10-08T01:11:00Z","zones":["_default_/example.com."]}`,
+		}},
+		{"a full refresh from webhooks", fullRefresh, []string{
+			`"error":"NetBox isn't reachable","events":0,`, `"full":true,"outcome":"failed","reason":"a view was updated","requests":[],`,
+			`"zones":null}`,
+		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

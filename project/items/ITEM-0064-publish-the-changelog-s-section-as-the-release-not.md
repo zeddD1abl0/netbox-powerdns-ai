@@ -45,3 +45,4 @@ show it, because without `GITLAB_TOKEN` no release is made.
     wrong or empty ones by editing the release in GitLab.
   - **v0.1.0's notes** still need that: the read-only token can't edit a
     release, so the user does.
+- 2026-10-08: The user chose not to fill in v0.1.0's notes by hand, so its GitLab release keeps empty notes. Later releases get theirs from the CHANGELOG.

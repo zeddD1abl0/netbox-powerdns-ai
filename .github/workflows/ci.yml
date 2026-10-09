@@ -22,7 +22,7 @@ jobs:
   # Stage: lint
   go-lint:
     runs-on: ubuntu-latest
-    container: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
+    container: golang:1.27.2@sha256:5bc7f572bbaa98885a3a1fd9c0aa76b59e3e14e8628bfc316bbfd0c701e4818c
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -31,7 +31,7 @@ jobs:
 
   docs-lint:
     runs-on: ubuntu-latest
-    container: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
+    container: golang:1.27.2@sha256:5bc7f572bbaa98885a3a1fd9c0aa76b59e3e14e8628bfc316bbfd0c701e4818c
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -40,7 +40,7 @@ jobs:
 
   api-lint:
     runs-on: ubuntu-latest
-    container: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
+    container: golang:1.27.2@sha256:5bc7f572bbaa98885a3a1fd9c0aa76b59e3e14e8628bfc316bbfd0c701e4818c
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -49,7 +49,7 @@ jobs:
 
   project-lint:
     runs-on: ubuntu-latest
-    container: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
+    container: golang:1.27.2@sha256:5bc7f572bbaa98885a3a1fd9c0aa76b59e3e14e8628bfc316bbfd0c701e4818c
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -60,7 +60,7 @@ jobs:
   unit-test:
     needs: [go-lint, docs-lint, api-lint, project-lint]
     runs-on: ubuntu-latest
-    container: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
+    container: golang:1.27.2@sha256:5bc7f572bbaa98885a3a1fd9c0aa76b59e3e14e8628bfc316bbfd0c701e4818c
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -70,11 +70,13 @@ jobs:
   # The lab runs in a privileged Docker-in-Docker service. The runner hands
   # this job's env to its own docker commands too, so the lab's Docker host
   # is LAB_DOCKER_HOST, which the Makefile exports as DOCKER_HOST, and not
-  # DOCKER_HOST itself, which would point the runner at the service.
+  # DOCKER_HOST itself, which would point the runner at the service. It waits
+  # for unit-test, as on GitLab, where the two together exhaust the runner's
+  # memory (ITEM-0075).
   integration-test:
-    needs: [go-lint, docs-lint, api-lint, project-lint]
+    needs: [unit-test]
     runs-on: ubuntu-latest
-    container: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
+    container: golang:1.27.2@sha256:5bc7f572bbaa98885a3a1fd9c0aa76b59e3e14e8628bfc316bbfd0c701e4818c
     services:
       docker:
         image: docker:29.8.1-dind@sha256:3f3c01aaaebf7cce837356b688b7c059a4749f10bd7660dec7c58fc454a283f0
@@ -93,7 +95,7 @@ jobs:
   build:
     needs: [unit-test, integration-test]
     runs-on: ubuntu-latest
-    container: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
+    container: golang:1.27.2@sha256:5bc7f572bbaa98885a3a1fd9c0aa76b59e3e14e8628bfc316bbfd0c701e4818c
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -106,7 +108,7 @@ jobs:
   release-check:
     needs: [unit-test, integration-test]
     runs-on: ubuntu-latest
-    container: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
+    container: golang:1.27.2@sha256:5bc7f572bbaa98885a3a1fd9c0aa76b59e3e14e8628bfc316bbfd0c701e4818c
     services:
       docker:
         image: docker:29.8.1-dind@sha256:3f3c01aaaebf7cce837356b688b7c059a4749f10bd7660dec7c58fc454a283f0
@@ -124,7 +126,7 @@ jobs:
   docs-site:
     needs: [unit-test, integration-test]
     runs-on: ubuntu-latest
-    container: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
+    container: golang:1.27.2@sha256:5bc7f572bbaa98885a3a1fd9c0aa76b59e3e14e8628bfc316bbfd0c701e4818c
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -135,7 +137,7 @@ jobs:
   vuln:
     needs: [build, docs-site]
     runs-on: ubuntu-latest
-    container: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
+    container: golang:1.27.2@sha256:5bc7f572bbaa98885a3a1fd9c0aa76b59e3e14e8628bfc316bbfd0c701e4818c
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -145,7 +147,7 @@ jobs:
   secrets:
     needs: [build, docs-site]
     runs-on: ubuntu-latest
-    container: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
+    container: golang:1.27.2@sha256:5bc7f572bbaa98885a3a1fd9c0aa76b59e3e14e8628bfc316bbfd0c701e4818c
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

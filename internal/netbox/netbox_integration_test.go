@@ -108,6 +108,10 @@ func TestLab(t *testing.T) {
 				if err != nil || z.View.Name != f.OtherView {
 					t.Errorf("FindZone in %s = %+v, %v", f.OtherView, z, err)
 				}
+				// A name's case means nothing in DNS, though the plugin keeps it.
+				if z, err := c.FindZone(t.Context(), strings.ToUpper(f.Zone), f.View); err != nil || z.Name != f.Zone {
+					t.Errorf("FindZone of %s in %s = %+v, %v", strings.ToUpper(f.Zone), f.View, z, err)
+				}
 				var ae *AmbiguousZoneError
 				_, err = c.FindZone(t.Context(), f.Zone, "")
 				if !errors.As(err, &ae) || !slices.Equal(ae.Views, []string{f.View, f.OtherView}) {

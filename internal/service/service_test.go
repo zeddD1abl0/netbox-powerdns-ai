@@ -103,7 +103,7 @@ func report(groups ...drift.GroupReport) drift.Report {
 func TestSchedule(t *testing.T) {
 	t.Run("on time", func(t *testing.T) {
 		var n atomic.Int32
-		s, _, _ := testService(t, Options{Interval: 20 * time.Millisecond, Refresh: func(context.Context) (drift.Report, error) {
+		s, _, _ := testService(t, Options{Interval: 20 * time.Millisecond, Refresh: func(context.Context, []drift.ZoneRef) (drift.Report, error) {
 			n.Add(1)
 			return report(), nil
 		}})
@@ -116,7 +116,7 @@ func TestSchedule(t *testing.T) {
 	})
 	t.Run("overrunning", func(t *testing.T) {
 		var inFlight, most atomic.Int32
-		s, logs, _ := testService(t, Options{Interval: 10 * time.Millisecond, Refresh: func(context.Context) (drift.Report, error) {
+		s, logs, _ := testService(t, Options{Interval: 10 * time.Millisecond, Refresh: func(context.Context, []drift.ZoneRef) (drift.Report, error) {
 			if n := inFlight.Add(1); n > most.Load() {
 				most.Store(n)
 			}
@@ -135,7 +135,7 @@ func TestSchedule(t *testing.T) {
 
 func TestShutdown(t *testing.T) {
 	started := make(chan struct{})
-	s, _, _ := testService(t, Options{Refresh: func(ctx context.Context) (drift.Report, error) {
+	s, _, _ := testService(t, Options{Refresh: func(ctx context.Context, _ []drift.ZoneRef) (drift.Report, error) {
 		close(started)
 		<-ctx.Done()
 		return drift.Report{}, ctx.Err()
@@ -164,7 +164,7 @@ func TestTimeout(t *testing.T) {
 	// read, one while a group is. Neither blames them.
 	var n atomic.Int32
 	s, logs, _ := testService(t, Options{Timeout: 20 * time.Millisecond, Groups: []Group{{Name: "a", URL: "https://a"}},
-		Refresh: func(ctx context.Context) (drift.Report, error) {
+		Refresh: func(ctx context.Context, _ []drift.ZoneRef) (drift.Report, error) {
 			switch n.Add(1) {
 			case 1:
 				return report(group("a", drift.StateInSync)), nil
@@ -178,7 +178,7 @@ func TestTimeout(t *testing.T) {
 		}})
 	m := s.o.Metrics
 	for range 3 {
-		s.refresh(t.Context(), time.Now())
+		s.refresh(t.Context(), time.Now(), batch{})
 	}
 	if testutil.ToFloat64(m.Refreshes.WithLabelValues(metrics.OutcomeFailed)) != 2 ||
 		testutil.ToFloat64(m.NetBoxUp.WithLabelValues()) != 1 || testutil.ToFloat64(m.GroupUp.WithLabelValues("a")) != 1 {
@@ -217,7 +217,9 @@ func TestHealth(t *testing.T) {
 		clock = clock.Add(d)
 	}
 	s, _, _ := testService(t, Options{now: now, Interval: 5 * time.Minute, Timeout: 10 * time.Minute,
-		Refresh: func(context.Context) (drift.Report, error) { return report(group("a", drift.StateInSync)), nil }})
+		Refresh: func(context.Context, []drift.ZoneRef) (drift.Report, error) {
+			return report(group("a", drift.StateInSync)), nil
+		}})
 
 	if code, body := get(t, s, http.MethodGet, "/readyz"); code != http.StatusServiceUnavailable || !strings.Contains(body, "first drift refresh") {
 		t.Errorf("readyz before a refresh: %d %q", code, body)
@@ -225,7 +227,7 @@ func TestHealth(t *testing.T) {
 	if code, _ := get(t, s, http.MethodGet, "/livez"); code != http.StatusOK {
 		t.Errorf("livez at start: %d", code)
 	}
-	s.refresh(t.Context(), now())
+	s.refresh(t.Context(), now(), batch{})
 	if code, _ := get(t, s, http.MethodGet, "/readyz"); code != http.StatusOK {
 		t.Errorf("readyz after a refresh: %d", code)
 	}
@@ -260,7 +262,7 @@ func TestLastKnownState(t *testing.T) {
 	t0 := time.Now()
 
 	// Both groups read; zone a in site-a drifted.
-	s.record(t.Context(), report(group("site-a", drift.StateDrift, drift.StateInSync), group("site-b", drift.StateInSync)), nil, t0, t0)
+	s.record(t.Context(), s.o.Log, report(group("site-a", drift.StateDrift, drift.StateInSync), group("site-b", drift.StateInSync)), nil, t0, t0)
 	if zones("site-a", drift.StateDrift) != 1 || zones("site-a", drift.StateInSync) != 1 || up("site-a") != 1 ||
 		testutil.ToFloat64(m.ZoneDrifted.WithLabelValues("site-a", "a.example.", drift.StateDrift)) != 1 ||
 		testutil.ToFloat64(m.RRsetChanges.WithLabelValues("site-a", drift.ChangeChanged)) != 1 ||
@@ -269,21 +271,21 @@ func TestLastKnownState(t *testing.T) {
 	}
 
 	// site-a's primary fails: it keeps its counts and its drifted zone.
-	s.record(t.Context(), report(failedGroup("site-a"), group("site-b", drift.StateInSync)), nil, t0, t0)
+	s.record(t.Context(), s.o.Log, report(failedGroup("site-a"), group("site-b", drift.StateInSync)), nil, t0, t0)
 	if up("site-a") != 0 || zones("site-a", drift.StateDrift) != 1 || testutil.CollectAndCount(m.ZoneDrifted) != 1 ||
 		testutil.ToFloat64(m.Refreshes.WithLabelValues(metrics.OutcomeIncomplete)) != 1 {
 		t.Errorf("after site-a failed:\n%s", gathered(t, m))
 	}
 
 	// NetBox fails: everything keeps its value, and the groups' up too.
-	s.record(t.Context(), drift.Report{}, errors.New("NetBox isn't reachable"), t0, t0)
+	s.record(t.Context(), s.o.Log, drift.Report{}, errors.New("NetBox isn't reachable"), t0, t0)
 	if testutil.ToFloat64(m.NetBoxUp.WithLabelValues()) != 0 || up("site-a") != 0 || up("site-b") != 1 || zones("site-a", drift.StateDrift) != 1 ||
 		testutil.ToFloat64(m.Refreshes.WithLabelValues(metrics.OutcomeFailed)) != 1 {
 		t.Errorf("after NetBox failed:\n%s", gathered(t, m))
 	}
 
 	// site-a back, and in sync: its drifted zone's series goes.
-	s.record(t.Context(), report(group("site-a", drift.StateInSync, drift.StateInSync), group("site-b", drift.StateMissing)), nil, t0, t0)
+	s.record(t.Context(), s.o.Log, report(group("site-a", drift.StateInSync, drift.StateInSync), group("site-b", drift.StateMissing)), nil, t0, t0)
 	if up("site-a") != 1 || zones("site-a", drift.StateDrift) != 0 || zones("site-a", drift.StateInSync) != 2 ||
 		testutil.CollectAndCount(m.ZoneDrifted) != 1 ||
 		testutil.ToFloat64(m.ZoneDrifted.WithLabelValues("site-b", "a.example.", drift.StateMissing)) != 1 {
@@ -311,13 +313,15 @@ func gathered(t *testing.T, m *metrics.Metrics) string {
 }
 
 func TestEachRefreshIsATrace(t *testing.T) {
-	s, logs, spans := testService(t, Options{Refresh: func(context.Context) (drift.Report, error) { return report(group("a", drift.StateInSync)), nil }})
+	s, logs, spans := testService(t, Options{Refresh: func(context.Context, []drift.ZoneRef) (drift.Report, error) {
+		return report(group("a", drift.StateInSync)), nil
+	}})
 	// The service's context has a span of its own, as `nbpdns serve`'s
 	// command span; each refresh must be a root, not its child.
 	ctx, parent := s.o.Tracer.Start(t.Context(), "nbpdns serve")
 	defer parent.End()
-	s.refresh(ctx, time.Now())
-	s.refresh(ctx, time.Now())
+	s.refresh(ctx, time.Now(), batch{})
+	s.refresh(ctx, time.Now(), batch{})
 	ended := spans.Ended()
 	if len(ended) != 2 || ended[0].Name() != "drift refresh" || ended[0].Parent().IsValid() ||
 		ended[0].SpanContext().TraceID() == ended[1].SpanContext().TraceID() {
@@ -351,9 +355,9 @@ func TestGroups(t *testing.T) {
 		}
 	}
 	t0 := time.Now()
-	s.record(t.Context(), report(group("site-a", drift.StateDrift), group("site-b", drift.StateInSync)), nil, t0, t0)
+	s.record(t.Context(), s.o.Log, report(group("site-a", drift.StateDrift), group("site-b", drift.StateInSync)), nil, t0, t0)
 	// site-b's primary fails: it keeps its report, and says it failed.
-	s.record(t.Context(), report(group("site-a", drift.StateInSync), failedGroup("site-b")), nil, t0, t0)
+	s.record(t.Context(), s.o.Log, report(group("site-a", drift.StateInSync), failedGroup("site-b")), nil, t0, t0)
 	got := s.Groups()
 	a, b := got[0], got[1]
 	if a.Report == nil || a.Report.Counts.InSync != 1 || a.Info.Status != drift.StatusOK {
@@ -379,7 +383,7 @@ func TestNetBoxZones(t *testing.T) {
 	r := report(group("site-a", drift.StateInSync))
 	r.NetBox = []dns.Zone{{Name: "a.example.", View: "v", Active: true}, {Name: "a.example.", View: "w", Active: true},
 		{Name: "b.example.", View: "w", Active: true}, {Name: "c.example.", View: "v"}, {Name: "c.example.", View: "w", Active: true}}
-	s.record(t.Context(), r, nil, t0, t0)
+	s.record(t.Context(), s.o.Log, r, nil, t0, t0)
 	nb := s.NetBox()
 	if !nb.AsOf.Equal(t0) || len(nb.Zones["v"]) != 2 || len(nb.Zones["w"]) != 3 {
 		t.Fatalf("after a refresh: %+v", nb)
@@ -398,21 +402,21 @@ func TestNetBoxZones(t *testing.T) {
 	}
 	// NetBox fails, and a refresh times out: the zones stay as they were.
 	t1 := t0.Add(time.Minute)
-	s.record(t.Context(), drift.Report{}, errors.New("NetBox isn't reachable"), t1, t1)
-	s.record(t.Context(), drift.Report{}, &TimeoutError{Timeout: time.Minute}, t1, t1)
+	s.record(t.Context(), s.o.Log, drift.Report{}, errors.New("NetBox isn't reachable"), t1, t1)
+	s.record(t.Context(), s.o.Log, drift.Report{}, &TimeoutError{Timeout: time.Minute}, t1, t1)
 	if nb := s.NetBox(); !nb.AsOf.Equal(t0) || len(nb.Zones["w"]) != 3 {
 		t.Errorf("after failures: %+v", nb)
 	}
 	// The zones that aren't compared fail: the last records stay, and it's
 	// logged.
 	r.NetBox, r.NetBoxErr = nil, errors.New("reading d.example. timed out")
-	s.record(t.Context(), r, nil, t1, t1)
+	s.record(t.Context(), s.o.Log, r, nil, t1, t1)
 	if nb := s.NetBox(); !nb.AsOf.Equal(t0) || !strings.Contains(logs.String(), "the API keeps NetBox's last records") {
 		t.Errorf("after the other zones failed: %+v", nb)
 	}
 	// No zones at all is a read, which empties the records.
 	r.NetBox, r.NetBoxErr = []dns.Zone{}, nil
-	s.record(t.Context(), r, nil, t1, t1)
+	s.record(t.Context(), s.o.Log, r, nil, t1, t1)
 	if nb := s.NetBox(); !nb.AsOf.Equal(t1) || len(nb.Zones) != 0 {
 		t.Errorf("after an empty read: %+v", nb)
 	}

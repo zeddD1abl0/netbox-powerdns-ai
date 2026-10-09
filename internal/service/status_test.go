@@ -111,7 +111,7 @@ func TestStatus(t *testing.T) {
 		NetBoxURL: "https://netbox.example.com",
 		Groups:    []Group{{Name: "site-a", URL: "https://pdns-a.example.com"}, {Name: "site-b", URL: "https://pdns-b.example.com"}},
 		OTLP:      OTLP{Endpoint: "https://otel.example.com:4318", Protocol: "http/protobuf"},
-		Refresh: func(context.Context) (drift.Report, error) {
+		Refresh: func(context.Context, []drift.ZoneRef) (drift.Report, error) {
 			refreshed = true
 			return report(group("site-a", drift.StateDrift, drift.StateInSync), failedGroup("site-b")), nil
 		},
@@ -136,7 +136,7 @@ func TestStatus(t *testing.T) {
 		t.Errorf("the page before a refresh:\n%s", body)
 	}
 
-	s.refresh(t.Context(), time.Now())
+	s.refresh(t.Context(), time.Now(), batch{})
 	if !refreshed {
 		t.Fatal("no refresh")
 	}

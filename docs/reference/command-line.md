@@ -30,6 +30,7 @@ in the [configuration reference](configuration.md).
 | `--drift-group-concurrency` | `integer` | `4` | How many server groups are read and compared at once. |
 | `--drift-interval` | `duration` | `5m` | How often `nbpdns serve` refreshes the drift report, from the start of one refresh to the start of the next. |
 | `--drift-timeout` | `duration` | `10m` | How long one refresh of `nbpdns serve` may take before it's stopped. |
+| `--drift-webhook-delay` | `duration` | `3s` | How long `nbpdns serve` waits for NetBox's webhooks to stop coming before it refreshes the zones they named. |
 | `--log-format` | `string` | `json` | How log lines are written to standard error. |
 | `--log-level` | `string` | `info` | The lowest level of log message to write. |
 | `--netbox-ca-file` | `path` | none | A PEM file of CA certificates to trust for NetBox, as well as the system's. |
@@ -39,6 +40,8 @@ in the [configuration reference](configuration.md).
 | `--netbox-token` | `string` | none | The NetBox API token that nbpdns reads with. |
 | `--netbox-token-file` | `path` | none | Read `netbox.token` from this file. |
 | `--netbox-url` | `url` | none | NetBox's base URL, such as `https://netbox.example.com`. |
+| `--netbox-webhook-secret` | `string` | none | The secret that NetBox's webhooks sign their events with. Setting it turns on `nbpdns serve`'s `/api/netbox-events`. |
+| `--netbox-webhook-secret-file` | `path` | none | Read `netbox.webhook_secret` from this file. |
 | `--otlp-ca-file` | `path` | none | A PEM file of CA certificates to trust for the collector, as well as the system's. |
 | `--otlp-endpoint` | `url` | none | The URL of the OpenTelemetry collector that nbpdns exports its spans to, over OTLP. |
 | `--otlp-headers` | `string` | none | Headers to send with every export, such as the collector's token, as `name=value,name=value`. |
@@ -317,6 +320,9 @@ or NetBox, can't be read. Serve, at server.listen:
   /readyz   200 once the first refresh has finished
   /status   the service's state, as text, or as JSON with ?json=1
   /metrics  the drift, refresh and request metrics, for Prometheus
+
+With netbox.webhook_secret set, NetBox's signed webhooks at /api/netbox-events
+refresh the zones they name, once they stop coming for drift.webhook_delay.
 
 Each refresh is its own trace, exported if otlp.endpoint is set. nbpdns only
 reads, and changes nothing. It stops on SIGINT or SIGTERM, and exits 0.

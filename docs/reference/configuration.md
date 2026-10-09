@@ -32,6 +32,7 @@ a secret's value.
 | [`drift.group_concurrency`](#driftgroup_concurrency) | integer, 1 to 32 | `4` |
 | [`drift.interval`](#driftinterval) | duration, at least `10s` | `5m` |
 | [`drift.timeout`](#drifttimeout) | duration | `10m` |
+| [`drift.webhook_delay`](#driftwebhook_delay) | duration, from `100ms` to `30s` | `3s` |
 | [`log.format`](#logformat) | `json` or `text` | `json` |
 | [`log.level`](#loglevel) | `debug`, `info`, `warn` or `error` | `info` |
 | [`netbox.ca_file`](#netboxca_file) | path | none |
@@ -40,6 +41,7 @@ a secret's value.
 | [`netbox.timeout`](#netboxtimeout) | duration | `30s` |
 | [`netbox.token`](#netboxtoken) | string, secret | none |
 | [`netbox.url`](#netboxurl) | an `http` or `https` URL | none |
+| [`netbox.webhook_secret`](#netboxwebhook_secret) | string, secret | none |
 | [`otlp.ca_file`](#otlpca_file) | path | none |
 | [`otlp.endpoint`](#otlpendpoint) | an `http` or `https` URL | none |
 | [`otlp.headers`](#otlpheaders) | string, secret | none |
@@ -85,6 +87,19 @@ schedule.
 - **Default:** `10m`
 - **Environment variable:** `NBPDNS_DRIFT_TIMEOUT`
 - **Flag:** `--drift-timeout`
+
+## `drift.webhook_delay`
+
+How long `nbpdns serve` waits for NetBox's webhooks to stop coming before it
+refreshes the zones they named. One change in NetBox sends several events, and
+a bulk edit sends thousands, so nbpdns gathers them, and refreshes once no
+event has come for this long, or 30 seconds after the first, whichever is
+sooner. Only with `netbox.webhook_secret` set.
+
+- **Type:** duration, from `100ms` to `30s`
+- **Default:** `3s`
+- **Environment variable:** `NBPDNS_DRIFT_WEBHOOK_DELAY`
+- **Flag:** `--drift-webhook-delay`
 
 ## `log.format`
 
@@ -173,6 +188,26 @@ reads from NetBox needs it.
 > With an `http://` URL, the NetBox token crosses the network unencrypted, and
 > anyone on the path can read it. Use `https://` wherever NetBox offers it.
 > nbpdns logs a warning each time it connects to NetBox over `http://`.
+
+## `netbox.webhook_secret`
+
+The secret that NetBox's webhooks sign their events with. Setting it turns on
+`nbpdns serve`'s `/api/netbox-events`. Give NetBox's webhook the same secret.
+An event is refused unless its `X-Hook-Signature` is the HMAC-SHA512 of its
+body, keyed by it. If it's unset, `/api/netbox-events` answers 404, and only
+the scheduled refreshes run. Use a long random string, such as `openssl rand
+-hex 32` prints: it must be at least 16 characters.
+
+- **Type:** string, secret
+- **Default:** none
+- **Environment variable:** `NBPDNS_NETBOX_WEBHOOK_SECRET`
+- **Flag:** `--netbox-webhook-secret`
+- **From a file:** `NBPDNS_NETBOX_WEBHOOK_SECRET_FILE`, `--netbox-webhook-secret-file`, or `netbox.webhook_secret_file` in the config file
+
+> [!WARNING]
+> Over `http://`, anyone on the path between NetBox and nbpdns can read the
+> events, and replay them, which makes nbpdns refresh the zones they name
+> again. They can't forge one without the secret.
 
 ## `otlp.ca_file`
 
@@ -344,6 +379,7 @@ drift:
   group_concurrency: 4
   interval: 5m
   timeout: 10m
+  webhook_delay: 3s
 log:
   format: json
   level: info

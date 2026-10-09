@@ -9,7 +9,7 @@ weight: 45
 # API
 
 `nbpdns serve` serves its API at `/api`, on `server.listen`. This page is
-generated from `api/openapi.yaml`, the API's source of truth, version 1.0.0.
+generated from `api/openapi.yaml`, the API's source of truth, version 1.1.0.
 The service serves the same document at `/api/openapi.yaml`, and a
 reference to browse at `/api/docs`.
 [How nbpdns's API is designed](../explanation/how-nbpdns-api-is-designed.md)
@@ -18,11 +18,13 @@ explains its conventions.
 > [!WARNING]
 > The API has no authentication until M10, and it names your server
 > groups, zones, and records. Keep `server.listen` on a trusted network.
+> Only NetBox's webhooks need a signature.
 
 ## Conventions
 
-- Bodies are JSON, with `snake_case` fields. Every field the schemas
-  below list is always present: one with nothing to say is `null`.
+- Bodies are JSON, with `snake_case` fields. Every field that a
+  response's schema lists is always present: one with nothing to say is
+  `null`.
 - Times are RFC 3339, in UTC.
 - A list takes `limit`, from 1 to 1000, 100 by default, and `cursor`, and
   answers a page: its `items`, and the absolute URLs of itself, `self`,
@@ -164,6 +166,29 @@ Returns a page of a zone's RRsets as NetBox defines them, in nbpdns's normalized
 | 404 | No such resource. | [`Problem`](#problem), `application/problem+json` |
 | default | Any other error. | [`Problem`](#problem), `application/problem+json` |
 
+### `POST /api/netbox-events`
+
+Receive a NetBox webhook. Operation `receiveNetBoxEvent`.
+
+Receives an event from a NetBox event rule's webhook, signed with `netbox.webhook_secret`, and queues a refresh of the zones it names, which runs once no event has come for `drift.webhook_delay`. A record's event names its zone, and a zone's event the zone, and its old name if it was renamed. An event for a view that a server group serves, by its name or its old one, a zone moved to another view, a record moved to another zone, and more than 100 zones at once each make a full refresh instead. Events for other object types, and for zones and views that no server group serves, are accepted and ignored. The endpoint is off until `netbox.webhook_secret` is set.
+
+Needs the `X-Hook-Signature` header. It's the hex HMAC-SHA512 of the request's body, keyed by `netbox.webhook_secret`, as a NetBox webhook sends it when its secret is set.
+
+| Parameter | In | Type | Description |
+|---|---|---|---|
+| `X-Flow-ID` | header | `string` | The request's flow ID, to follow it through the logs. A request without a valid one is given one. Either way, the response returns it, and it's the request's `request_id` in nbpdns's logs. |
+
+The request's body is [`NetBoxEvent`](#netboxevent), `application/json`. It's the event, as NetBox's webhook sends it without a body template.
+
+| Response | Description | Body |
+|---|---|---|
+| 202 | The event is accepted. The refresh it asks for runs later, if it asks for one. | none |
+| 400 | The body isn't an event that NetBox sends, such as JSON without an `object_type`. | [`Problem`](#problem), `application/problem+json` |
+| 401 | The request's `X-Hook-Signature` is missing, or isn't the body's, keyed by `netbox.webhook_secret`. Nothing in the body is read. | [`Problem`](#problem), `application/problem+json` |
+| 404 | Webhooks are off, because `netbox.webhook_secret` isn't set. | [`Problem`](#problem), `application/problem+json` |
+| 413 | The body is over 1 MiB, which no event that nbpdns reads needs. | [`Problem`](#problem), `application/problem+json` |
+| default | Any other error. | [`Problem`](#problem), `application/problem+json` |
+
 ## Schemas
 
 ### `Problem`
@@ -193,6 +218,7 @@ The nbpdns service's state.
 | `schedule` | [`Schedule`](#schedule) | The refreshes' schedule, and how they went. |
 | `netbox` | [`NetBoxState`](#netboxstate) | NetBox's state, as of the last refresh. |
 | `tracing` | [`Tracing`](#tracing) | Where the service's spans are exported. |
+| `webhooks` | [`Webhooks`](#webhooks) | The state of NetBox's webhooks, which refresh the zones they name. |
 
 ### `Schedule`
 
@@ -249,6 +275,65 @@ Where the service's spans are exported.
 | `endpoint` | `string`, or null | The OTLP collector's endpoint, `otlp.endpoint`, or null. |
 | `protocol` | [`OTLPProtocol`](#otlpprotocol), or null | The OTLP protocol, `otlp.protocol`, or null. |
 
+### `Webhooks`
+
+The state of NetBox's webhooks, which refresh the zones they name.
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `boolean` | Whether `netbox.webhook_secret` is set, so that `/api/netbox-events` takes NetBox's webhooks. |
+| `delay_seconds` | `number` (`double`) | How long the zones that webhooks name wait for the webhooks to stop coming, `drift.webhook_delay`. |
+| `last_event` | [`WebhookEvent`](#webhookevent), or null | The last event that a signed webhook brought, or null before the first. |
+| `pending` | [`PendingRefresh`](#pendingrefresh) | What NetBox's webhooks queued, waiting for its refresh. |
+| `last_refresh` | [`WebhookRefresh`](#webhookrefresh), or null | The last refresh that webhooks asked for, or that covered the zones they named, or null. |
+
+### `WebhookEvent`
+
+An event that a NetBox webhook brought.
+
+| Field | Type | Description |
+|---|---|---|
+| `received` | `string` (`date-time`) | When it came. |
+| `event` | `string` | What the event said happened to the object, `created`, `updated` or `deleted`. |
+| `object_type` | `string` | The object's type, such as `netbox_dns.record`. |
+| `request` | [`ChangeRequest`](#changerequest) | The NetBox request that made a change. |
+
+### `ChangeRequest`
+
+The NetBox request that made a change.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string`, or null | NetBox's ID for the request, or null if no request made the change. |
+| `user` | `string`, or null | The user who made the request, or null. |
+
+### `PendingRefresh`
+
+What NetBox's webhooks queued, waiting for its refresh.
+
+| Field | Type | Description |
+|---|---|---|
+| `events` | `integer` (`int64`) | The webhooks whose refresh waits. |
+| `zones` | array of `string` | The zones that webhooks named, waiting, each as `view/name`. Once a full refresh waits, it covers them, and no more are added. |
+| `full` | `boolean` | Whether a full refresh waits: for a change to a view that a server group serves, a zone or a record that moved, or more than 100 zones. |
+| `due` | `string` (`date-time`), or null | When the refresh is due, unless the scheduled one comes first, or null if nothing waits. |
+
+### `WebhookRefresh`
+
+A refresh that NetBox's webhooks asked for, or that covered the zones they named, which finished.
+
+| Field | Type | Description |
+|---|---|---|
+| `started` | `string` (`date-time`) | When it started. |
+| `finished` | `string` (`date-time`) | When it finished. |
+| `zones` | array of `string`, or null | The zones it refreshed, each as `view/name`, or null for a full refresh. |
+| `full` | `boolean` | Whether it was a full refresh. |
+| `reason` | `string`, or null | Why it was a full refresh, such as `view internal was updated`, or null. |
+| `outcome` | `complete`, `incomplete`, or `failed` | `complete` if NetBox and every group it compared were read, `incomplete` if a group's primary couldn't be, and `failed` if NetBox couldn't be, or it ran out of time. |
+| `error` | `string`, or null | Why it failed, or null. |
+| `events` | `integer` (`int64`) | The webhooks it served. |
+| `requests` | array of [`ChangeRequest`](#changerequest) | The NetBox requests whose changes it refreshed, up to 128. |
+
 ### `OTLPProtocol`
 
 An OTLP protocol.
@@ -273,8 +358,8 @@ A PowerDNS server group, with its last-known state. The counts are as of `last_s
 | `drift_policy` | [`DriftPolicy`](#driftpolicy) | What nbpdns does about a zone's drift: `report` reports it, `enforce` reports it and, from M13, corrects it, and `ignore` doesn't compare the zone. |
 | `status` | `ok`, `failed`, or `unknown` | `ok` if the last refresh that tried the group's primary read it, `failed` if it couldn't, and `unknown` before any did. |
 | `error` | `string`, or null | Why the primary couldn't be read, or null. |
-| `last_success` | `string` (`date-time`), or null | When the group was last read and compared, or null if it never was. |
-| `counts` | [`ZoneCounts`](#zonecounts), or null | The group's zones by state, as of `last_success`, or null if it was never read. |
+| `last_success` | `string` (`date-time`), or null | When the group was last read and compared in full, or null if it never was. Zones that NetBox's webhooks named may have been compared since. |
+| `counts` | [`ZoneCounts`](#zonecounts), or null | The group's zones by state, as of `last_success`, and of the zone refreshes since, or null if it was never read. |
 | `problem_count` | `integer` (`int64`), or null | How many problems normalization worked around in either side's data, as of `last_success`, or null. `nbpdns drift` lists them. |
 | `warning_count` | `integer` (`int64`), or null | How many problems with the configuration or NetBox's data the comparison worked around, as of `last_success`, or null. `nbpdns drift` lists them. |
 
@@ -339,7 +424,7 @@ The fields of [`Zone`](#zone), and:
 
 | Field | Type | Description |
 |---|---|---|
-| `as_of` | `string` (`date-time`) | When the group was last read and compared, its `last_success`. |
+| `as_of` | `string` (`date-time`) | Its group's `last_success`: when the group was last compared in full. A zone that NetBox's webhooks named may have been compared since. |
 
 ### `ZonePage`
 
@@ -349,7 +434,7 @@ The fields of [`PageLinks`](#pagelinks), and:
 
 | Field | Type | Description |
 |---|---|---|
-| `as_of` | `string` (`date-time`), or null | What the zones are as of, the group's `last_success`, or null if the group was never read. |
+| `as_of` | `string` (`date-time`), or null | What the zones are as of, the group's `last_success`, or null if the group was never read. Zones that NetBox's webhooks named may have been compared since. |
 | `items` | array of [`Zone`](#zone) | The page's zones. |
 
 ### `ChangeKind`
@@ -387,7 +472,7 @@ The fields of [`PageLinks`](#pagelinks), and:
 
 | Field | Type | Description |
 |---|---|---|
-| `as_of` | `string` (`date-time`) | When the group was last read and compared. |
+| `as_of` | `string` (`date-time`) | When the group was last compared in full. A zone that NetBox's webhooks named may have been compared since. |
 | `items` | array of [`Change`](#change) | The page's changes. |
 
 ### `Record`
@@ -418,5 +503,36 @@ The fields of [`PageLinks`](#pagelinks), and:
 
 | Field | Type | Description |
 |---|---|---|
-| `as_of` | `string` (`date-time`) | When NetBox was last read, which the RRsets are as of. |
+| `as_of` | `string` (`date-time`) | When NetBox was last read in full, which the RRsets are as of. A zone that NetBox's webhooks named may have been read since. |
 | `items` | array of [`RRset`](#rrset) | The page's RRsets. |
+
+### `NetBoxEvent`
+
+A NetBox webhook's event, as NetBox 4.7 sends it without a body template: what happened to an object, the object, and the request that made the change. nbpdns reads only the fields below, and ignores the rest.
+
+| Field | Type | Description |
+|---|---|---|
+| `event` | `string` | What happened to the object, such as `created`, `updated` or `deleted`. |
+| `timestamp` | `string` (`date-time`) | When it happened. |
+| `object_type` | `string` | The object's type. nbpdns reads `netbox_dns.record`, `netbox_dns.zone` and `netbox_dns.view`, and ignores the others. |
+| `request` | [`NetBoxRequest`](#netboxrequest), or null | The NetBox request that made the change, or null if none did. |
+| `data` | `object` | The object, as NetBox's API serializes it: after the change, or before it, for a deletion. A record's has its `zone`, with the zone's `id`, `name` and `view`, and a zone's has its `id`, `name` and `view`, each view with its `id` and `name`. |
+| `snapshots` | [`NetBoxSnapshots`](#netboxsnapshots), or null | The object's fields around the change, with related objects as their IDs. |
+
+### `NetBoxRequest`
+
+A NetBox request, as its webhooks describe it.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` (`uuid`) | NetBox's ID for the request, which every event it causes shares. |
+| `user` | `string` | The name of the user who made the request. |
+
+### `NetBoxSnapshots`
+
+An object's fields before and after a change.
+
+| Field | Type | Description |
+|---|---|---|
+| `prechange` | `object`, or null | The fields before the change: null for a creation, and for some updates that the DNS plugin makes itself. A renamed zone's has its old `name`, and a moved zone's its old `view` ID, as a moved record's has its old `zone` ID. |
+| `postchange` | `object`, or null | The fields after the change, or null for a deletion. |

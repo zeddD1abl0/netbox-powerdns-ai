@@ -89,11 +89,43 @@ the runner's own Docker commands.
 make test-integration
 ```
 
-This starts the lab if it isn't running, then runs every test with the
-`integration` build tag. The tests use every NetBox and PowerDNS server in the
-lab. Each test creates its own DNS data, and in NetBox users with their own API
+This starts the lab if it isn't running, then tests the packages that have
+tests with the `integration` build tag: their unit tests too, but no other
+package's, which `make test` covers. The tests use every NetBox and PowerDNS
+server in the lab. Each test creates its own DNS data, and in NetBox users with their own API
 tokens, with names that contain a random ID, and removes them when it ends.
 Data you add to the lab yourself isn't touched.
+
+The integration tests replay NetBox's webhooks, signed, rather than have
+NetBox send them, which takes NetBox's worker.
+
+## Have NetBox send webhooks
+
+NetBox sends webhooks from a background worker, which the lab runs only
+with the profile `webhooks`, since it takes about 300 MB more memory. Start
+the lab with it:
+
+```shell
+make lab-up LAB_PROFILES=webhooks
+```
+
+The worker reaches services on the Docker host as `host.docker.internal`.
+So a webhook in the lab's NetBox whose URL is
+`http://host.docker.internal:8080/api/netbox-events` reaches `nbpdns serve`
+listening on port 8080 of every interface. That works on a local Docker
+host only.
+
+To run the end-to-end webhook test, which starts the lab with the worker,
+creates a webhook and an event rule in NetBox, changes a record, and waits
+for `nbpdns serve` to see the zone drift:
+
+```shell
+make test-webhooks
+```
+
+It isn't part of `make ci`.
+[Refresh drift as NetBox changes](refresh-drift-as-netbox-changes.md) sets
+up webhooks outside the lab.
 
 ## Remove the lab
 
@@ -101,5 +133,5 @@ Data you add to the lab yourself isn't touched.
 make lab-down
 ```
 
-This removes the containers and their data. The downloaded images stay, so
-the next start is faster.
+This removes the containers, the worker's too, and their data. The
+downloaded images stay, so the next start is faster.

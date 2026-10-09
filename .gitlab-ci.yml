@@ -21,9 +21,9 @@ workflow:
     - if: $CI_COMMIT_TAG
 
 # Every job: the official Go image (Debian, glibc: ADR-0031), pinned by digest.
-# It ships Go 1.27.1, go.mod's toolchain, so no other Go is ever downloaded.
+# It ships Go 1.27.2, go.mod's toolchain, so no other Go is ever downloaded.
 .go:
-  image: golang:1.27.1@sha256:3680233e3204827fbdc66088528ae6d4b3d034f51d03a99d454f6de034888244
+  image: golang:1.27.2@sha256:5bc7f572bbaa98885a3a1fd9c0aa76b59e3e14e8628bfc316bbfd0c701e4818c
   variables:
     GOTOOLCHAIN: local
 
@@ -62,10 +62,13 @@ unit-test:
 # NetBox and one PowerDNS server (ADR-0023, ADR-0026). The service's resident
 # memory peaks at about 1.1 to 1.25 GiB, almost all of it NetBox applying its
 # first-start migrations, and the job's at about 0.35 GiB; the service stores
-# about 2.2 GB (ITEM-0028, ITEM-0037).
+# about 2.2 GB (ITEM-0028, ITEM-0037). It waits for unit-test, so the two
+# never share the runner's memory: run together, the runner killed it
+# (ITEM-0075).
 integration-test:
   extends: .go
   stage: test
+  needs: [unit-test]
   services:
     - name: docker:29.8.1-dind@sha256:3f3c01aaaebf7cce837356b688b7c059a4749f10bd7660dec7c58fc454a283f0
       alias: docker

@@ -6,15 +6,16 @@
 openapi: 3.1.0
 info:
   title: nbpdns API
-  version: 1.0.0
+  version: 1.1.0
   description: >-
-    The read-only API of nbpdns, which compares the DNS data in NetBox's DNS
-    plugin with what each PowerDNS server group's primary serves. It serves
-    the service's status, each server group's drift, its zones and their
+    The API of nbpdns, which compares the DNS data in NetBox's DNS plugin
+    with what each PowerDNS server group's primary serves. It serves the
+    service's status, each server group's drift, its zones and their
     changes, and each zone's DNS records as NetBox defines them. Everything
-    is last-known state, as of the last successful read of each side. The
-    API has no authentication until M10, so serve it only on a trusted
-    network.
+    is last-known state, as of the last successful read of each side. It
+    changes nothing, and it receives NetBox's webhooks, which refresh the
+    zones they name. Apart from those, which NetBox signs, the API has no
+    authentication until M10, so serve it only on a trusted network.
   contact:
     name: nbpdns
     url: https://github.com/zeddD1abl0/netbox-powerdns-ai
@@ -37,6 +38,8 @@ tags:
       PowerDNS server groups: each is a primary, the servers that follow it,
       and the NetBox views whose zones they serve. A group's name is its
       stable ID.
+  - name: netbox
+    description: Events from NetBox, which make nbpdns refresh what changed.
 paths:
   /status:
     get:
@@ -90,6 +93,33 @@ paths:
                   exported: false
                   endpoint: null
                   protocol: null
+                webhooks:
+                  enabled: true
+                  delay_seconds: 3
+                  last_event:
+                    received: "2026-10-08T01:11:58.2Z"
+                    event: updated
+                    object_type: netbox_dns.record
+                    request:
+                      id: 3bd63b08-a526-45f3-a819-aa7c507dd31f
+                      user: admin
+                  pending:
+                    events: 0
+                    zones: []
+                    full: false
+                    due: null
+                  last_refresh:
+                    started: "2026-10-08T01:12:01.2Z"
+                    finished: "2026-10-08T01:12:01.6Z"
+                    zones: [_default_/example.com.]
+                    full: false
+                    reason: null
+                    outcome: complete
+                    error: null
+                    events: 3
+                    requests:
+                      - id: 3bd63b08-a526-45f3-a819-aa7c507dd31f
+                        user: admin
         default:
           $ref: "#/components/responses/Problem"
   /server-groups:
@@ -374,6 +404,83 @@ paths:
           $ref: "#/components/responses/NotFound"
         default:
           $ref: "#/components/responses/Problem"
+  /netbox-events:
+    post:
+      operationId: receiveNetBoxEvent
+      summary: Receive a NetBox webhook
+      description: >-
+        Receives an event from a NetBox event rule's webhook, signed with
+        `netbox.webhook_secret`, and queues a refresh of the zones it names,
+        which runs once no event has come for `drift.webhook_delay`. A
+        record's event names its zone, and a zone's event the zone, and its
+        old name if it was renamed. An event for a view that a server group
+        serves, by its name or its old one, a zone moved to another view, a
+        record moved to another zone, and more than 100 zones at once each
+        make a full refresh instead. Events for other object types, and for
+        zones and views that no server group serves, are accepted and
+        ignored. The endpoint is off until `netbox.webhook_secret` is
+        set.
+      tags: [netbox]
+      security:
+        - netboxSignature: []
+      parameters:
+        - $ref: "#/components/parameters/FlowID"
+      requestBody:
+        required: true
+        description: It's the event, as NetBox's webhook sends it without a body template.
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NetBoxEvent"
+            example:
+              event: updated
+              timestamp: "2026-10-08T07:14:37.453389+00:00"
+              object_type: netbox_dns.record
+              request:
+                id: 3bd63b08-a526-45f3-a819-aa7c507dd31f
+                path: /api/plugins/netbox-dns/records/102788/
+                method: PATCH
+                user: admin
+              data:
+                id: 102788
+                name: www
+                type: A
+                value: 192.0.2.11
+                zone:
+                  id: 1106
+                  name: example.com
+                  view:
+                    id: 1
+                    name: _default_
+              snapshots:
+                prechange:
+                  name: www
+                  type: A
+                  value: 192.0.2.10
+                  zone: 1106
+                postchange:
+                  name: www
+                  type: A
+                  value: 192.0.2.11
+                  zone: 1106
+      responses:
+        "202":
+          description: >-
+            The event is accepted. The refresh it asks for runs later, if it
+            asks for one.
+          headers:
+            X-Flow-ID:
+              $ref: "#/components/headers/FlowID"
+        "400":
+          $ref: "#/components/responses/InvalidEvent"
+        "401":
+          $ref: "#/components/responses/BadSignature"
+        "404":
+          $ref: "#/components/responses/WebhooksOff"
+        "413":
+          $ref: "#/components/responses/EventTooLarge"
+        default:
+          $ref: "#/components/responses/Problem"
 components:
   parameters:
     FlowID:
@@ -433,6 +540,15 @@ components:
       description: The request's flow ID, as sent, or as nbpdns made it.
       schema:
         type: string
+  securitySchemes:
+    netboxSignature:
+      type: apiKey
+      in: header
+      name: X-Hook-Signature
+      description: >-
+        It's the hex HMAC-SHA512 of the request's body, keyed by
+        `netbox.webhook_secret`, as a NetBox webhook sends it when its
+        secret is set.
   responses:
     BadRequest:
       description: A parameter is invalid, such as a limit out of range, or a cursor that this API didn't give.
@@ -464,6 +580,75 @@ components:
             status: 404
             detail: No server group is named site-z.
             instance: /api/server-groups/site-z
+    InvalidEvent:
+      description: The body isn't an event that NetBox sends, such as JSON without an `object_type`.
+      headers:
+        X-Flow-ID:
+          $ref: "#/components/headers/FlowID"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: about:blank
+            title: Bad Request
+            status: 400
+            detail: "The body isn't an event that NetBox sends: a netbox_dns.record event's data has no zone with a name and a view."
+            instance: /api/netbox-events
+    BadSignature:
+      description: >-
+        The request's `X-Hook-Signature` is missing, or isn't the body's,
+        keyed by `netbox.webhook_secret`. Nothing in the body is read.
+      headers:
+        X-Flow-ID:
+          $ref: "#/components/headers/FlowID"
+        WWW-Authenticate:
+          description: The scheme to authenticate with, which names the signature's header.
+          schema:
+            type: string
+            examples: [X-Hook-Signature]
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: about:blank
+            title: Unauthorized
+            status: 401
+            detail: >-
+              The request's X-Hook-Signature isn't the body's: set the
+              webhook's secret in NetBox to netbox.webhook_secret.
+            instance: /api/netbox-events
+    WebhooksOff:
+      description: Webhooks are off, because `netbox.webhook_secret` isn't set.
+      headers:
+        X-Flow-ID:
+          $ref: "#/components/headers/FlowID"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: about:blank
+            title: Not Found
+            status: 404
+            detail: Webhooks are off. Set netbox.webhook_secret, and give NetBox's webhook the same secret, to turn them on.
+            instance: /api/netbox-events
+    EventTooLarge:
+      description: The body is over 1 MiB, which no event that nbpdns reads needs.
+      headers:
+        X-Flow-ID:
+          $ref: "#/components/headers/FlowID"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: about:blank
+            title: Request Entity Too Large
+            status: 413
+            detail: The body is over 1 MiB.
+            instance: /api/netbox-events
     Problem:
       description: Any other error.
       headers:
@@ -521,7 +706,7 @@ components:
     Status:
       type: object
       description: The nbpdns service's state.
-      required: [version, revision, started, uptime_seconds, ready, live, schedule, netbox, tracing]
+      required: [version, revision, started, uptime_seconds, ready, live, schedule, netbox, tracing, webhooks]
       properties:
         version:
           type: string
@@ -560,6 +745,8 @@ components:
           $ref: "#/components/schemas/NetBoxState"
         tracing:
           $ref: "#/components/schemas/Tracing"
+        webhooks:
+          $ref: "#/components/schemas/Webhooks"
     Schedule:
       type: object
       description: The refreshes' schedule, and how they went.
@@ -688,6 +875,160 @@ components:
           oneOf:
             - $ref: "#/components/schemas/OTLPProtocol"
             - type: "null"
+    Webhooks:
+      type: object
+      description: The state of NetBox's webhooks, which refresh the zones they name.
+      required: [enabled, delay_seconds, last_event, pending, last_refresh]
+      properties:
+        enabled:
+          type: boolean
+          description: >-
+            Whether `netbox.webhook_secret` is set, so that
+            `/api/netbox-events` takes NetBox's webhooks.
+          examples: [true]
+        delay_seconds:
+          type: number
+          format: double
+          minimum: 0
+          description: >-
+            How long the zones that webhooks name wait for the webhooks to
+            stop coming, `drift.webhook_delay`.
+          examples: [3]
+        last_event:
+          description: The last event that a signed webhook brought, or null before the first.
+          oneOf:
+            - $ref: "#/components/schemas/WebhookEvent"
+            - type: "null"
+        pending:
+          $ref: "#/components/schemas/PendingRefresh"
+        last_refresh:
+          description: >-
+            The last refresh that webhooks asked for, or that covered the
+            zones they named, or null.
+          oneOf:
+            - $ref: "#/components/schemas/WebhookRefresh"
+            - type: "null"
+    WebhookEvent:
+      type: object
+      description: An event that a NetBox webhook brought.
+      required: [received, event, object_type, request]
+      properties:
+        received:
+          type: string
+          format: date-time
+          description: When it came.
+          examples: ["2026-10-08T01:11:58.2Z"]
+        event:
+          type: string
+          description: What the event said happened to the object, `created`, `updated` or `deleted`.
+          examples: [updated]
+        object_type:
+          type: string
+          description: The object's type, such as `netbox_dns.record`.
+          examples: [netbox_dns.record]
+        request:
+          $ref: "#/components/schemas/ChangeRequest"
+    ChangeRequest:
+      type: object
+      description: The NetBox request that made a change.
+      required: [id, user]
+      properties:
+        id:
+          type: [string, "null"]
+          description: NetBox's ID for the request, or null if no request made the change.
+          examples: [3bd63b08-a526-45f3-a819-aa7c507dd31f]
+        user:
+          type: [string, "null"]
+          description: The user who made the request, or null.
+          examples: [admin]
+    PendingRefresh:
+      type: object
+      description: What NetBox's webhooks queued, waiting for its refresh.
+      required: [events, zones, full, due]
+      properties:
+        events:
+          type: integer
+          format: int64
+          minimum: 0
+          description: The webhooks whose refresh waits.
+          examples: [2]
+        zones:
+          type: array
+          items:
+            type: string
+          description: >-
+            The zones that webhooks named, waiting, each as `view/name`. Once
+            a full refresh waits, it covers them, and no more are added.
+          examples: [[_default_/example.org.]]
+        full:
+          type: boolean
+          description: >-
+            Whether a full refresh waits: for a change to a view that a
+            server group serves, a zone or a record that moved, or more than
+            100 zones.
+          examples: [false]
+        due:
+          type: [string, "null"]
+          format: date-time
+          description: >-
+            When the refresh is due, unless the scheduled one comes first,
+            or null if nothing waits.
+          examples: ["2026-10-08T01:12:01.2Z"]
+    WebhookRefresh:
+      type: object
+      description: A refresh that NetBox's webhooks asked for, or that covered the zones they named, which finished.
+      required: [started, finished, zones, full, reason, outcome, error, events, requests]
+      properties:
+        started:
+          type: string
+          format: date-time
+          description: When it started.
+          examples: ["2026-10-08T01:12:01.2Z"]
+        finished:
+          type: string
+          format: date-time
+          description: When it finished.
+          examples: ["2026-10-08T01:12:01.6Z"]
+        zones:
+          type: [array, "null"]
+          items:
+            type: string
+          description: The zones it refreshed, each as `view/name`, or null for a full refresh.
+          examples: [[_default_/example.com.]]
+        full:
+          type: boolean
+          description: Whether it was a full refresh.
+          examples: [false]
+        reason:
+          type: [string, "null"]
+          description: Why it was a full refresh, such as `view internal was updated`, or null.
+          examples: [null]
+        outcome:
+          type: string
+          enum: [complete, incomplete, failed]
+          description: >-
+            `complete` if NetBox and every group it compared were read,
+            `incomplete` if a group's primary couldn't be, and `failed` if
+            NetBox couldn't be, or it ran out of time.
+          examples: [complete]
+        error:
+          type: [string, "null"]
+          description: Why it failed, or null.
+          examples: [null]
+        events:
+          type: integer
+          format: int64
+          minimum: 0
+          description: The webhooks it served.
+          examples: [3]
+        requests:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChangeRequest"
+          description: The NetBox requests whose changes it refreshed, up to 128.
+          examples:
+            - - id: 3bd63b08-a526-45f3-a819-aa7c507dd31f
+                user: admin
     OTLPProtocol:
       type: string
       description: An OTLP protocol.
@@ -739,10 +1080,15 @@ components:
         last_success:
           type: [string, "null"]
           format: date-time
-          description: When the group was last read and compared, or null if it never was.
+          description: >-
+            When the group was last read and compared in full, or null if it
+            never was. Zones that NetBox's webhooks named may have been
+            compared since.
           examples: ["2026-10-08T01:10:02Z"]
         counts:
-          description: The group's zones by state, as of `last_success`, or null if it was never read.
+          description: >-
+            The group's zones by state, as of `last_success`, and of the zone
+            refreshes since, or null if it was never read.
           examples:
             - {in_sync: 980, drift: 15, missing: 5, inactive_in_netbox: 0, ignored: 1, unmanaged: 2}
           oneOf:
@@ -916,7 +1262,10 @@ components:
             as_of:
               type: string
               format: date-time
-              description: When the group was last read and compared, its `last_success`.
+              description: >-
+                Its group's `last_success`: when the group was last compared
+                in full. A zone that NetBox's webhooks named may have been
+                compared since.
               examples: ["2026-10-08T01:10:02Z"]
     ZonePage:
       description: One page of a server group's zones, with its links.
@@ -928,7 +1277,10 @@ components:
             as_of:
               type: [string, "null"]
               format: date-time
-              description: What the zones are as of, the group's `last_success`, or null if the group was never read.
+              description: >-
+                What the zones are as of, the group's `last_success`, or null
+                if the group was never read. Zones that NetBox's webhooks
+                named may have been compared since.
               examples: ["2026-10-08T01:10:02Z"]
             items:
               type: array
@@ -1007,7 +1359,9 @@ components:
             as_of:
               type: string
               format: date-time
-              description: When the group was last read and compared.
+              description: >-
+                When the group was last compared in full. A zone that
+                NetBox's webhooks named may have been compared since.
               examples: ["2026-10-08T01:10:02Z"]
             items:
               type: array
@@ -1074,7 +1428,10 @@ components:
             as_of:
               type: string
               format: date-time
-              description: When NetBox was last read, which the RRsets are as of.
+              description: >-
+                When NetBox was last read in full, which the RRsets are as
+                of. A zone that NetBox's webhooks named may have been read
+                since.
               examples: ["2026-10-08T01:10:00Z"]
             items:
               type: array
@@ -1088,3 +1445,108 @@ components:
                     records:
                       - value: 192.0.2.10
                         managed: false
+    NetBoxEvent:
+      type: object
+      description: >-
+        A NetBox webhook's event, as NetBox 4.7 sends it without a body
+        template: what happened to an object, the object, and the request
+        that made the change. nbpdns reads only the fields below, and
+        ignores the rest.
+      required: [event, object_type]
+      # The server decodes it as internal/webhook's Event, which reads what
+      # nbpdns needs from NetBox's own objects.
+      x-go-type: webhook.Event
+      x-go-type-import:
+        path: github.com/zeddD1abl0/netbox-powerdns-ai/internal/webhook
+      examples:
+        - event: deleted
+          object_type: netbox_dns.zone
+          request:
+            id: 23778ad9-07a9-40a0-b9f2-721252181a5e
+            user: admin
+          data:
+            id: 1106
+            name: example.com
+            view:
+              id: 1
+              name: _default_
+          snapshots:
+            prechange:
+              name: example.com
+              view: 1
+            postchange: null
+      properties:
+        event:
+          type: string
+          description: What happened to the object, such as `created`, `updated` or `deleted`.
+          examples: [updated]
+        timestamp:
+          type: string
+          format: date-time
+          description: When it happened.
+          examples: ["2026-10-08T07:14:37.453389+00:00"]
+        object_type:
+          type: string
+          description: >-
+            The object's type. nbpdns reads `netbox_dns.record`,
+            `netbox_dns.zone` and `netbox_dns.view`, and ignores the others.
+          examples: [netbox_dns.record]
+        request:
+          description: The NetBox request that made the change, or null if none did.
+          oneOf:
+            - $ref: "#/components/schemas/NetBoxRequest"
+            - type: "null"
+        data:
+          type: object
+          additionalProperties: true
+          description: >-
+            The object, as NetBox's API serializes it: after the change, or
+            before it, for a deletion. A record's has its `zone`, with the
+            zone's `id`, `name` and `view`, and a zone's has its `id`,
+            `name` and `view`, each view with its `id` and `name`.
+          examples:
+            - id: 1106
+              name: example.com
+              view:
+                id: 1
+                name: _default_
+        snapshots:
+          description: The object's fields around the change, with related objects as their IDs.
+          oneOf:
+            - $ref: "#/components/schemas/NetBoxSnapshots"
+            - type: "null"
+    NetBoxRequest:
+      type: object
+      description: A NetBox request, as its webhooks describe it.
+      additionalProperties: true
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: NetBox's ID for the request, which every event it causes shares.
+          examples: [23778ad9-07a9-40a0-b9f2-721252181a5e]
+        user:
+          type: string
+          description: The name of the user who made the request.
+          examples: [admin]
+    NetBoxSnapshots:
+      type: object
+      description: An object's fields before and after a change.
+      additionalProperties: true
+      properties:
+        prechange:
+          type: [object, "null"]
+          additionalProperties: true
+          description: >-
+            The fields before the change: null for a creation, and for some
+            updates that the DNS plugin makes itself. A renamed zone's has
+            its old `name`, and a moved zone's its old `view` ID, as a moved
+            record's has its old `zone` ID.
+          examples:
+            - name: example.com
+              view: 1
+        postchange:
+          type: [object, "null"]
+          additionalProperties: true
+          description: The fields after the change, or null for a deletion.
+          examples: [null]

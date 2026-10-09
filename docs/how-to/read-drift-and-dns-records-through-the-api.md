@@ -5,7 +5,7 @@ weight: 42
 
 # Read drift and DNS records through the API
 
-`nbpdns serve` has a read-only API at `/api`. This guide reads it with curl
+`nbpdns serve` has an API at `/api`, which reads nbpdns's state. This guide reads it with curl
 and jq: the service's state, the zones that drifted in every server group,
 a zone's changes, and a zone's records as NetBox defines them, in a form
 another tool can take.

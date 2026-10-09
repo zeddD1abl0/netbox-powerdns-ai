@@ -30,6 +30,23 @@ const (
 // Outcomes are the values of the outcome label.
 var Outcomes = []string{OutcomeComplete, OutcomeIncomplete, OutcomeFailed}
 
+// The results of a NetBox webhook (ADR-0036).
+const (
+	// WebhookAccepted is an event that queued a refresh.
+	WebhookAccepted = "accepted"
+	// WebhookIgnored is an event that named nothing that a server group
+	// serves.
+	WebhookIgnored = "ignored"
+	// WebhookBadSignature is a request whose signature didn't verify.
+	WebhookBadSignature = "bad_signature"
+	// WebhookInvalid is a signed request that wasn't an event NetBox sends,
+	// or was too large.
+	WebhookInvalid = "invalid"
+)
+
+// WebhookResults are the values of the result label.
+var WebhookResults = []string{WebhookAccepted, WebhookIgnored, WebhookBadSignature, WebhookInvalid}
+
 // The kinds of metric.
 const (
 	counter   = "counter"
@@ -67,6 +84,17 @@ var (
 	defRefreshDuration = def{name: "nbpdns_drift_refresh_duration_seconds", kind: histogram,
 		buckets: []float64{1, 5, 10, 30, 60, 120, 300, 600, 1200},
 		help:    "How long each drift refresh took."}
+	defZoneRefreshes = def{name: "nbpdns_drift_zone_refreshes_total", kind: counter, labels: []string{"outcome"},
+		values: map[string][]string{"outcome": Outcomes},
+		help: "Zone refreshes finished, by outcome: refreshes of only the zones that NetBox's webhooks named. " +
+			"Incomplete if a server group couldn't be read, and failed if NetBox couldn't be read. " +
+			"A webhook that asks for a full refresh is counted in `nbpdns_drift_refreshes_total`."}
+	defZoneRefreshDuration = def{name: "nbpdns_drift_zone_refresh_duration_seconds", kind: histogram,
+		buckets: []float64{0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60},
+		help:    "How long each zone refresh took."}
+	defPendingZones = def{name: "nbpdns_drift_pending_zones", kind: gauge,
+		help: "The zones that NetBox's webhooks named, waiting for their refresh. " +
+			"Once a full refresh waits instead, for a view or past 100 zones, no more are added."}
 	defLastRefresh = def{name: "nbpdns_drift_last_refresh_timestamp_seconds", kind: gauge,
 		help: "When the last drift refresh finished, whatever its outcome, as a Unix time. It has no value before the first."}
 	defLastComplete = def{name: "nbpdns_drift_last_complete_refresh_timestamp_seconds", kind: gauge,
@@ -89,7 +117,7 @@ var (
 	defGroupUp = def{name: "nbpdns_server_group_up", kind: gauge, labels: []string{"group"},
 		help: "1 if the server group's primary could be read the last time a refresh tried, else 0. A refresh that can't read NetBox doesn't try the primaries."}
 	defGroupLastSuccess = def{name: "nbpdns_server_group_last_success_timestamp_seconds", kind: gauge, labels: []string{"group"},
-		help: "When the server group's primary was last read and compared, as a Unix time."}
+		help: "When the server group's primary was last read and compared in full, as a Unix time. A zone refresh, from NetBox's webhooks, doesn't move it."}
 	defRequests = def{name: "nbpdns_http_client_requests_total", kind: counter, labels: []string{"service", "target", "method", "code"},
 		values: map[string][]string{"service": services, "method": methods},
 		help: "Requests to NetBox and to each primary, one per attempt. The target is `netbox`, or the server group's name, " +
@@ -108,14 +136,21 @@ var (
 	defAPIRequestDuration = def{name: "nbpdns_api_request_duration_seconds", kind: histogram, labels: []string{"operation"},
 		buckets: []float64{0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5},
 		help:    "How long the API took to answer each request."}
+	defWebhooks = def{name: "nbpdns_netbox_webhooks_total", kind: counter, labels: []string{"result"},
+		values: map[string][]string{"result": WebhookResults},
+		help: "Requests to `/api/netbox-events`, NetBox's webhooks, by result: `accepted` if the event queued a refresh, " +
+			"`ignored` if it named nothing that a server group serves, `bad_signature` if its signature didn't verify, " +
+			"and `invalid` if it wasn't an event that NetBox sends, or was over 1 MiB. Requests while webhooks are off aren't counted."}
 	defBuildInfo = def{name: "nbpdns_build_info", kind: gauge, labels: []string{"version", "revision", "goversion"},
 		help: "1, with the running build's version, VCS revision, and Go version."}
 
 	defs = []def{
-		defRefreshes, defRefreshDuration, defLastRefresh, defLastComplete,
+		defRefreshes, defRefreshDuration, defZoneRefreshes, defZoneRefreshDuration, defPendingZones,
+		defLastRefresh, defLastComplete,
 		defZones, defRRsetChanges, defZoneDrifted, defProblems, defWarnings,
 		defNetBoxUp, defGroupUp, defGroupLastSuccess,
-		defRequests, defRequestDuration, defRetries, defAPIRequests, defAPIRequestDuration, defBuildInfo,
+		defRequests, defRequestDuration, defRetries, defAPIRequests, defAPIRequestDuration,
+		defWebhooks, defBuildInfo,
 	}
 )
 
@@ -123,8 +158,11 @@ var (
 type Metrics struct {
 	Registry *prometheus.Registry
 
-	Refreshes       *prometheus.CounterVec
-	RefreshDuration prometheus.Histogram
+	Refreshes           *prometheus.CounterVec
+	RefreshDuration     prometheus.Histogram
+	ZoneRefreshes       *prometheus.CounterVec
+	ZoneRefreshDuration prometheus.Histogram
+	PendingZones        prometheus.Gauge
 	// LastRefresh, LastCompleteRefresh and NetBoxUp have no labels. They're
 	// vectors so that they have no series until they're first set, which
 	// would otherwise read as a refresh at 1970 and NetBox down.
@@ -144,6 +182,7 @@ type Metrics struct {
 	retries            *prometheus.CounterVec
 	apiRequests        *prometheus.CounterVec
 	apiRequestDuration *prometheus.HistogramVec
+	webhooks           *prometheus.CounterVec
 }
 
 // New returns nbpdns's metrics for the build info, registered in a new
@@ -155,6 +194,9 @@ func New(info version.Info) *Metrics {
 		Registry:            reg,
 		Refreshes:           register(reg, prometheus.NewCounterVec(counterOpts(defRefreshes), defRefreshes.labels)),
 		RefreshDuration:     register(reg, prometheus.NewHistogram(histogramOpts(defRefreshDuration))),
+		ZoneRefreshes:       register(reg, prometheus.NewCounterVec(counterOpts(defZoneRefreshes), defZoneRefreshes.labels)),
+		ZoneRefreshDuration: register(reg, prometheus.NewHistogram(histogramOpts(defZoneRefreshDuration))),
+		PendingZones:        register(reg, prometheus.NewGauge(gaugeOpts(defPendingZones))),
 		LastRefresh:         register(reg, prometheus.NewGaugeVec(gaugeOpts(defLastRefresh), nil)),
 		LastCompleteRefresh: register(reg, prometheus.NewGaugeVec(gaugeOpts(defLastComplete), nil)),
 		Zones:               register(reg, prometheus.NewGaugeVec(gaugeOpts(defZones), defZones.labels)),
@@ -170,6 +212,7 @@ func New(info version.Info) *Metrics {
 		retries:             register(reg, prometheus.NewCounterVec(counterOpts(defRetries), defRetries.labels)),
 		apiRequests:         register(reg, prometheus.NewCounterVec(counterOpts(defAPIRequests), defAPIRequests.labels)),
 		apiRequestDuration:  register(reg, prometheus.NewHistogramVec(histogramOpts(defAPIRequestDuration), defAPIRequestDuration.labels)),
+		webhooks:            register(reg, prometheus.NewCounterVec(counterOpts(defWebhooks), defWebhooks.labels)),
 	}
 	build := register(reg, prometheus.NewGaugeVec(gaugeOpts(defBuildInfo), defBuildInfo.labels))
 	build.WithLabelValues(info.Version, info.Commit, info.GoVersion).Set(1)
@@ -177,6 +220,10 @@ func New(info version.Info) *Metrics {
 	// the first failure.
 	for _, o := range Outcomes {
 		m.Refreshes.WithLabelValues(o)
+		m.ZoneRefreshes.WithLabelValues(o)
+	}
+	for _, r := range WebhookResults {
+		m.webhooks.WithLabelValues(r)
 	}
 	return m
 }
@@ -192,6 +239,10 @@ func (m *Metrics) APIRequest(operation string, code int, d time.Duration) {
 	m.apiRequests.WithLabelValues(operation, strconv.Itoa(code)).Inc()
 	m.apiRequestDuration.WithLabelValues(operation).Observe(d.Seconds())
 }
+
+// NetBoxWebhook counts a request to /api/netbox-events, with one of
+// WebhookResults.
+func (m *Metrics) NetBoxWebhook(result string) { m.webhooks.WithLabelValues(result).Inc() }
 
 // Observer returns an observer of the requests to target, a server of
 // service: NetBox, or a server group's primary.

@@ -22,6 +22,7 @@ func filled(t *testing.T) *Metrics {
 	t.Helper()
 	m := New(info)
 	m.RefreshDuration.Observe(12)
+	m.ZoneRefreshDuration.Observe(0.3)
 	m.LastRefresh.WithLabelValues().SetToCurrentTime()
 	m.LastCompleteRefresh.WithLabelValues().SetToCurrentTime()
 	m.Zones.WithLabelValues("site-a", "in_sync").Set(3)
@@ -86,6 +87,21 @@ func TestObserver(t *testing.T) {
 	}
 }
 
+func TestNetBoxWebhook(t *testing.T) {
+	m := New(info)
+	m.NetBoxWebhook(WebhookAccepted)
+	m.NetBoxWebhook(WebhookAccepted)
+	m.NetBoxWebhook(WebhookBadSignature)
+	for _, tt := range []struct {
+		result string
+		want   float64
+	}{{WebhookAccepted, 2}, {WebhookIgnored, 0}, {WebhookBadSignature, 1}, {WebhookInvalid, 0}} {
+		if got := testutil.ToFloat64(m.webhooks.WithLabelValues(tt.result)); got != tt.want {
+			t.Errorf("webhooks with result %s: %v, want %v", tt.result, got, tt.want)
+		}
+	}
+}
+
 func TestHandler(t *testing.T) {
 	m := New(info)
 	srv := httptest.NewServer(m.Handler())
@@ -105,6 +121,9 @@ func TestHandler(t *testing.T) {
 		`nbpdns_drift_refreshes_total{outcome="complete"} 0`,
 		`nbpdns_drift_refreshes_total{outcome="incomplete"} 0`,
 		`nbpdns_drift_refreshes_total{outcome="failed"} 0`,
+		// And every webhook result, before any webhook.
+		`nbpdns_netbox_webhooks_total{result="accepted"} 0`,
+		`nbpdns_netbox_webhooks_total{result="bad_signature"} 0`,
 		"go_goroutines ",
 	} {
 		if !strings.Contains(string(b), want) {

@@ -81,7 +81,7 @@ func TestLoadDefaults(t *testing.T) {
 		Log:      LogConfig{Level: "info", Format: "json"},
 		NetBox:   NetBoxConfig{Timeout: 30 * time.Second, PageSize: 500, Concurrency: 4},
 		PowerDNS: PowerDNSConfig{Timeout: 30 * time.Second, Concurrency: 4},
-		Drift:    DriftConfig{GroupConcurrency: 4, Interval: 5 * time.Minute, Timeout: 10 * time.Minute},
+		Drift:    DriftConfig{GroupConcurrency: 4, Interval: 5 * time.Minute, Timeout: 10 * time.Minute, WebhookDelay: 3 * time.Second},
 		Server:   ServerConfig{Listen: ":8080"},
 		OTLP:     OTLPConfig{Protocol: OTLPHTTP, Timeout: 10 * time.Second},
 	}
@@ -213,6 +213,10 @@ func TestLoadErrors(t *testing.T) {
 			[]string{"isn't positive"}},
 		{"a drift interval too short", "", map[string]string{"NBPDNS_DRIFT_INTERVAL": "5s"}, nil,
 			[]string{"drift.interval", "5s is shorter than 10s"}},
+		{"a webhook delay too long", "", map[string]string{"NBPDNS_DRIFT_WEBHOOK_DELAY": "1m"}, nil,
+			[]string{"drift.webhook_delay", "1m0s is longer than 30s"}},
+		{"a webhook delay too short", "", nil, []string{"--drift-webhook-delay", "10ms"},
+			[]string{"drift.webhook_delay", "10ms is shorter than 100ms"}},
 		{"a listen address without a port", "", map[string]string{"NBPDNS_SERVER_LISTEN": "localhost"}, nil,
 			[]string{"server.listen", `"localhost" isn't an address`}},
 		{"a listen port out of range", "", nil, []string{"--server-listen", ":70000"},
@@ -227,6 +231,8 @@ func TestLoadErrors(t *testing.T) {
 			[]string{"mustn't contain credentials; set the token or API key in its own key"}},
 		{"a token that YAML reads as a number", "netbox:\n  token: 12345\n", nil, nil,
 			[]string{"netbox.token (from file", "want a string, not a number; put it in quotes"}},
+		{"a webhook secret too short to be safe", "", map[string]string{"NBPDNS_NETBOX_WEBHOOK_SECRET": "s3cret-is-short"}, nil,
+			[]string{"netbox.webhook_secret (from env NBPDNS_NETBOX_WEBHOOK_SECRET)", "at least 16 characters"}},
 		{"URL with a query", "", map[string]string{"NBPDNS_NETBOX_URL": "https://netbox.example.com/?x=1"}, nil,
 			[]string{"mustn't have a query"}},
 		{"a mapping for a string", "netbox:\n  url:\n    host: x\n", nil, nil,
@@ -257,15 +263,17 @@ func TestLoadErrors(t *testing.T) {
 
 // TestLoadAcceptsGoodValues covers valid values of each kind.
 func TestLoadAcceptsGoodValues(t *testing.T) {
+	hookSecret := secretFile(t, "0123456789abcdef\n")
 	cfg, _, err := load(t,
 		"log:\n  format: text\nnetbox:\n  url: http://netbox.lab:8047\n  page_size: \"1000\"\n  timeout: 2m\n  ca_file: /etc/ssl/netbox.pem\n",
-		map[string]string{"NBPDNS_NETBOX_CONCURRENCY": " 32 "})
+		map[string]string{"NBPDNS_NETBOX_CONCURRENCY": " 32 ", "NBPDNS_NETBOX_WEBHOOK_SECRET_FILE": hookSecret})
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
 	n := cfg.NetBox
 	if cfg.Log.Format != "text" || n.URL != "http://netbox.lab:8047" || n.PageSize != 1000 ||
-		n.Timeout != 2*time.Minute || n.CAFile != "/etc/ssl/netbox.pem" || n.Concurrency != 32 {
+		n.Timeout != 2*time.Minute || n.CAFile != "/etc/ssl/netbox.pem" || n.Concurrency != 32 ||
+		n.WebhookSecret.Reveal() != "0123456789abcdef" {
 		t.Errorf("Load() = %+v", *cfg)
 	}
 }
