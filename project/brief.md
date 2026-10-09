@@ -335,3 +335,48 @@ killing:
 The user then approved M07's plan. The decisions are recorded in ADR-0035,
 and as REQ-048, answering Q-037 and Q-054's trigger part; its import part
 is Q-057, for M15.
+
+## Answers, 2026-10-09 (planning ahead, and M08 design)
+
+After M07 closed, the user asked to plan several milestones ahead, with
+GitLab as their view, while keeping every push, tag and merge:
+
+> I am a bit of a controlling person around code commits because of the
+> runner configuration.
+
+They gave Claude's token the Planner role, with the `api` scope, rather
+than Developer, and clarified REQ-026's scope:
+
+> As much as I've said not to rely on Forge Features, that was primarily for
+> the code-base, etc. The pipeline itself may not always run on GitLab
+> runners, and indeed, currently runs on GitLab and GitHub. The code may not
+> always be on x86_64 hardware. Currently we use GitLab for code tracking and
+> tracing though, so it makes sense to use those features where useful.
+
+On versions, after `v1.0.0-mNN` was tried and its tag deleted:
+
+> I'll clean up the v1.0.0-m7 stuff, and we'll go with v0.NN.0 until we
+> think it's proper, and then v1.NN.0 from there
+
+The user accepted ADR-0037, which records all of this, and its changes to
+CLAUDE.md.
+
+These were then given in the M08 design session, each chosen from proposed
+options; the label of the chosen option is quoted.
+
+| Question | Answer |
+|---|---|
+| How big should M08 be? | "As stubbed": the database, migrations and the lock; drift history; the audit core; runtime settings with `managed_by`; and secrets at rest. |
+| Which query layer? | "sqlc", on goose's forward-only migrations and modernc.org/sqlite. |
+| Q-035: is the proposed audit default right, from M08? | "Yes, chained from the start": hash-chained from the first event, with a configurable retention. |
+| Q-036: which compliance frameworks? | "Essential Eight / ISM", "ISO 27001", and "SOC 2 or PCI DSS". |
+| What writes settings and groups before M10? | "A local CLI": `nbpdns settings` and `nbpdns groups`, each change audited with the OS user as its actor. |
+| When does a running `serve` use a changed setting? | "Within seconds". |
+| What should drift history keep? | "Also every refresh's changes": each zone's changes of state, and its RRset changes. |
+| Where does the database live? | "Required, with a default path": `sqlite:///var/lib/nbpdns/nbpdns.db`. |
+
+The user then approved M08's plan, recorded with its ADRs, ADR-0038 to
+ADR-0042, proposed until M08 starts; REQ-049 to REQ-053; and Q-012's
+settings part, Q-023, Q-024, Q-026's migrations part, Q-035 and Q-036
+answered. Q-012's metadata part is Q-059, for M13, and Q-026's backup and
+export part is Q-058, for M17.
