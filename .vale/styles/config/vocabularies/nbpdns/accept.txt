@@ -131,3 +131,5 @@ netbox\.webhook_secret
 netbox-events
 sqlc
 sqlx
+templ
+htmx

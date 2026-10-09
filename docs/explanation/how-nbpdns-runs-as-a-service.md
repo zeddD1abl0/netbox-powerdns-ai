@@ -82,7 +82,7 @@ Each zone refresh is a trace of its own, `drift zone refresh`, linked to the
 spans of the webhooks it serves, and it carries NetBox's request IDs and
 users, as its log lines do. That's the start of following a change from
 NetBox to PowerDNS. The rest, through writes to each server, comes with
-M13.
+M14.
 
 ## What it keeps when something fails
 
@@ -181,6 +181,6 @@ the host scrapes it, or restrict it with a firewall or a network policy.
 
 ## What it doesn't do yet
 
-- **Correct drift.** Nothing is written to PowerDNS until M13.
+- **Correct drift.** Nothing is written to PowerDNS until M14.
 - **Remember across restarts.** That comes with the database, in M08.
 - **Run more than one instance.** High availability comes in M09.

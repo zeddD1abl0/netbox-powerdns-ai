@@ -37,10 +37,11 @@ the probes stay open.
 ## Non-goals
 
 - **No local users, MFA or sessions:** they need a sign-in page, so they come
-  with the UI, in M12. There, MFA is WebAuthn only (REQ-056).
-- **No SSO, no roles:** M11. Until then, a token's scope is its only limit.
+  with sign-in, in M12 (ADR-0043). There, MFA is WebAuthn only (REQ-056).
+- **No roles:** M11. Until then, a token's scope is its only limit.
+- **No SSO:** M12.
 - **No OIDC workload identity** for CI: later (Q-031).
-- **No UI:** M12.
+- **No UI:** M13.
 
 ## Dependencies
 

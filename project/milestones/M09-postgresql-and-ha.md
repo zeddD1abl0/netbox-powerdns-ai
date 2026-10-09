@@ -24,7 +24,7 @@ stops (REQ-033).
   interface, and the store's tests run against both databases. More releases
   are added as the CI runners have room, as for NetBox and PowerDNS.
 - **The leader:** a PostgreSQL session advisory lock, held on a connection
-  of its own. Only the leader runs refreshes, the prune and, from M13, the
+  of its own. Only the leader runs refreshes, the prune and, from M14, the
   writes; a replica that gets the lock takes over. TCP keepalives bound how
   long a dead leader's lock lasts, to about 30 seconds.
 - **Every replica serves the API and status from the database**, not from

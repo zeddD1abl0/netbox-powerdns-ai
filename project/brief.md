@@ -400,3 +400,18 @@ waiting until each is next. For M09:
 | Q-029, with the Essential Eight: which MFA methods? | "WebAuthn only". |
 | Once the API needs a token, what stays open? | "Only /livez and /readyz". |
 | Q-040: rate limits? | "Per token and per IP". |
+
+### M11 to M13's roadmaps, and the re-plan, 2026-10-09
+
+| Question | Answer |
+|---|---|
+| How should M11 and M12 split the identity work, since SSO needs a sign-in page? | "Roles in M11, sign-in in M12". |
+| Q-028: which sign-in protocols? | "OIDC, SAML and proxy headers". |
+| Q-030 and Q-015: what roles model? | "Built-in and custom roles, by group". |
+| Q-032: is SCIM needed? | "Yes, with SSO". |
+| Split M12, which held the UI and all of sign-in? | "Split: Sign-in, then Web UI": M13 to M19 become M14 to M20, putting v1 at M20. |
+| Q-016: the UI's scope? | "Q-016's default". |
+| Q-050: the UI's technology? | "templ and htmx". |
+| Q-051: accessibility and language? | "WCAG 2.2 AA, English". |
+
+ADR-0043 records the re-plan, with REQ-057 and REQ-058.

@@ -1,12 +1,12 @@
 ---
-id: M16
+id: M17
 title: SIEM export
 status: planned # planned | in-progress | done
 started:
 closed:
 ---
 
-# M16: SIEM export
+# M17: SIEM export
 
 ## Goal
 
@@ -16,10 +16,9 @@ Every audit event leaves the system reliably and can be shown to be untampered.
 
 - Sinks: stdout JSON, file, syslog (RFC 5424 over TLS), HTTP (HEC-compatible), OTLP logs (Q-033)
 - The wire format (Q-034)
-- A transactional outbox with backlog alerting, and hash-chain verification (Q-035)
-- The generated audit event catalogue
+- A transactional outbox with backlog alerting, exporting M08's hash-chained events with their hashes, so that the SIEM can check the chain too (ADR-0039)
 
 ## Design, non-goals and acceptance criteria
 
 To be written in this milestone's plan-mode session, before implementation
-starts. The milestone's branch is `m16-siem-export` (ADR-0010).
+starts. The milestone's branch is `m17-siem-export` (ADR-0010).

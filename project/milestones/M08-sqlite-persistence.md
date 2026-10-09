@@ -29,10 +29,10 @@ the database are encrypted with a master key.
 - **No remote writes:** settings and groups change only through the local
   CLI. The API stays read-only until M10.
 - **No audit API, no SIEM:** the trail is read with `nbpdns audit`, locally.
-  The API serves it from M10, behind authentication; M16 exports it.
-- **No export, import or backup commands:** M17 (Q-026). M08's docs say how to
+  The API serves it from M10, behind authentication; M17 exports it.
+- **No export, import or backup commands:** M18 (Q-026). M08's docs say how to
   copy the SQLite file safely.
-- **No per-zone PowerDNS metadata:** the write path, M13 (Q-012).
+- **No per-zone PowerDNS metadata:** the write path, M14 (Q-012).
 - **No Vault or OpenBao:** the master key comes from a file or the environment
   (Q-023).
 - **NetBox's records aren't persisted:** they're a cache that the first refresh

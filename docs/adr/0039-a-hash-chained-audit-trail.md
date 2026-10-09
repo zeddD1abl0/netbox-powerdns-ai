@@ -33,12 +33,12 @@ years; PCI DSS for at least one.
 - ASD-approved cryptography (REQ-053).
 - Events declared once, with their reference generated (CLAUDE.md, principle
   2).
-- The SIEM export comes in M16, and must be able to build on this.
+- The SIEM export comes in M17, and must be able to build on this.
 
 ## Considered options
 
 1. A hash chain from the first event.
-2. Events now, and a hash chain with the SIEM export in M16.
+2. Events now, and a hash chain with the SIEM export in M17.
 3. No tamper evidence: the SIEM's copy is the only one that's trusted.
 
 ## Decision outcome
@@ -70,10 +70,10 @@ Chosen: **a hash chain from the first event**, as the user chose.
 
 - Good: an edited, deleted or inserted event breaks the chain, which
   `verify` reports.
-- Good: M16 can export the events in order, with their hashes, so that the
+- Good: M17 can export the events in order, with their hashes, so that the
   SIEM can check them too.
 - Bad: the chain proves order and integrity, not that nobody rewrote the
-  whole trail; an outside copy, from M16, does that.
+  whole trail; an outside copy, from M17, does that.
 - Bad: seven years of events take room, though state changes are few.
 
 ### Confirmation
@@ -85,10 +85,10 @@ Chosen: **a hash chain from the first event**, as the user chose.
 
 ## Pros and cons of the options
 
-### A chain with the SIEM export, in M16
+### A chain with the SIEM export, in M17
 
 - Good: one piece of work, with the export.
-- Bad: the events from M08 to M16 aren't covered.
+- Bad: the events from M08 to M17 aren't covered.
 
 ### No tamper evidence
 

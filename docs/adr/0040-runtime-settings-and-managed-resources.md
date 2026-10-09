@@ -70,14 +70,14 @@ Chosen: **a local CLI, applied within seconds**, as the user chose.
     changed groups and dropping removed ones' state and metrics;
   - the API's server groups gain `managed_by`.
 - **Q-012:** this app's settings are runtime settings from M08. Per-zone
-  PowerDNS metadata comes with the write path, M13; `pdns.conf` stays with
+  PowerDNS metadata comes with the write path, M14; `pdns.conf` stays with
   Ansible.
 
 ### Consequences
 
 - Good: settings and groups change without a restart, and every change is
   audited.
-- Good: later managers, the API (M10), the UI (M12) and Terraform (M18), add
+- Good: later managers, the API (M10), the UI (M13) and Terraform (M19), add
   `managed_by` values without a new model.
 - Bad: anyone who can write the database file can change settings until M10;
   the file's permissions are the guard.

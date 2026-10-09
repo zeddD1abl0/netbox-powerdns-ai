@@ -4,7 +4,7 @@
 #   a PostgreSQL server, so a release is only added when the runners have room
 #   (ADR-0023).
 # - A PowerDNS server group, lab-a, with a primary on PowerDNS 5.1 and no
-#   secondaries (ADR-0026). Secondaries arrive with catalog zones, in M13.
+#   secondaries (ADR-0026). Secondaries arrive with catalog zones, in M14.
 #   Each supported PowerDNS release adds a server and an image, so one is
 #   only added when the runners have room.
 #

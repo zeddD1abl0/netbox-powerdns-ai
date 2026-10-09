@@ -19,15 +19,16 @@
 | [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | planned | 1 of 11 |
 | [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | planned | 1 of 1 |
 | [M10](milestones/M10-authentication.md) | Authentication | planned | 1 of 2 |
-| [M11](milestones/M11-sso-and-rbac.md) | SSO and RBAC | planned | — |
-| [M12](milestones/M12-web-ui.md) | Web UI | planned | — |
-| [M13](milestones/M13-write-path-plan-and-apply.md) | Write path: plan and apply | planned | 0 of 1 |
-| [M14](milestones/M14-change-safety.md) | Change safety | planned | — |
-| [M15](milestones/M15-brownfield-import.md) | Brownfield import | planned | — |
-| [M16](milestones/M16-siem-export.md) | SIEM export | planned | — |
-| [M17](milestones/M17-production-hardening.md) | Production hardening | planned | 0 of 1 |
-| [M18](milestones/M18-terraform-provider.md) | Terraform/OpenTofu provider | planned | — |
-| [M19](milestones/M19-ansible-collection-v1.md) | Ansible collection and v1.0 | planned | — |
+| [M11](milestones/M11-roles-and-permissions.md) | Roles and permissions | planned | 1 of 1 |
+| [M12](milestones/M12-sign-in.md) | Sign-in | planned | 1 of 1 |
+| [M13](milestones/M13-web-ui.md) | Web UI | planned | 1 of 1 |
+| [M14](milestones/M14-write-path-plan-and-apply.md) | Write path: plan and apply | planned | 0 of 1 |
+| [M15](milestones/M15-change-safety.md) | Change safety | planned | — |
+| [M16](milestones/M16-brownfield-import.md) | Brownfield import | planned | — |
+| [M17](milestones/M17-siem-export.md) | SIEM export | planned | — |
+| [M18](milestones/M18-production-hardening.md) | Production hardening | planned | 0 of 1 |
+| [M19](milestones/M19-terraform-provider.md) | Terraform/OpenTofu provider | planned | — |
+| [M20](milestones/M20-ansible-collection-v1.md) | Ansible collection and v1 | planned | — |
 
 ## Open items in other milestones
 
@@ -49,24 +50,22 @@
 
 ## Open questions
 
-17 open (0 blocking), 45 answered. The questions and their proposed defaults are in [requirements.md](requirements.md#open-questions).
+10 open (0 blocking), 52 answered. The questions and their proposed defaults are in [requirements.md](requirements.md#open-questions).
 
 | Needed by | Open questions |
 |---|---|
 | M10 | Q-031 |
-| M11 | Q-015, Q-028, Q-030, Q-032 |
-| M12 | Q-016, Q-050, Q-051 |
-| M13 | Q-011, Q-059 |
-| M14 | Q-013, Q-014 |
-| M15 | Q-057 |
-| M16 | Q-033, Q-034 |
-| M17 | Q-058 |
-| M18 | Q-042 |
+| M14 | Q-011, Q-059 |
+| M15 | Q-013, Q-014 |
+| M16 | Q-057 |
+| M17 | Q-033, Q-034 |
+| M18 | Q-058 |
+| M19 | Q-042 |
 
 ## Requirements
 
-56 requirements, listed in [requirements.md](requirements.md#requirements). 11 aren't referenced by any item yet: REQ-004, REQ-007, REQ-008, REQ-009, REQ-010, REQ-015, REQ-016, REQ-017, REQ-023, REQ-034, REQ-035.
+58 requirements, listed in [requirements.md](requirements.md#requirements). 11 aren't referenced by any item yet: REQ-004, REQ-007, REQ-008, REQ-009, REQ-010, REQ-015, REQ-016, REQ-017, REQ-023, REQ-034, REQ-035.
 
 ## Decisions
 
-42 ADRs (28 accepted, 5 proposed, 9 superseded), listed in [docs/adr](../docs/adr/_index.md).
+43 ADRs (29 accepted, 5 proposed, 9 superseded), listed in [docs/adr](../docs/adr/_index.md).

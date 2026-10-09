@@ -342,7 +342,7 @@ One of `http/protobuf`, or `grpc`.
 
 ### `DriftPolicy`
 
-What nbpdns does about a zone's drift: `report` reports it, `enforce` reports it and, from M13, corrects it, and `ignore` doesn't compare the zone.
+What nbpdns does about a zone's drift: `report` reports it, `enforce` reports it and, from M14, corrects it, and `ignore` doesn't compare the zone.
 
 One of `enforce`, `report`, or `ignore`.
 
@@ -355,7 +355,7 @@ A PowerDNS server group, with its last-known state. The counts are as of `last_s
 | `name` | `string` | The group's name, its stable ID. |
 | `primary_url` | `string` (`uri`) | The URL of the group's primary's PowerDNS API. |
 | `views` | array of `string` | The NetBox views whose zones the group serves. |
-| `drift_policy` | [`DriftPolicy`](#driftpolicy) | What nbpdns does about a zone's drift: `report` reports it, `enforce` reports it and, from M13, corrects it, and `ignore` doesn't compare the zone. |
+| `drift_policy` | [`DriftPolicy`](#driftpolicy) | What nbpdns does about a zone's drift: `report` reports it, `enforce` reports it and, from M14, corrects it, and `ignore` doesn't compare the zone. |
 | `status` | `ok`, `failed`, or `unknown` | `ok` if the last refresh that tried the group's primary read it, `failed` if it couldn't, and `unknown` before any did. |
 | `error` | `string`, or null | Why the primary couldn't be read, or null. |
 | `last_success` | `string` (`date-time`), or null | When the group was last read and compared in full, or null if it never was. Zones that NetBox's webhooks named may have been compared since. |

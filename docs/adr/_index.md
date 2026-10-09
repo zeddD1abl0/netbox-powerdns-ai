@@ -56,5 +56,6 @@ from [`template.md`](template.md).
 | [0040](0040-runtime-settings-and-managed-resources.md) | Runtime settings and managed resources | proposed |
 | [0041](0041-secrets-encrypted-at-rest.md) | Secrets encrypted at rest | proposed |
 | [0042](0042-drift-history.md) | Drift history | proposed |
+| [0043](0043-re-plan-m11-to-m20-roles-then-sign-in-then-the-web.md) | Re-plan M11 to M20: roles, then sign-in, then the web UI | accepted |
 
 <!-- projctl:adr-index:end -->

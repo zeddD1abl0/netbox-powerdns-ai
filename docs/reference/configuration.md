@@ -332,7 +332,7 @@ is an error.
 |---|---|---|---|
 | `name` | string: lowercase letters, digits and `-` | required | The group's name, unique among the groups. Commands take it as `--group`. |
 | `views` | list of strings | required | The NetBox views whose zones the group serves. A view may be served by more than one group. |
-| `drift_policy` | `enforce`, `report` or `ignore` | `report` | The drift policy of the group's zones that `zone_policies` doesn't name. `ignore` doesn't compare a zone; `report` and `enforce` report its drift, and from M13, `enforce` also corrects it. |
+| `drift_policy` | `enforce`, `report` or `ignore` | `report` | The drift policy of the group's zones that `zone_policies` doesn't name. `ignore` doesn't compare a zone; `report` and `enforce` report its drift, and from M14, `enforce` also corrects it. |
 | `zone_policies` | mapping of zone names to drift policies | none | Drift policies for single zones, which override `drift_policy`, such as `{legacy.example.com: ignore}`. A name the group doesn't serve is reported as a warning. |
 | `primary.url` | an `http` or `https` URL | required | The primary's PowerDNS API: its web server, or a TLS proxy in front of it, such as `https://pdns-a.example.com:8443`. |
 | `primary.api_key` | string, secret | none | The PowerDNS API key, sent as `X-API-Key`. Set this or `primary.api_key_file`. |

@@ -50,7 +50,7 @@ For the image, you need Docker, Kubernetes, or another container runtime.
    published: don't install it.
 
    > [!NOTE]
-   > Releases aren't signed until M17. A checksum shows that the archive is
+   > Releases aren't signed until M18. A checksum shows that the archive is
    > the file `checksums.txt` lists, not who published it, so download both
    > from the project's GitLab, over HTTPS.
 

@@ -128,7 +128,7 @@ image. The index's lists its images.
 The archives have SHA-256 checksums. A checksum shows that a download is
 the file the release listed, not who published it: nothing is signed yet.
 Signing needs a key, or an identity, to be managed, and a decision on what
-it protects against. M17 designs it together with the threat model:
+it protects against. M18 designs it together with the threat model:
 
 - a cosign key is one more secret to hold and rotate;
 - keyless signing through Sigstore records the GitLab instance's identity

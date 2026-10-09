@@ -244,11 +244,11 @@ func writeDrift(w io.Writer, r drift.Report) error {
 	return nil
 }
 
-// policy writes a zone's drift policy. Nothing is written until M13, so
+// policy writes a zone's drift policy. Nothing is written until M14, so
 // enforce is marked as acting from then (ADR-0027).
 func policy(p string) string {
 	if p == config.PolicyEnforce {
-		return p + " (from M13)"
+		return p + " (from M14)"
 	}
 	return p
 }
