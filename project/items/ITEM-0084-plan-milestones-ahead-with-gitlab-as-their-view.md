@@ -26,7 +26,7 @@ Each milestone that the branch designs has an item of its own.
 
 - [x] ADR-0037 is accepted, and CLAUDE.md, the `close-milestone` skill and "Make a release" follow it.
 - [x] The CHANGELOG's M06 and M07 entries are under `[0.7.0]`, which `releasenotes -tag v0.7.0` prints.
-- [ ] Each milestone file has a GitLab milestone, titled `Mnn: Title`, and M01 to M07 are closed.
+- [x] Each milestone file has a GitLab milestone, titled `Mnn: Title`, and M00 to M07 are closed.
 - [ ] The branch is merged, and the user tags its merge commit `v0.7.0`; the `[0.7.0]` section's date is the merge's.
 
 ## Notes
@@ -37,3 +37,10 @@ Each milestone that the branch designs has an item of its own.
   and accepted ADR-0037 and its CLAUDE.md changes. The `[0.7.0]` section
   is dated 2026-10-09; if the branch merges later, its date moves to the
   merge's.
+- 2026-10-09: Created GitLab milestones %2 to %21, one for each milestone
+  file, M00 to M19, through the API with the Planner token. Each is titled
+  `Mnn: Title`, and its description is the file's goal and path. M00 to
+  M07 are closed, with their start and close dates; GitLab refuses a due
+  date that isn't after the start date, so those done in a day (M02, M04,
+  M06) have only a due date. M08 to M19 are open. The user's test
+  milestone and issue, `claude-test`, are left as they are.
