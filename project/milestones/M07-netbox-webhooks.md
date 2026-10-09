@@ -147,6 +147,10 @@ Append-only and dated. Record what was run and what was seen.
   was recorded. The user confirmed that only Maintainers can push or merge
   `main` and `v*` branches, or create `v*` tags, generic `v*` packages, and
   the image's `v.*` and `latest` tags.
+- 2026-10-09: The user deleted `v1.0.0-m07`, on GitLab and GitHub, before
+  it published anything: ADR-0037 makes each milestone a `v0.NN.0` release
+  instead. M07 is released as `v0.7.0`, from the merge of `plan-m08-m12`,
+  whose CHANGELOG has its section.
 
 ## Approved design
 

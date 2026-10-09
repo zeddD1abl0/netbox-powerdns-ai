@@ -5,8 +5,10 @@ description: Run the Definition of Done checks and close a milestone (Mnn) when 
 
 # Close a milestone
 
-Claude commits on the milestone branch. The user merges into `main` and
-pushes (ADR-0010). Work through every step in order. If any step fails, stop
+Claude commits on the milestone branch. The user merges into `main`,
+pushes, and tags the release (ADR-0010, ADR-0037). The same steps close a
+planning branch, whose items are its planning work, and which has no
+release of its own. Work through every step in order. If any step fails, stop
 and report what's outstanding. Don't mark the milestone done.
 
 1. **Items.** Every item with `milestone: Mnn` is `done` (with a `closed:` date)
@@ -27,12 +29,19 @@ and report what's outstanding. Don't mark the milestone done.
 5. **Docs.**
    - Generated references are up to date.
    - The how-to and explanation pages cover the new behaviour.
-   - `CHANGELOG.md` has the user-facing changes under `Unreleased`.
+   - `CHANGELOG.md` has the user-facing changes. Rename `## [Unreleased]` to
+     the milestone's release, `## [0.NN.0] - date` (NN without its leading
+     zero: `0.8.0` for M08), with a new, empty `## [Unreleased]` above it,
+     and check that `go run ./internal/cmd/releasenotes -tag v0.NN.0
+     CHANGELOG.md` prints its notes. Once the user judges nbpdns stable, the
+     releases are `1.NN.0` (ADR-0037).
    - Any decisions made during the milestone have ADRs.
 6. **Manual verification.** Record in the verification log the steps a person
    would take to see the milestone working, and the result when you ran them.
 7. **Tracking.**
    - Set the milestone's `status: done` and `closed:` date.
+   - Update its GitLab milestone's description, which closes once the branch
+     is merged.
    - Set the next milestone's `status: in-progress` only when the user says
      to start it.
    - Run `make project`, then `make project-lint`.
@@ -42,6 +51,9 @@ and report what's outstanding. Don't mark the milestone done.
    - the branch's commit list (`git log --oneline main..HEAD`);
    - the merge request's title and description, written as below, ready to
      paste;
+   - the tag to make once it's merged, which publishes the internal release:
+     `git tag -a v0.NN.0 -m "nbpdns 0.NN.0"` on `main`'s merge commit, then
+     `git push origin v0.NN.0`;
    - how to finish (ADR-0018): push the branch, open a GitLab merge request
      into `main`, and merge it with the **Merge commit** method. Never squash:
      it loses the per-item commits. If GitLab isn't available, merge locally
@@ -50,9 +62,10 @@ and report what's outstanding. Don't mark the milestone done.
 
    **Title:** `Mnn: <milestone title>`, for example `M01: NetBox read path`.
 
-   **Description:** Markdown, with these sections in this order. Show paths
-   and commands as code, never as links: relative links don't resolve in a
-   merge request description.
+   **Description:** Markdown, starting with the quick action
+   `/milestone %"Mnn: <milestone title>"`, which assigns the GitLab milestone,
+   then these sections in this order. Show paths and commands as code, never
+   as links: relative links don't resolve in a merge request description.
    1. **Summary:** what the milestone delivers and why, in two or three
       sentences.
    2. **What's included:** each item on one line (`ITEM-nnnn`, its title),
@@ -64,5 +77,12 @@ and report what's outstanding. Don't mark the milestone done.
       and how to try it locally.
    5. **Known and deferred:** known problems, review findings left unfixed and
       why, and work or questions moved to later milestones.
-   6. **Merging:** the method (a merge commit, no squash) and anything to do
-      after the merge.
+   6. **Merging:** the method (a merge commit, no squash), the tag to make, and
+      anything else to do after the merge.
+
+   End it with a `Closes #n` line for each GitLab issue that its items came
+   from.
+
+9. **After the merge.** When the user says it's merged, on the next branch:
+   record the merge commit and `main`'s pipelines in the verification log,
+   tick the last criterion, and close the GitLab milestone.

@@ -16,7 +16,7 @@
 | [M05](milestones/M05-packaging.md) | Packaging | done | 5 of 5 |
 | [M06](milestones/M06-rest-api.md) | REST API | done | 10 of 10 |
 | [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | done | 9 of 9 |
-| [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | planned | — |
+| [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | planned | 0 of 1 |
 | [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | planned | — |
 | [M10](milestones/M10-authentication.md) | Authentication | planned | 0 of 1 |
 | [M11](milestones/M11-sso-and-rbac.md) | SSO and RBAC | planned | — |
@@ -33,6 +33,7 @@
 
 | Item | Title | Type | Status | Waiting on |
 |---|---|---|---|---|
+| [ITEM-0084](items/ITEM-0084-plan-milestones-ahead-with-gitlab-as-their-view.md) | Plan milestones ahead, with GitLab as their view | task | in-progress | — |
 | [ITEM-0040](items/ITEM-0040-write-record-values-to-powerdns-in-its-own-text-fo.md) | Write record values to PowerDNS in its own text form | task | open | — |
 | [ITEM-0062](items/ITEM-0062-keep-the-image-s-latest-tag-on-the-newest-release.md) | Keep the image's latest tag on the newest release | debt | open | — |
 | [ITEM-0074](items/ITEM-0074-refuse-requests-whose-host-isn-t-server-public-url.md) | Refuse requests whose Host isn't server.public_url's | debt | open | — |
@@ -60,4 +61,4 @@
 
 ## Decisions
 
-36 ADRs (27 accepted, 9 superseded), listed in [docs/adr](../docs/adr/_index.md).
+37 ADRs (28 accepted, 9 superseded), listed in [docs/adr](../docs/adr/_index.md).

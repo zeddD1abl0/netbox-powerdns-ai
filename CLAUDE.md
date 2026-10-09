@@ -10,6 +10,7 @@ lives in `project/`, and decisions live in `docs/adr/`.
    current milestone, the open items and the open questions.
 2. Read the current milestone's file in [`project/milestones/`](project/milestones/).
 3. Read only the items, ADRs and docs the task needs, not whole directories.
+4. Make an item for each open GitLab issue that no item tracks yet ([ADR-0037](docs/adr/0037-plan-milestones-ahead-with-gitlab-milestones-and-i.md)).
 
 ## Where things live
 
@@ -31,9 +32,11 @@ lives in `project/`, and decisions live in `docs/adr/`.
   milestone file under **Approved design**.
 - Implement in auto mode. When the implementation is done and verified, return
   to plan mode.
+- **Planning ahead, GitLab and releases,** as [ADR-0037](docs/adr/0037-plan-milestones-ahead-with-gitlab-milestones-and-i.md) says: `plan-mNN-mMM` branches, with
+  ADRs `proposed` until their milestone starts; GitLab milestones kept in step; a `v0.NN.0` release per milestone.
 - **Commits** ([ADR-0010](docs/adr/0010-claude-commits-per-item-on-milestone-branches.md)):
   - Work on the milestone branch `mNN-short-title`, created from `main` when
-    the milestone starts.
+    the milestone starts, or on a planning branch.
   - Commit when each item is done. Checkpoint commits are fine.
   - Use Conventional Commits, with a `Refs: ITEM-nnnn` trailer on every commit.
   - Never commit to `main`, merge into it, or push; a hook blocks commits on
@@ -69,8 +72,8 @@ lives in `project/`, and decisions live in `docs/adr/`.
    Develop on glibc Linux amd64; the prerequisites are Go, Docker, make, curl,
    tar, sha256sum and gcc (for `-race`). Pin every tool: release binaries by SHA-256 in
    `tools/tools.mk`, others in `tools/<name>/go.mod`. Elsewhere, `make shell`.
-   CI files only call make targets. Vendor UI assets; no CDNs. Don't rely on
-   forge features (issues, wiki, Pages).
+   CI files only call make targets. Vendor UI assets; no CDNs. Only tracking
+   uses forge features: GitLab's milestones and issues are a view of `project/`.
 2. **One source, generated references.** Config keys, metrics, audit events and
    permissions are declared once in code, and their reference docs are
    generated. Never hand-edit a generated file.
@@ -82,8 +85,7 @@ lives in `project/`, and decisions live in `docs/adr/`.
 
 ## Engineering standards
 
-The full rationale lives in ADRs. Where no ADR exists yet, these are the
-defaults.
+The rationale lives in ADRs. Where no ADR exists yet, these are the defaults.
 
 - **Go:** Google Go Style Guide. Code goes under `internal/`. Stdlib first.
   Justify each new dependency in its item; a significant one gets an ADR.
@@ -140,11 +142,9 @@ defaults.
 - the board is updated;
 - it's committed on the milestone branch with its `Refs` trailer.
 
-**A milestone** is done when:
+**A milestone** is done, as the `close-milestone` skill checks, when:
 - every item in it is done;
 - `/code-review high` has run, plus `/security-review` if auth, audit or secrets
   changed;
 - the manual verification steps are recorded in the milestone file;
 - the user has merged its branch into `main`.
-
-Use the `close-milestone` skill.
