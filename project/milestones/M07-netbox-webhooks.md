@@ -63,8 +63,8 @@ request ID and user. The scheduled full refresh still runs as the safety net.
   CHANGELOG is updated.
 - [x] `/code-review high` and `/security-review` have run. The security
   review runs because M07 adds an authenticated endpoint and a secret.
-- [ ] The manual verification is recorded. The pipelines pass, and the user
-  has merged through an MR with a merge commit.
+- [x] The manual verification is recorded. The pipelines pass, and the user
+  has merged through an MR with a merge commit: `5bed276`, on 2026-10-09.
 
 ## Verification log
 
@@ -137,6 +137,16 @@ Append-only and dated. Record what was run and what was seen.
   Terraform manages only the event rule, and zones are listed by name
   whatever its case, 20 names a request. The code, the explanations and
   REQ-048 cite it. M07 is closed; its last criterion waits for the merge.
+- 2026-10-09: **Merged.** The user merged `m07-netbox-webhooks` through
+  GitLab merge request !8. `main` is at the merge commit `5bed276`, whose
+  parents are the old `main`, `c07c0cc`, and the branch tip, `773296b`, so
+  every per-item commit is kept (ADR-0018). `main`'s pipelines passed:
+  GitLab 791 and GitHub Actions run 37872245134. The user tagged the merge
+  commit `v1.0.0-m07`, an annotated tag, the first milestone tag; its
+  pipelines, GitLab 792 and GitHub run 37878653346, were running when this
+  was recorded. The user confirmed that only Maintainers can push or merge
+  `main` and `v*` branches, or create `v*` tags, generic `v*` packages, and
+  the image's `v.*` and `latest` tags.
 
 ## Approved design
 
