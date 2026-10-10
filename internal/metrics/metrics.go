@@ -13,6 +13,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/audit"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/drift"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/version"
 )
@@ -141,6 +142,10 @@ var (
 		help: "Requests to `/api/netbox-events`, NetBox's webhooks, by result: `accepted` if the event queued a refresh, " +
 			"`ignored` if it named nothing that a server group serves, `bad_signature` if its signature didn't verify, " +
 			"and `invalid` if it wasn't an event that NetBox sends, or was over 1 MiB. Requests while webhooks are off aren't counted."}
+	defAuditEvents = def{name: "nbpdns_audit_events_total", kind: counter, labels: []string{"action"},
+		values: map[string][]string{"action": auditActions()},
+		help: "Audit events that `nbpdns serve` recorded, by action. Those that the command line records, " +
+			"in its own process, are in the trail, but not here."}
 	defBuildInfo = def{name: "nbpdns_build_info", kind: gauge, labels: []string{"version", "revision", "goversion"},
 		help: "1, with the running build's version, VCS revision, and Go version."}
 
@@ -150,7 +155,7 @@ var (
 		defZones, defRRsetChanges, defZoneDrifted, defProblems, defWarnings,
 		defNetBoxUp, defGroupUp, defGroupLastSuccess,
 		defRequests, defRequestDuration, defRetries, defAPIRequests, defAPIRequestDuration,
-		defWebhooks, defBuildInfo,
+		defWebhooks, defAuditEvents, defBuildInfo,
 	}
 )
 
@@ -183,6 +188,7 @@ type Metrics struct {
 	apiRequests        *prometheus.CounterVec
 	apiRequestDuration *prometheus.HistogramVec
 	webhooks           *prometheus.CounterVec
+	auditEvents        *prometheus.CounterVec
 }
 
 // New returns nbpdns's metrics for the build info, registered in a new
@@ -213,6 +219,7 @@ func New(info version.Info) *Metrics {
 		apiRequests:         register(reg, prometheus.NewCounterVec(counterOpts(defAPIRequests), defAPIRequests.labels)),
 		apiRequestDuration:  register(reg, prometheus.NewHistogramVec(histogramOpts(defAPIRequestDuration), defAPIRequestDuration.labels)),
 		webhooks:            register(reg, prometheus.NewCounterVec(counterOpts(defWebhooks), defWebhooks.labels)),
+		auditEvents:         register(reg, prometheus.NewCounterVec(counterOpts(defAuditEvents), defAuditEvents.labels)),
 	}
 	build := register(reg, prometheus.NewGaugeVec(gaugeOpts(defBuildInfo), defBuildInfo.labels))
 	build.WithLabelValues(info.Version, info.Commit, info.GoVersion).Set(1)
@@ -225,7 +232,27 @@ func New(info version.Info) *Metrics {
 	for _, r := range WebhookResults {
 		m.webhooks.WithLabelValues(r)
 	}
+	for _, a := range auditActions() {
+		m.auditEvents.WithLabelValues(a)
+	}
 	return m
+}
+
+// auditActions returns the audit trail's actions, the values of the action
+// label.
+func auditActions() []string {
+	var as []string
+	for _, d := range audit.Defs() {
+		as = append(as, string(d.Action))
+	}
+	return as
+}
+
+// AuditEvents counts the events that serve recorded.
+func (m *Metrics) AuditEvents(events []audit.Event) {
+	for _, e := range events {
+		m.auditEvents.WithLabelValues(string(e.Action)).Inc()
+	}
 }
 
 // Handler serves the metrics in Prometheus's text or OpenMetrics format.

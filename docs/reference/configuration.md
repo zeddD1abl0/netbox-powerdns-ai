@@ -29,6 +29,7 @@ a secret's value.
 
 | Key | Type | Default |
 |---|---|---|
+| [`audit.retention_days`](#auditretention_days) | integer, 1 to 36500 | `2557` |
 | [`database.url`](#databaseurl) | a `sqlite:` URL | `sqlite:///var/lib/nbpdns/nbpdns.db` |
 | [`drift.group_concurrency`](#driftgroup_concurrency) | integer, 1 to 32 | `4` |
 | [`drift.interval`](#driftinterval) | duration, at least `10s` | `5m` |
@@ -53,6 +54,22 @@ a secret's value.
 | [`server.listen`](#serverlisten) | a TCP address | `:8080` |
 | [`server.public_url`](#serverpublic_url) | an `http` or `https` URL | none |
 | [`powerdns.groups`](#powerdnsgroups) | list of server groups, config file only | none |
+
+## `audit.retention_days`
+
+How many days the audit trail keeps an event. `nbpdns serve` deletes older
+events daily, and records that it did. The default, seven years, is the minimum
+that the ISM sets for event logs, the strictest of the frameworks that nbpdns
+is built to support. PCI DSS asks for one year.
+
+- **Type:** integer, 1 to 36500
+- **Default:** `2557`
+- **Environment variable:** `NBPDNS_AUDIT_RETENTION_DAYS`
+- **Flag:** `--audit-retention-days`
+
+> [!WARNING]
+> A shorter retention may fall short of your compliance obligations. Copy the
+> trail elsewhere before you shorten it: the events it deletes are gone.
 
 ## `database.url`
 
@@ -393,6 +410,8 @@ powerdns:
 Every key except the secrets, with its default:
 
 ```yaml
+audit:
+  retention_days: 2557
 database:
   url: sqlite:///var/lib/nbpdns/nbpdns.db
 drift:

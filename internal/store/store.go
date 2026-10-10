@@ -21,6 +21,7 @@ import (
 
 	_ "modernc.org/sqlite" // the database/sql driver "sqlite"
 
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/audit"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/store/sqlite"
 )
 
@@ -29,8 +30,9 @@ import (
 const busyTimeout = 5 * time.Second
 
 // TimeLayout is how times are stored: in UTC, to the microsecond, at a fixed
-// width, so that they sort as text, on SQLite and PostgreSQL alike.
-const TimeLayout = "2006-01-02T15:04:05.000000Z"
+// width, so that they sort as text, on SQLite and PostgreSQL alike. It's the
+// audit trail's, whose hashes cover times as stored.
+const TimeLayout = audit.TimeLayout
 
 // A Store is an open database.
 type Store struct {

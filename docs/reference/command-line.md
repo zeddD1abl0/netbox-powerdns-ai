@@ -26,6 +26,7 @@ in the [configuration reference](configuration.md).
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--audit-retention-days` | `integer` | `2557` | How many days the audit trail keeps an event. |
 | `--config` | `string` | none | The YAML config file to read, instead of `$NBPDNS_CONFIG`. |
 | `--database-url` | `url` | `sqlite:///var/lib/nbpdns/nbpdns.db` | Where `nbpdns serve` keeps its state, such as `sqlite:///var/lib/nbpdns/nbpdns.db`. |
 | `--drift-group-concurrency` | `integer` | `4` | How many server groups are read and compared at once. |
@@ -55,6 +56,49 @@ in the [configuration reference](configuration.md).
 | `--server-public-url` | `url` | none | The URL that clients reach `nbpdns serve` at, such as `https://nbpdns.example.com`, for the API's absolute links. |
 
 ## Commands
+
+### `nbpdns audit`
+
+Read and verify the audit trail in the database at database.url: an event for
+every change of nbpdns's state, each holding the SHA-384 of its contents and
+of the event before it, so that a changed, removed, or inserted event shows.
+
+```text
+nbpdns audit [command]
+```
+
+Subcommands: [`list`](#nbpdns-audit-list) and [`verify`](#nbpdns-audit-verify).
+
+### `nbpdns audit list`
+
+List the latest audit events, oldest first, that the flags select: by default,
+the last 100. The table leaves out each event's before and after values,
+and its hashes, which the JSON output includes.
+
+```text
+nbpdns audit list [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--action` | `string` | none | List the events of this action, such as `service.started`. |
+| `--actor` | `string` | none | List the events of this actor, such as `os-user:jordan` or `system`. |
+| `--limit` | `int` | `100` | List at most this many events, the latest. |
+| `-o`, `--output` | `format` | `table` | The output format: `table` or `json`. |
+| `--since` | `string` | none | List events from this time, in RFC 3339 such as `2026-10-01T00:00:00Z`, or this long ago, such as `24h`. |
+| `--target` | `string` | none | List the events about this target, as `type:id`, or about every target of a type, such as `setting`. |
+| `--until` | `string` | none | List events before this time, in RFC 3339, or this long ago. |
+
+### `nbpdns audit verify`
+
+Walk the whole audit trail, in order, and check each event's hash, and its
+link to the event before it. It fails, with exit status 1, at the first event
+where the chain breaks. The chain can't show that the latest events were
+removed, or that the whole trail was rewritten: a copy kept elsewhere can.
+
+```text
+nbpdns audit verify
+```
 
 ### `nbpdns completion`
 

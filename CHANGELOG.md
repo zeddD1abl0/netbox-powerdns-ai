@@ -16,6 +16,16 @@ All notable changes to this project are recorded here. The format follows
   PID.
 - `nbpdns db status` shows the database and its migrations, and `nbpdns db
   migrate` creates it, or applies the migrations it lacks.
+- An audit trail, in the database: every change of nbpdns's state is an
+  event, with its actor, action, target, values before and after, reason,
+  and trace and request IDs, in the same transaction as the change. Each
+  event holds the SHA-384 of its contents and of the event before it.
+  `nbpdns audit verify` checks the chain, and `nbpdns audit list` reads
+  the events. `nbpdns serve` records its start, with its configuration's
+  fingerprint, and its stop, and deletes events older than
+  `audit.retention_days`, by default seven years, daily.
+  "Audit events" lists every event, and `nbpdns_audit_events_total` counts
+  them.
 
 ### Changed
 

@@ -4,6 +4,35 @@
 
 package sqlite
 
+import (
+	"database/sql"
+)
+
+type AuditAnchor struct {
+	Singleton int64
+	Seq       int64
+	Hash      string
+	PrunedAt  string
+}
+
+type AuditEvent struct {
+	Seq        int64
+	At         string
+	Actor      string
+	Action     string
+	TargetType string
+	TargetID   string
+	BeforeJson sql.NullString
+	AfterJson  sql.NullString
+	Reason     string
+	Outcome    string
+	TraceID    string
+	RequestID  string
+	SourceIp   string
+	PrevHash   string
+	Hash       string
+}
+
 type DatabaseInfo struct {
 	Singleton int64
 	ID        string

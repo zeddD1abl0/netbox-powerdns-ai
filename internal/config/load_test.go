@@ -78,6 +78,7 @@ func TestLoadDefaults(t *testing.T) {
 		t.Fatalf("Load() error = %v", err)
 	}
 	want := Config{
+		Audit:    AuditConfig{RetentionDays: 2557},
 		Database: DatabaseConfig{URL: "sqlite:///var/lib/nbpdns/nbpdns.db"},
 		Log:      LogConfig{Level: "info", Format: "json"},
 		NetBox:   NetBoxConfig{Timeout: 30 * time.Second, PageSize: 500, Concurrency: 4},

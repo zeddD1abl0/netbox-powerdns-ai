@@ -21,3 +21,4 @@ its goal and prerequisites, then gives numbered steps.
 - [Refresh drift as NetBox changes](refresh-drift-as-netbox-changes.md)
 - [Monitor drift with Prometheus](monitor-drift-with-prometheus.md)
 - [Export traces to an OpenTelemetry collector](export-traces-to-an-opentelemetry-collector.md)
+- [Check the audit trail](check-the-audit-trail.md)

@@ -10,6 +10,7 @@ import (
 // Config is nbpdns's configuration, with the defaults, the config file, the
 // environment and the flags applied.
 type Config struct {
+	Audit    AuditConfig
 	Database DatabaseConfig
 	Log      LogConfig
 	NetBox   NetBoxConfig
@@ -31,6 +32,12 @@ type DriftConfig struct {
 	// WebhookDelay is how long `nbpdns serve` waits for NetBox's webhooks
 	// to stop before it refreshes the zones they named (ADR-0036).
 	WebhookDelay time.Duration
+}
+
+// AuditConfig says how long the audit trail keeps its events (ADR-0039).
+type AuditConfig struct {
+	// RetentionDays is how many days an event is kept.
+	RetentionDays int
 }
 
 // DatabaseConfig says where `nbpdns serve` keeps its state (ADR-0038).
@@ -118,6 +125,16 @@ const minWebhookSecret = 16
 // name.
 func keys(c *Config) []Key {
 	ks := []Key{
+		intKey(&c.Audit.RetentionDays, Key{
+			Name:    "audit.retention_days",
+			Summary: "How many days the audit trail keeps an event.",
+			Details: "`nbpdns serve` deletes older events daily, and records that it did. " +
+				"The default, seven years, is the minimum that the ISM sets for event logs, " +
+				"the strictest of the frameworks that nbpdns is built to support. PCI DSS asks for one year.",
+			Warning: "A shorter retention may fall short of your compliance obligations. " +
+				"Copy the trail elsewhere before you shorten it: the events it deletes are gone.",
+			Default: "2557",
+		}, 36500),
 		stringKey(&c.Database.URL, "a `sqlite:` URL", "url", Key{
 			Name:    "database.url",
 			Summary: "Where `nbpdns serve` keeps its state, such as `sqlite:///var/lib/nbpdns/nbpdns.db`.",
