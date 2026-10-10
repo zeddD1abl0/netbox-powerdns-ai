@@ -130,6 +130,7 @@ func keys(c *Config) []Key {
 	ks := []Key{
 		intKey(&c.Audit.RetentionDays, Key{
 			Name:    "audit.retention_days",
+			Runtime: true,
 			Summary: "How many days the audit trail keeps an event.",
 			Details: "`nbpdns serve` deletes older events daily, and records that it did. " +
 				"The default, seven years, is the minimum that the ISM sets for event logs, " +
@@ -150,6 +151,7 @@ func keys(c *Config) []Key {
 		}, checkDatabaseURL),
 		enumKey(&c.Log.Level, Key{
 			Name:    "log.level",
+			Runtime: true,
 			Summary: "The lowest level of log message to write.",
 			Details: "At `debug`, nbpdns also logs each request it makes.",
 			Default: "info",
@@ -171,6 +173,7 @@ func keys(c *Config) []Key {
 		}, checkURL),
 		secretKey(&c.NetBox.Token, Key{
 			Name:    "netbox.token",
+			Runtime: true,
 			Summary: "The NetBox API token that nbpdns reads with.",
 			Details: "Use a v2 token, which starts with `nbt_`, whose user can only view the DNS plugin's objects. " +
 				"A v1 token still works, with a warning. " +
@@ -184,23 +187,27 @@ func keys(c *Config) []Key {
 		}, nil),
 		durationKey(&c.NetBox.Timeout, Key{
 			Name:    "netbox.timeout",
+			Runtime: true,
 			Summary: "How long one request to NetBox may take.",
 			Details: "Write it with a unit, such as `30s` or `2m`.",
 			Default: "30s",
 		}),
 		intKey(&c.NetBox.PageSize, Key{
 			Name:    "netbox.page_size",
+			Runtime: true,
 			Summary: "How many objects to ask NetBox for in each page of a list.",
 			Details: "NetBox returns no more than its own `MAX_PAGE_SIZE`, 1000 by default.",
 			Default: "500",
 		}, 1000),
 		intKey(&c.NetBox.Concurrency, Key{
 			Name:    "netbox.concurrency",
+			Runtime: true,
 			Summary: "How many requests to NetBox may be in flight at once.",
 			Default: "4",
 		}, 32),
 		secretKey(&c.NetBox.WebhookSecret, Key{
 			Name:    "netbox.webhook_secret",
+			Runtime: true,
 			Summary: "The secret that NetBox's webhooks sign their events with. Setting it turns on `nbpdns serve`'s `/api/netbox-events`.",
 			Details: "Give NetBox's webhook the same secret. An event is refused unless its `X-Hook-Signature` is the HMAC-SHA512 of its body, keyed by it. " +
 				"If it's unset, `/api/netbox-events` answers 404, and only the scheduled refreshes run. " +
@@ -216,17 +223,20 @@ func keys(c *Config) []Key {
 		}),
 		durationKey(&c.PowerDNS.Timeout, Key{
 			Name:    "powerdns.timeout",
+			Runtime: true,
 			Summary: "How long one request to a PowerDNS API may take.",
 			Details: "Write it with a unit, such as `30s` or `2m`.",
 			Default: "30s",
 		}),
 		intKey(&c.PowerDNS.Concurrency, Key{
 			Name:    "powerdns.concurrency",
+			Runtime: true,
 			Summary: "How many requests to each PowerDNS API may be in flight at once.",
 			Default: "4",
 		}, 32),
 		intKey(&c.Drift.GroupConcurrency, Key{
 			Name:    "drift.group_concurrency",
+			Runtime: true,
 			Summary: "How many server groups are read and compared at once.",
 			Details: "Each group's primary also takes up to `powerdns.concurrency` requests at once. " +
 				"NetBox is read once, for all the groups together, whatever this is.",
@@ -234,6 +244,7 @@ func keys(c *Config) []Key {
 		}, 32),
 		durationKeyAtLeast(&c.Drift.Interval, Key{
 			Name:    "drift.interval",
+			Runtime: true,
 			Summary: "How often `nbpdns serve` refreshes the drift report, from the start of one refresh to the start of the next.",
 			Details: "A refresh that takes longer delays the next one, so refreshes never overlap. " +
 				"Each refresh reads every zone's records from NetBox and from each primary, so make it much longer than a refresh takes.",
@@ -241,6 +252,7 @@ func keys(c *Config) []Key {
 		}, 10*time.Second),
 		durationKey(&c.Drift.Timeout, Key{
 			Name:    "drift.timeout",
+			Runtime: true,
 			Summary: "How long one refresh of `nbpdns serve` may take before it's stopped.",
 			Details: "A refresh that's stopped counts as failed, and every server group keeps its last report: " +
 				"a slow refresh says nothing about what PowerDNS serves. The next one starts on schedule.",
@@ -248,6 +260,7 @@ func keys(c *Config) []Key {
 		}),
 		intKey(&c.Drift.HistoryRetentionDays, Key{
 			Name:    "drift.history_retention_days",
+			Runtime: true,
 			Summary: "How many days the drift history keeps each refresh, and each zone's changes.",
 			Details: "`nbpdns serve` deletes older refreshes, and older rows of each zone's history, daily, " +
 				"but keeps each zone's last row, which says what state it's been in since. " +
@@ -257,6 +270,7 @@ func keys(c *Config) []Key {
 		}, 36500),
 		durationKeyWithin(&c.Drift.WebhookDelay, Key{
 			Name:    "drift.webhook_delay",
+			Runtime: true,
 			Summary: "How long `nbpdns serve` waits for NetBox's webhooks to stop coming before it refreshes the zones they named.",
 			Details: "One change in NetBox sends several events, and a bulk edit sends thousands, so nbpdns gathers them, " +
 				"and refreshes once no event has come for this long, or 30 seconds after the first, whichever is sooner. " +

@@ -43,11 +43,22 @@ All notable changes to this project are recorded here. The format follows
   `/api/status` gains `database`. `nbpdns drift history` shows a group's
   refreshes, or, with `--zone`, a zone's history, in a table, or in JSON
   with `--output json`. "Read a zone's drift history" shows how.
+- Runtime settings: each key is a runtime or a bootstrap key, as the
+  configuration reference shows. `nbpdns settings list|get|set|unset`
+  shows and changes the runtime ones, which the database stores, between
+  the defaults and the config file, and a running `nbpdns serve` applies
+  within seconds, without a restart. A runtime key that the config file,
+  the environment or a flag sets is pinned. Each change is a `setting.set`
+  or `setting.unset` audit event, and `nbpdns_settings_reloads_total`
+  counts serve's reloads. "Change nbpdns's settings while it runs" shows
+  how.
 
 ### Changed
 
 - `/readyz` is ready once `nbpdns serve` has restored its last reports, or,
   with none to restore, once its first refresh has finished.
+- `nbpdns config show` takes the runtime settings that the database stores
+  into account, if the database exists, and names it as their source.
 - `nbpdns serve` needs a directory that it can write its database to. In
   the image, mount a volume at `/var/lib/nbpdns`, writable by user 65532,
   and in Kubernetes, update the deployment with the `Recreate` strategy, as

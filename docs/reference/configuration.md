@@ -14,12 +14,22 @@ the first of these that sets it:
 1. a flag, such as `--netbox-url`;
 2. an environment variable, such as `NBPDNS_NETBOX_URL`;
 3. the YAML config file named by `--config` or `NBPDNS_CONFIG`;
-4. the default.
+4. for a runtime key, the database, where `nbpdns settings set` stores it;
+5. the default.
 
 An empty environment variable counts as unset. An unknown key in the config
 file, or an unknown `NBPDNS_` variable, is an error. nbpdns reports every problem
 it finds before it stops. To see each key's value and where it came from, run
 `nbpdns config show`.
+
+A **runtime** key, such as `drift.interval`, is one that `nbpdns serve` applies
+while it runs: `nbpdns settings set` stores it in the database, and serve uses
+it within seconds. If a flag, the environment or the config file sets the key
+too, it's **pinned**: that value wins, and the stored one is kept, but not
+used, until it's unset there. A **bootstrap** key, such as `database.url`,
+comes only from a flag, the environment or the config file, and takes effect
+when serve starts. Only `nbpdns serve`, `nbpdns config show` and `nbpdns
+settings` read the database; the other commands use the rest.
 
 A **secret**, such as `netbox.token`, can also be read from a file. Name the
 file with the key's `_FILE` environment variable, its `-file` flag, or its
@@ -27,34 +37,34 @@ file with the key's `_FILE` environment variable, its `-file` flag, or its
 itself, and setting both at one level is an error. nbpdns never prints or logs
 a secret's value.
 
-| Key | Type | Default |
-|---|---|---|
-| [`audit.retention_days`](#auditretention_days) | integer, 1 to 36500 | `2557` |
-| [`database.url`](#databaseurl) | a `sqlite:` URL | `sqlite:///var/lib/nbpdns/nbpdns.db` |
-| [`drift.group_concurrency`](#driftgroup_concurrency) | integer, 1 to 32 | `4` |
-| [`drift.history_retention_days`](#drifthistory_retention_days) | integer, 1 to 36500 | `400` |
-| [`drift.interval`](#driftinterval) | duration, at least `10s` | `5m` |
-| [`drift.timeout`](#drifttimeout) | duration | `10m` |
-| [`drift.webhook_delay`](#driftwebhook_delay) | duration, from `100ms` to `30s` | `3s` |
-| [`log.format`](#logformat) | `json` or `text` | `json` |
-| [`log.level`](#loglevel) | `debug`, `info`, `warn` or `error` | `info` |
-| [`netbox.ca_file`](#netboxca_file) | path | none |
-| [`netbox.concurrency`](#netboxconcurrency) | integer, 1 to 32 | `4` |
-| [`netbox.page_size`](#netboxpage_size) | integer, 1 to 1000 | `500` |
-| [`netbox.timeout`](#netboxtimeout) | duration | `30s` |
-| [`netbox.token`](#netboxtoken) | string, secret | none |
-| [`netbox.url`](#netboxurl) | an `http` or `https` URL | none |
-| [`netbox.webhook_secret`](#netboxwebhook_secret) | string, secret | none |
-| [`otlp.ca_file`](#otlpca_file) | path | none |
-| [`otlp.endpoint`](#otlpendpoint) | an `http` or `https` URL | none |
-| [`otlp.headers`](#otlpheaders) | string, secret | none |
-| [`otlp.protocol`](#otlpprotocol) | `http/protobuf` or `grpc` | `http/protobuf` |
-| [`otlp.timeout`](#otlptimeout) | duration | `10s` |
-| [`powerdns.concurrency`](#powerdnsconcurrency) | integer, 1 to 32 | `4` |
-| [`powerdns.timeout`](#powerdnstimeout) | duration | `30s` |
-| [`server.listen`](#serverlisten) | a TCP address | `:8080` |
-| [`server.public_url`](#serverpublic_url) | an `http` or `https` URL | none |
-| [`powerdns.groups`](#powerdnsgroups) | list of server groups, config file only | none |
+| Key | Kind | Type | Default |
+|---|---|---|---|
+| [`audit.retention_days`](#auditretention_days) | runtime | integer, 1 to 36500 | `2557` |
+| [`database.url`](#databaseurl) | bootstrap | a `sqlite:` URL | `sqlite:///var/lib/nbpdns/nbpdns.db` |
+| [`drift.group_concurrency`](#driftgroup_concurrency) | runtime | integer, 1 to 32 | `4` |
+| [`drift.history_retention_days`](#drifthistory_retention_days) | runtime | integer, 1 to 36500 | `400` |
+| [`drift.interval`](#driftinterval) | runtime | duration, at least `10s` | `5m` |
+| [`drift.timeout`](#drifttimeout) | runtime | duration | `10m` |
+| [`drift.webhook_delay`](#driftwebhook_delay) | runtime | duration, from `100ms` to `30s` | `3s` |
+| [`log.format`](#logformat) | bootstrap | `json` or `text` | `json` |
+| [`log.level`](#loglevel) | runtime | `debug`, `info`, `warn` or `error` | `info` |
+| [`netbox.ca_file`](#netboxca_file) | bootstrap | path | none |
+| [`netbox.concurrency`](#netboxconcurrency) | runtime | integer, 1 to 32 | `4` |
+| [`netbox.page_size`](#netboxpage_size) | runtime | integer, 1 to 1000 | `500` |
+| [`netbox.timeout`](#netboxtimeout) | runtime | duration | `30s` |
+| [`netbox.token`](#netboxtoken) | runtime | string, secret | none |
+| [`netbox.url`](#netboxurl) | bootstrap | an `http` or `https` URL | none |
+| [`netbox.webhook_secret`](#netboxwebhook_secret) | runtime | string, secret | none |
+| [`otlp.ca_file`](#otlpca_file) | bootstrap | path | none |
+| [`otlp.endpoint`](#otlpendpoint) | bootstrap | an `http` or `https` URL | none |
+| [`otlp.headers`](#otlpheaders) | bootstrap | string, secret | none |
+| [`otlp.protocol`](#otlpprotocol) | bootstrap | `http/protobuf` or `grpc` | `http/protobuf` |
+| [`otlp.timeout`](#otlptimeout) | bootstrap | duration | `10s` |
+| [`powerdns.concurrency`](#powerdnsconcurrency) | runtime | integer, 1 to 32 | `4` |
+| [`powerdns.timeout`](#powerdnstimeout) | runtime | duration | `30s` |
+| [`server.listen`](#serverlisten) | bootstrap | a TCP address | `:8080` |
+| [`server.public_url`](#serverpublic_url) | bootstrap | an `http` or `https` URL | none |
+| [`powerdns.groups`](#powerdnsgroups) | resources | list of server groups, config file only | none |
 
 ## `audit.retention_days`
 
@@ -63,6 +73,7 @@ events daily, and records that it did. The default, seven years, is the minimum
 that the ISM sets for event logs, the strictest of the frameworks that nbpdns
 is built to support. PCI DSS asks for one year.
 
+- **Kind:** runtime
 - **Type:** integer, 1 to 36500
 - **Default:** `2557`
 - **Environment variable:** `NBPDNS_AUDIT_RETENTION_DAYS`
@@ -84,6 +95,7 @@ for it with `.lock` added, which stops a second `nbpdns serve` from using the
 same database. Commands that only read NetBox or PowerDNS, such as `nbpdns
 drift`, don't use it.
 
+- **Kind:** bootstrap
 - **Type:** a `sqlite:` URL
 - **Default:** `sqlite:///var/lib/nbpdns/nbpdns.db`
 - **Environment variable:** `NBPDNS_DATABASE_URL`
@@ -95,6 +107,7 @@ How many server groups are read and compared at once. Each group's primary also
 takes up to `powerdns.concurrency` requests at once. NetBox is read once, for
 all the groups together, whatever this is.
 
+- **Kind:** runtime
 - **Type:** integer, 1 to 32
 - **Default:** `4`
 - **Environment variable:** `NBPDNS_DRIFT_GROUP_CONCURRENCY`
@@ -109,6 +122,7 @@ since. The default, 400 days, is more than the year that PCI DSS asks for. A
 zone's changes of state are also audit events, which `audit.retention_days`
 keeps.
 
+- **Kind:** runtime
 - **Type:** integer, 1 to 36500
 - **Default:** `400`
 - **Environment variable:** `NBPDNS_DRIFT_HISTORY_RETENTION_DAYS`
@@ -121,6 +135,7 @@ refresh to the start of the next. A refresh that takes longer delays the next
 one, so refreshes never overlap. Each refresh reads every zone's records from
 NetBox and from each primary, so make it much longer than a refresh takes.
 
+- **Kind:** runtime
 - **Type:** duration, at least `10s`
 - **Default:** `5m`
 - **Environment variable:** `NBPDNS_DRIFT_INTERVAL`
@@ -133,6 +148,7 @@ that's stopped counts as failed, and every server group keeps its last report:
 a slow refresh says nothing about what PowerDNS serves. The next one starts on
 schedule.
 
+- **Kind:** runtime
 - **Type:** duration
 - **Default:** `10m`
 - **Environment variable:** `NBPDNS_DRIFT_TIMEOUT`
@@ -146,6 +162,7 @@ a bulk edit sends thousands, so nbpdns gathers them, and refreshes once no
 event has come for this long, or 30 seconds after the first, whichever is
 sooner. Only with `netbox.webhook_secret` set.
 
+- **Kind:** runtime
 - **Type:** duration, from `100ms` to `30s`
 - **Default:** `3s`
 - **Environment variable:** `NBPDNS_DRIFT_WEBHOOK_DELAY`
@@ -157,6 +174,7 @@ How log lines are written to standard error. `json` writes one JSON object per
 line, for log collectors. `text` writes `key=value` pairs, for reading in a
 terminal.
 
+- **Kind:** bootstrap
 - **Type:** `json` or `text`
 - **Default:** `json`
 - **Environment variable:** `NBPDNS_LOG_FORMAT`
@@ -167,6 +185,7 @@ terminal.
 The lowest level of log message to write. At `debug`, nbpdns also logs each
 request it makes.
 
+- **Kind:** runtime
 - **Type:** `debug`, `info`, `warn` or `error`
 - **Default:** `info`
 - **Environment variable:** `NBPDNS_LOG_LEVEL`
@@ -177,6 +196,7 @@ request it makes.
 A PEM file of CA certificates to trust for NetBox, as well as the system's. Use
 it when NetBox's certificate comes from a private CA.
 
+- **Kind:** bootstrap
 - **Type:** path
 - **Default:** none
 - **Environment variable:** `NBPDNS_NETBOX_CA_FILE`
@@ -186,6 +206,7 @@ it when NetBox's certificate comes from a private CA.
 
 How many requests to NetBox may be in flight at once.
 
+- **Kind:** runtime
 - **Type:** integer, 1 to 32
 - **Default:** `4`
 - **Environment variable:** `NBPDNS_NETBOX_CONCURRENCY`
@@ -196,6 +217,7 @@ How many requests to NetBox may be in flight at once.
 How many objects to ask NetBox for in each page of a list. NetBox returns no
 more than its own `MAX_PAGE_SIZE`, 1000 by default.
 
+- **Kind:** runtime
 - **Type:** integer, 1 to 1000
 - **Default:** `500`
 - **Environment variable:** `NBPDNS_NETBOX_PAGE_SIZE`
@@ -206,6 +228,7 @@ more than its own `MAX_PAGE_SIZE`, 1000 by default.
 How long one request to NetBox may take. Write it with a unit, such as `30s` or
 `2m`.
 
+- **Kind:** runtime
 - **Type:** duration
 - **Default:** `30s`
 - **Environment variable:** `NBPDNS_NETBOX_TIMEOUT`
@@ -218,6 +241,7 @@ The NetBox API token that nbpdns reads with. Use a v2 token, which starts with
 works, with a warning. Pass the token in a file or the environment rather than
 as a flag, which other users of the host can see in the process list.
 
+- **Kind:** runtime
 - **Type:** string, secret
 - **Default:** none
 - **Environment variable:** `NBPDNS_NETBOX_TOKEN`
@@ -229,6 +253,7 @@ as a flag, which other users of the host can see in the process list.
 NetBox's base URL, such as `https://netbox.example.com`. Every command that
 reads from NetBox needs it.
 
+- **Kind:** bootstrap
 - **Type:** an `http` or `https` URL
 - **Default:** none
 - **Environment variable:** `NBPDNS_NETBOX_URL`
@@ -248,6 +273,7 @@ body, keyed by it. If it's unset, `/api/netbox-events` answers 404, and only
 the scheduled refreshes run. Use a long random string, such as `openssl rand
 -hex 32` prints: it must be at least 16 characters.
 
+- **Kind:** runtime
 - **Type:** string, secret
 - **Default:** none
 - **Environment variable:** `NBPDNS_NETBOX_WEBHOOK_SECRET`
@@ -264,6 +290,7 @@ the scheduled refreshes run. Use a long random string, such as `openssl rand
 A PEM file of CA certificates to trust for the collector, as well as the
 system's.
 
+- **Kind:** bootstrap
 - **Type:** path
 - **Default:** none
 - **Environment variable:** `NBPDNS_OTLP_CA_FILE`
@@ -277,6 +304,7 @@ OTLP. Such as `https://otel.example.com:4318`, or port 4317 for `grpc`. For
 specification says. If it's unset, nothing is exported. Every command exports
 its spans, and sends the last of them as it ends.
 
+- **Kind:** bootstrap
 - **Type:** an `http` or `https` URL
 - **Default:** none
 - **Environment variable:** `NBPDNS_OTLP_ENDPOINT`
@@ -293,6 +321,7 @@ Headers to send with every export, such as the collector's token, as
 `name=value,name=value`. Over `grpc`, they're sent as metadata. Percent-encode
 a comma in a value as `%2C`.
 
+- **Kind:** bootstrap
 - **Type:** string, secret
 - **Default:** none
 - **Environment variable:** `NBPDNS_OTLP_HEADERS`
@@ -303,6 +332,7 @@ a comma in a value as `%2C`.
 
 The OTLP protocol to export spans with.
 
+- **Kind:** bootstrap
 - **Type:** `http/protobuf` or `grpc`
 - **Default:** `http/protobuf`
 - **Environment variable:** `NBPDNS_OTLP_PROTOCOL`
@@ -313,6 +343,7 @@ The OTLP protocol to export spans with.
 How long one export may take, and how long a command waits to send its last
 spans as it ends. Write it with a unit, such as `10s`.
 
+- **Kind:** bootstrap
 - **Type:** duration
 - **Default:** `10s`
 - **Environment variable:** `NBPDNS_OTLP_TIMEOUT`
@@ -322,6 +353,7 @@ spans as it ends. Write it with a unit, such as `10s`.
 
 How many requests to each PowerDNS API may be in flight at once.
 
+- **Kind:** runtime
 - **Type:** integer, 1 to 32
 - **Default:** `4`
 - **Environment variable:** `NBPDNS_POWERDNS_CONCURRENCY`
@@ -332,6 +364,7 @@ How many requests to each PowerDNS API may be in flight at once.
 How long one request to a PowerDNS API may take. Write it with a unit, such as
 `30s` or `2m`.
 
+- **Kind:** runtime
 - **Type:** duration
 - **Default:** `30s`
 - **Environment variable:** `NBPDNS_POWERDNS_TIMEOUT`
@@ -343,6 +376,7 @@ The address `nbpdns serve` listens on, for `/livez`, `/readyz`, `/status`,
 `/metrics`, and the API, `/api`. Such as `:8080` for every interface, or
 `127.0.0.1:8080` for this host only.
 
+- **Kind:** bootstrap
 - **Type:** a TCP address
 - **Default:** `:8080`
 - **Environment variable:** `NBPDNS_SERVER_LISTEN`
@@ -361,6 +395,7 @@ path is kept, so `https://example.com/nbpdns` makes links such as
 `https://example.com/nbpdns/api/server-groups`. If it's unset, the API's links
 use the host that each request names, over `http`.
 
+- **Kind:** bootstrap
 - **Type:** an `http` or `https` URL
 - **Default:** none
 - **Environment variable:** `NBPDNS_SERVER_PUBLIC_URL`

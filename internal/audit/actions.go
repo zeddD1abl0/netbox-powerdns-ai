@@ -13,6 +13,8 @@ const (
 	AuditPruned    Action = "audit.pruned"
 	// ZoneDriftChanged is ADR-0008's drift detection.
 	ZoneDriftChanged Action = "zone.drift_changed"
+	SettingSet       Action = "setting.set"
+	SettingUnset     Action = "setting.unset"
 )
 
 // Def declares an action.
@@ -63,6 +65,19 @@ var defs = []Def{
 		Before: "`state`, the zone's last state, unless it's new.",
 		After: "`state`, its state now, which is `removed` if it left the report; `changes`, how many of its RRsets differ; " +
 			"and `policy`, its drift policy.",
+	},
+	{
+		Action: SettingSet, Target: "setting", TargetID: "its key, such as `drift.interval`",
+		Actor:   "`os-user:<name>`",
+		Summary: "`nbpdns settings set` stored a runtime setting's value in the database, which `nbpdns serve` applies within seconds, unless the key is pinned.",
+		Before:  "`value`, the stored value before, if there was one; `[redacted]` for a secret.",
+		After:   "`value`, the value stored; `[redacted]` for a secret.",
+	},
+	{
+		Action: SettingUnset, Target: "setting", TargetID: "its key",
+		Actor:   "`os-user:<name>`",
+		Summary: "`nbpdns settings unset` removed a runtime setting's stored value, so that the key takes its default, unless it's pinned.",
+		Before:  "`value`, the stored value; `[redacted]` for a secret.",
 	},
 }
 

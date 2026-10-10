@@ -17,7 +17,7 @@
 | [M05](milestones/M05-packaging.md) | Packaging | done | 5 of 5 |
 | [M06](milestones/M06-rest-api.md) | REST API | done | 10 of 10 |
 | [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | done | 9 of 9 |
-| [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | in-progress | 6 of 12 |
+| [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | in-progress | 7 of 12 |
 | [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | planned | 1 of 1 |
 | [M10](milestones/M10-authentication.md) | Authentication | planned | 1 of 2 |
 | [M11](milestones/M11-roles-and-permissions.md) | Roles and permissions | planned | 1 of 1 |
@@ -36,9 +36,8 @@
 | Item | Title | Type | Status | Waiting on |
 |---|---|---|---|---|
 | [ITEM-0100](items/ITEM-0100-keep-concurrent-pipelines-from-running-the-runner.md) | Keep concurrent pipelines from running the runner out of memory | bug | in-progress | — |
-| [ITEM-0090](items/ITEM-0090-runtime-settings-key-kinds-precedence-and-live-app.md) | Runtime settings: key kinds, precedence and live application | feature | open | — |
-| [ITEM-0091](items/ITEM-0091-server-groups-in-the-database-with-managed-by.md) | Server groups in the database, with managed_by | feature | open | ITEM-0090 |
-| [ITEM-0092](items/ITEM-0092-secrets-encrypted-at-rest-and-master-key-rotation.md) | Secrets encrypted at rest, and master key rotation | feature | open | ITEM-0090, ITEM-0091 |
+| [ITEM-0091](items/ITEM-0091-server-groups-in-the-database-with-managed-by.md) | Server groups in the database, with managed_by | feature | open | — |
+| [ITEM-0092](items/ITEM-0092-secrets-encrypted-at-rest-and-master-key-rotation.md) | Secrets encrypted at rest, and master key rotation | feature | open | ITEM-0091 |
 | [ITEM-0093](items/ITEM-0093-the-m08-integration-tests-and-the-image-s-volume.md) | The M08 integration tests and the image's volume | task | open | ITEM-0091, ITEM-0092 |
 | [ITEM-0094](items/ITEM-0094-the-m08-docs-and-changelog.md) | The M08 docs and CHANGELOG | task | open | ITEM-0093 |
 | [ITEM-0084](items/ITEM-0084-plan-milestones-ahead-with-gitlab-as-their-view.md) | Plan milestones ahead, with GitLab as their view | task | done 2026-10-10 | — |
@@ -47,6 +46,7 @@
 | [ITEM-0087](items/ITEM-0087-the-audit-core-events-chain-retention-and-nbpdns-a.md) | The audit core: events, chain, retention and nbpdns audit | feature | done 2026-10-10 | — |
 | [ITEM-0088](items/ITEM-0088-drift-history-and-restore-at-start.md) | Drift history and restore at start | feature | done 2026-10-10 | — |
 | [ITEM-0089](items/ITEM-0089-drift-history-in-the-api-and-the-cli.md) | Drift history in the API and the CLI | feature | done 2026-10-10 | — |
+| [ITEM-0090](items/ITEM-0090-runtime-settings-key-kinds-precedence-and-live-app.md) | Runtime settings: key kinds, precedence and live application | feature | done 2026-10-10 | — |
 
 ## Open items in other milestones
 

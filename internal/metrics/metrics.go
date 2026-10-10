@@ -62,6 +62,15 @@ const (
 // WriteOps are the values of the op label.
 var WriteOps = []string{WriteHistory, WriteAudit, WritePrune}
 
+// The outcomes of a reload of the runtime settings (ADR-0040).
+const (
+	ReloadApplied = "applied"
+	ReloadFailed  = "failed"
+)
+
+// ReloadOutcomes are the values of the reloads' outcome label.
+var ReloadOutcomes = []string{ReloadApplied, ReloadFailed}
+
 // The kinds of metric.
 const (
 	counter   = "counter"
@@ -165,6 +174,10 @@ var (
 		help: "Writes to the database that failed, by what they wrote: `history`, a refresh, to the drift history; " +
 			"`audit`, an audit event of serve's own, such as its stop; and `prune`, the daily prune of the audit trail and the drift history. " +
 			"A refresh whose history couldn't be written is still served."}
+	defSettingsReloads = def{name: "nbpdns_settings_reloads_total", kind: counter, labels: []string{"outcome"},
+		values: map[string][]string{"outcome": ReloadOutcomes},
+		help: "Reloads of the runtime settings, after `nbpdns settings` changed them, by outcome: " +
+			"`applied`, or `failed` if a stored value wasn't valid, and serve kept the settings it had."}
 	defBuildInfo = def{name: "nbpdns_build_info", kind: gauge, labels: []string{"version", "revision", "goversion"},
 		help: "1, with the running build's version, VCS revision, and Go version."}
 
@@ -174,7 +187,7 @@ var (
 		defZones, defRRsetChanges, defZoneDrifted, defProblems, defWarnings,
 		defNetBoxUp, defGroupUp, defGroupLastSuccess,
 		defRequests, defRequestDuration, defRetries, defAPIRequests, defAPIRequestDuration,
-		defWebhooks, defAuditEvents, defDBWriteFailures, defBuildInfo,
+		defWebhooks, defAuditEvents, defDBWriteFailures, defSettingsReloads, defBuildInfo,
 	}
 )
 
@@ -209,6 +222,7 @@ type Metrics struct {
 	webhooks           *prometheus.CounterVec
 	auditEvents        *prometheus.CounterVec
 	dbWriteFailures    *prometheus.CounterVec
+	settingsReloads    *prometheus.CounterVec
 }
 
 // New returns nbpdns's metrics for the build info, registered in a new
@@ -241,6 +255,7 @@ func New(info version.Info) *Metrics {
 		webhooks:            register(reg, prometheus.NewCounterVec(counterOpts(defWebhooks), defWebhooks.labels)),
 		auditEvents:         register(reg, prometheus.NewCounterVec(counterOpts(defAuditEvents), defAuditEvents.labels)),
 		dbWriteFailures:     register(reg, prometheus.NewCounterVec(counterOpts(defDBWriteFailures), defDBWriteFailures.labels)),
+		settingsReloads:     register(reg, prometheus.NewCounterVec(counterOpts(defSettingsReloads), defSettingsReloads.labels)),
 	}
 	build := register(reg, prometheus.NewGaugeVec(gaugeOpts(defBuildInfo), defBuildInfo.labels))
 	build.WithLabelValues(info.Version, info.Commit, info.GoVersion).Set(1)
@@ -259,6 +274,9 @@ func New(info version.Info) *Metrics {
 	for _, op := range WriteOps {
 		m.dbWriteFailures.WithLabelValues(op)
 	}
+	for _, o := range ReloadOutcomes {
+		m.settingsReloads.WithLabelValues(o)
+	}
 	return m
 }
 
@@ -271,6 +289,10 @@ func auditActions() []string {
 	}
 	return as
 }
+
+// SettingsReload counts a reload of the runtime settings, with one of
+// ReloadOutcomes.
+func (m *Metrics) SettingsReload(outcome string) { m.settingsReloads.WithLabelValues(outcome).Inc() }
 
 // DBWriteFailure counts a write to the database that failed, with one of
 // WriteOps.

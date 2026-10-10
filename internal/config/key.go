@@ -36,6 +36,11 @@ type Key struct {
 	// Secret marks a key whose value is redacted everywhere, and which can
 	// also be read from a file.
 	Secret bool
+	// Runtime marks a runtime key, which `nbpdns serve` applies while it
+	// runs, and `nbpdns settings` can store in the database (ADR-0040).
+	// Every other key is a bootstrap key, which only the file, the
+	// environment and the flags set.
+	Runtime bool
 
 	typ      string              // the kind of value, for the reference
 	flagType string              // the kind of value, for --help

@@ -173,12 +173,13 @@ func (s *Service) Status() Status {
 	defer s.mu.Unlock()
 	st := s.st
 	now := s.o.now()
+	t := s.Timing()
 	alive, _ := s.alive(st.lastStart)
 	out := Status{
 		Version: s.o.Version.Version, Revision: s.o.Version.Commit, Started: s.started.UTC(),
 		UptimeSeconds: now.Sub(s.started).Seconds(), Ready: st.ready, Live: alive,
 		Schedule: Schedule{
-			IntervalSeconds: s.o.Interval.Seconds(), TimeoutSeconds: s.o.Timeout.Seconds(),
+			IntervalSeconds: t.Interval.Seconds(), TimeoutSeconds: t.Timeout.Seconds(),
 			Refreshes: Refreshes{
 				Complete: st.refreshes[metrics.OutcomeComplete], Incomplete: st.refreshes[metrics.OutcomeIncomplete],
 				Failed: st.refreshes[metrics.OutcomeFailed],
@@ -221,13 +222,14 @@ func (s *Service) Status() Status {
 // webhooks returns the webhooks' state. It's called with s.mu held.
 func (s *Service) webhooks() Webhooks {
 	st := &s.st
-	w := Webhooks{Enabled: s.o.Webhooks, DelaySeconds: s.o.WebhookDelay.Seconds(), Pending: Pending{Zones: []string{}}}
+	delay := s.Timing().WebhookDelay
+	w := Webhooks{Enabled: s.o.Webhooks, DelaySeconds: delay.Seconds(), Pending: Pending{Zones: []string{}}}
 	if e := st.lastEvent; e != nil {
 		copied := *e
 		w.LastEvent = &copied
 	}
 	if p := &st.pending; p.events > 0 {
-		w.Pending = Pending{Events: p.events, Zones: p.names(), Full: p.full, Due: utc(p.due(s.o.WebhookDelay, s.o.maxWait))}
+		w.Pending = Pending{Events: p.events, Zones: p.names(), Full: p.full, Due: utc(p.due(delay, s.o.maxWait))}
 	}
 	if r := st.lastWebhookRefresh; r != nil {
 		// A kept refresh is never changed, only replaced.

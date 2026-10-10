@@ -187,3 +187,27 @@ func metricsText(t *testing.T, s *Service) string {
 	s.Handler().ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/metrics", http.NoBody))
 	return rec.Body.String()
 }
+
+// TestSetTiming shortens the interval of a running service, which then
+// refreshes on the new schedule, without waiting out the old one.
+func TestSetTiming(t *testing.T) {
+	refreshed := make(chan struct{}, 10)
+	s, _, _ := testService(t, Options{Interval: time.Hour, Refresh: func(context.Context, []drift.ZoneRef) (drift.Report, error) {
+		refreshed <- struct{}{}
+		return report(), nil
+	}})
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	go s.Run(ctx)
+	<-refreshed
+	s.SetTiming(Timing{Interval: 50 * time.Millisecond, Timeout: time.Second, WebhookDelay: 200 * time.Millisecond})
+	select {
+	case <-refreshed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("no refresh after the interval was shortened from an hour")
+	}
+	status := s.Status()
+	if status.Schedule.IntervalSeconds != 0.05 || status.Schedule.TimeoutSeconds != 1 || status.Webhooks.DelaySeconds != 0.2 {
+		t.Errorf("schedule %+v, webhooks' delay %v, want the new timing", status.Schedule, status.Webhooks.DelaySeconds)
+	}
+}

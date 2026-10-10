@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -62,35 +63,33 @@ func newServeCmd(a *app) *cobra.Command {
 				return err
 			}
 			s.metrics = metrics.New(version.Get())
-			st, closeStore, err := s.openServeStore(ctx)
+			st, settingsVersion, closeStore, err := s.openServeStore(ctx)
 			if err != nil {
 				return err
 			}
 			defer func() { closeStore(err) }()
-			nb, err := s.netbox(ctx)
+			c, err := s.newClients(ctx, groups)
 			if err != nil {
 				return err
 			}
-			defer nb.Close()
-			clients := s.groupClients(ctx, groups)
-			defer closeClients(clients)
-			for _, c := range clients {
-				if c.err != nil {
-					s.log.WarnContext(ctx, "a server group has no client; each refresh tries again, and reports it failed until one works",
-						"group", c.cfg.Name, "err", c.err)
-				}
-			}
-			nbc := &netboxConn{c: nb}
+			defer c.close()
+			// live is the configuration as the settings change it: serve's
+			// background loops read it, and each refresh applies it.
+			var live atomic.Pointer[config.Config]
+			live.Store(s.cfg)
 			primaries := make([]service.Group, len(groups))
 			for i, g := range groups {
 				primaries[i] = service.Group{Name: g.Name, URL: g.Primary.URL, Views: g.Views, DriftPolicy: g.DriftPolicy}
 			}
 			svc := service.New(service.Options{
 				Refresh: func(ctx context.Context, zones []drift.ZoneRef) (drift.Report, error) {
-					s.retryClients(ctx, clients)
+					// Refreshes never overlap, so this is the one place that
+					// changes the session's configuration and clients.
+					c.reconfigure(ctx, live.Load())
+					s.retryClients(ctx, c.groups)
 					// The API serves NetBox's records too (ADR-0033), and a
 					// webhook's refresh compares only its zones (ADR-0036).
-					return s.compare(ctx, nbc, clients, drift.Options{ReadNetBox: true, Zones: zones})
+					return s.compare(ctx, c.netbox, c.groups, drift.Options{ReadNetBox: true, Zones: zones})
 				},
 				Interval:     s.cfg.Drift.Interval,
 				Timeout:      s.cfg.Drift.Timeout,
@@ -109,9 +108,10 @@ func newServeCmd(a *app) *cobra.Command {
 			// The last reports are served at once (ADR-0042), and the first
 			// refresh starts as serve listens.
 			svc.Restore(ctx)
-			pruneCtx, stopPrune := context.WithCancel(ctx)
-			defer stopPrune()
-			go s.prune(pruneCtx, st)
+			bgCtx, stopBackground := context.WithCancel(ctx)
+			defer stopBackground()
+			go s.prune(bgCtx, st, &live)
+			go s.watchSettings(bgCtx, st, settingsVersion, svc, &live)
 			return serve(ctx, s, svc, st)
 		})
 	}
@@ -127,21 +127,21 @@ const pruneInterval = 24 * time.Hour
 // in the audit trail (ADR-0039). Its close function records serve's stop,
 // with err, the error it stopped with, if any, then closes the database and
 // releases the lock.
-func (s *session) openServeStore(ctx context.Context) (*store.Store, func(err error), error) {
+func (s *session) openServeStore(ctx context.Context) (*store.Store, int64, func(err error), error) {
 	// The lock comes first, so that a second serve changes nothing.
 	lock, err := store.Acquire(s.cfg.Database.SQLitePath())
 	if err != nil {
-		return nil, nil, err
+		return nil, 0, nil, err
 	}
 	st, err := s.openStore(ctx, true)
 	if err != nil {
 		_ = lock.Close()
-		return nil, nil, err
+		return nil, 0, nil, err
 	}
-	fail := func(err error) (*store.Store, func(error), error) {
+	fail := func(err error) (*store.Store, int64, func(error), error) {
 		_ = st.Close()
 		_ = lock.Close()
-		return nil, nil, err
+		return nil, 0, nil, err
 	}
 	if _, err := s.migrate(ctx, st); err != nil {
 		return fail(err)
@@ -151,6 +151,12 @@ func (s *session) openServeStore(ctx context.Context) (*store.Store, func(err er
 		return fail(err)
 	}
 	s.log.InfoContext(ctx, "opened the database", "path", st.Path(), "database_id", info.ID)
+	// The runtime settings that the database stores (ADR-0040), which the
+	// configuration's fingerprint covers.
+	settingsVersion, err := s.applyStored(ctx, st)
+	if err != nil {
+		return fail(err)
+	}
 	host, _ := os.Hostname()
 	target := audit.Target{Type: "service", ID: host}
 	after, err := audit.Value(map[string]string{"version": version.Get().Version, "config_fingerprint": s.configFingerprint()})
@@ -163,7 +169,7 @@ func (s *session) openServeStore(ctx context.Context) (*store.Store, func(err er
 	}
 	s.metrics.AuditEvents([]audit.Event{e})
 	start := time.Now()
-	return st, func(serveErr error) {
+	return st, settingsVersion, func(serveErr error) {
 		// The signal that stopped serve canceled ctx, but its stop is still
 		// recorded.
 		sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownTimeout)
@@ -203,10 +209,11 @@ func (s *session) configFingerprint() string {
 }
 
 // prune deletes the audit events older than audit.retention_days, and the
-// drift history older than drift.history_retention_days, at once and then
-// daily, until ctx is done. Each prune is its own trace.
-func (s *session) prune(ctx context.Context, st *store.Store) {
+// drift history older than drift.history_retention_days, as live has them,
+// at once and then daily, until ctx is done. Each prune is its own trace.
+func (s *session) prune(ctx context.Context, st *store.Store, live *atomic.Pointer[config.Config]) {
 	for {
+		cfg := live.Load()
 		pctx, span := s.tracer.Start(logging.WithRequestID(ctx, rand.Text()), "database prune", trace.WithNewRoot())
 		fail := func(err error) {
 			if ctx.Err() != nil {
@@ -216,7 +223,7 @@ func (s *session) prune(ctx context.Context, st *store.Store) {
 			s.metrics.DBWriteFailure(metrics.WritePrune)
 			s.log.ErrorContext(pctx, "couldn't prune the database; serve tries again in a day", "err", err)
 		}
-		days := s.cfg.Audit.RetentionDays
+		days := cfg.Audit.RetentionDays
 		n, events, err := st.PruneAudit(pctx, time.Now().AddDate(0, 0, -days), days)
 		switch {
 		case err != nil:
@@ -225,7 +232,7 @@ func (s *session) prune(ctx context.Context, st *store.Store) {
 			s.metrics.AuditEvents(events)
 			s.log.InfoContext(pctx, "pruned the audit trail", "deleted", n, "retention_days", days)
 		}
-		days = s.cfg.Drift.HistoryRetentionDays
+		days = cfg.Drift.HistoryRetentionDays
 		refreshes, rows, err := st.PruneDriftHistory(pctx, time.Now().AddDate(0, 0, -days))
 		switch {
 		case err != nil:

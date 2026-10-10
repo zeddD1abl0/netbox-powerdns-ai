@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.opentelemetry.io/otel/codes"
@@ -94,10 +95,23 @@ type OTLP struct {
 	Protocol string
 }
 
+// Timing is the refreshes' schedule, which can change while the service
+// runs (ADR-0040).
+type Timing struct {
+	// Interval is the time from one refresh's start to the next's.
+	Interval time.Duration
+	// Timeout bounds a refresh.
+	Timeout time.Duration
+	// WebhookDelay is how long the zones that NetBox's webhooks name wait
+	// for the webhooks to stop. Zero is 3 seconds.
+	WebhookDelay time.Duration
+}
+
 // A Service refreshes the drift report, and keeps what it found.
 type Service struct {
 	o       Options
 	started time.Time
+	timing  atomic.Pointer[Timing]
 	// views are the views that the groups serve.
 	views map[string]bool
 	// wake tells Run that a webhook has queued a refresh.
@@ -160,9 +174,6 @@ func New(o Options) *Service {
 	if o.now == nil {
 		o.now = time.Now
 	}
-	if o.WebhookDelay == 0 {
-		o.WebhookDelay = 3 * time.Second
-	}
 	if o.maxWait == 0 {
 		o.maxWait = maxWait
 	}
@@ -172,8 +183,37 @@ func New(o Options) *Service {
 			views[v] = true
 		}
 	}
-	return &Service{o: o, started: o.now(), views: views, wake: make(chan struct{}, 1),
+	s := &Service{o: o, started: o.now(), views: views, wake: make(chan struct{}, 1),
 		st: state{refreshes: map[string]int{}, groups: map[string]*groupState{}}}
+	s.storeTiming(Timing{Interval: o.Interval, Timeout: o.Timeout, WebhookDelay: o.WebhookDelay})
+	return s
+}
+
+// Timing returns the refreshes' schedule.
+func (s *Service) Timing() Timing { return *s.timing.Load() }
+
+// SetTiming changes the refreshes' schedule: the next refresh starts an
+// interval after the last one started, and a refresh that starts from now
+// is bounded by the timeout, and webhooks' zones wait for the delay.
+func (s *Service) SetTiming(t Timing) {
+	s.storeTiming(t)
+	s.mu.Lock()
+	if st := &s.st; !st.next.IsZero() && !st.lastStart.After(st.lastEnd) {
+		st.next = maxTime(st.lastStart.Add(t.Interval), s.o.now())
+	}
+	s.mu.Unlock()
+	// Run waits until the next refresh; it works the time out again.
+	select {
+	case s.wake <- struct{}{}:
+	default:
+	}
+}
+
+func (s *Service) storeTiming(t Timing) {
+	if t.WebhookDelay == 0 {
+		t.WebhookDelay = 3 * time.Second
+	}
+	s.timing.Store(&t)
 }
 
 // Run refreshes at once, then every interval, from one refresh's start to
@@ -181,7 +221,15 @@ func New(o Options) *Service {
 // NetBox's webhooks name, once they're due (ADR-0036). Refreshes never
 // overlap: one that takes longer than the interval delays the next.
 func (s *Service) Run(ctx context.Context) {
-	next := s.o.now()
+	// last is the last full refresh's start, and the next one starts an
+	// interval after it, whatever the interval is by then.
+	var last time.Time
+	next := func() time.Time {
+		if last.IsZero() {
+			return time.Time{}
+		}
+		return last.Add(s.Timing().Interval)
+	}
 	for {
 		b, full := s.wait(ctx, next)
 		if ctx.Err() != nil {
@@ -196,29 +244,33 @@ func (s *Service) Run(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		next = start.Add(s.o.Interval)
-		if now := s.o.now(); now.After(next) {
+		last = start
+		n := next()
+		if now := s.o.now(); now.After(n) {
 			s.o.Log.WarnContext(ctx, "the drift refresh took longer than drift.interval, so the next one starts now",
-				"duration_seconds", now.Sub(start).Seconds(), "interval_seconds", s.o.Interval.Seconds())
-			next = now
+				"duration_seconds", now.Sub(start).Seconds(), "interval_seconds", s.Timing().Interval.Seconds())
+			n = now
 		}
 		s.mu.Lock()
-		s.st.next = next
+		s.st.next = n
 		s.mu.Unlock()
 	}
 }
 
-// wait waits until next, when the scheduled refresh is due, or until what
-// webhooks queued is due, whichever is sooner, and takes what's queued.
-// full reports whether a full refresh is due: the scheduled one, which
-// covers every zone queued, or one that a webhook asked for.
-func (s *Service) wait(ctx context.Context, next time.Time) (b batch, full bool) {
+// wait waits until next(), when the scheduled refresh is due, which is now
+// if it's zero, or until what webhooks queued is due, whichever is sooner,
+// and takes what's queued. full reports whether a full refresh is due: the
+// scheduled one, which covers every zone queued, or one that a webhook
+// asked for. A wake, from a webhook or a change of timing, works the time
+// out again.
+func (s *Service) wait(ctx context.Context, nextFn func() time.Time) (b batch, full bool) {
 	for {
 		now := s.o.now()
+		next := nextFn()
 		until := next
 		s.mu.Lock()
 		if p := &s.st.pending; p.events > 0 {
-			until = minTime(until, p.due(s.o.WebhookDelay, s.o.maxWait))
+			until = minTime(until, p.due(s.Timing().WebhookDelay, s.o.maxWait))
 		}
 		s.mu.Unlock()
 		if !until.After(now) {
@@ -257,7 +309,8 @@ func (s *Service) refresh(ctx context.Context, start time.Time, b batch) {
 	if b.full {
 		log.InfoContext(rctx, "refreshing every zone, as NetBox's webhooks asked", "reason", b.reason, "events", b.events)
 	}
-	rctx, cancel := context.WithTimeout(rctx, s.o.Timeout)
+	timeout := s.Timing().Timeout
+	rctx, cancel := context.WithTimeout(rctx, timeout)
 	defer cancel()
 	r, err := s.o.Refresh(rctx, nil)
 	if ctx.Err() != nil {
@@ -266,7 +319,7 @@ func (s *Service) refresh(ctx context.Context, start time.Time, b batch) {
 	// A refresh stopped by its timeout says nothing about NetBox or the
 	// primaries, though the reads it stopped failed.
 	if errors.Is(rctx.Err(), context.DeadlineExceeded) && (err != nil || !r.Complete) {
-		err = &TimeoutError{Timeout: s.o.Timeout}
+		err = &TimeoutError{Timeout: timeout}
 	}
 	if err != nil {
 		span.RecordError(err)
@@ -561,7 +614,8 @@ func (s *Service) alive(last time.Time) (bool, time.Time) {
 	if last.Before(s.started) {
 		last = s.started
 	}
-	return s.o.now().Sub(last) <= s.o.Interval+s.o.Timeout+time.Minute, last
+	t := s.Timing()
+	return s.o.now().Sub(last) <= t.Interval+t.Timeout+time.Minute, last
 }
 
 // readyz answers 200 once the first refresh has finished, whatever its

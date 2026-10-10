@@ -124,6 +124,13 @@ func minTime(a, b time.Time) time.Time {
 	return a
 }
 
+func maxTime(a, b time.Time) time.Time {
+	if b.After(a) {
+		return b
+	}
+	return a
+}
+
 // refs returns b's zones, sorted by view and name.
 func (b *batch) refs() []drift.ZoneRef {
 	return slices.SortedFunc(maps.Keys(b.zones), func(x, y drift.ZoneRef) int {
@@ -252,7 +259,8 @@ func (s *Service) refreshZones(ctx context.Context, start time.Time, b batch) {
 	rctx, span := s.o.Tracer.Start(rctx, "drift zone refresh", trace.WithNewRoot(),
 		trace.WithLinks(b.links...), trace.WithAttributes(b.attributes()...))
 	defer span.End()
-	rctx, cancel := context.WithTimeout(rctx, s.o.Timeout)
+	timeout := s.Timing().Timeout
+	rctx, cancel := context.WithTimeout(rctx, timeout)
 	defer cancel()
 	log.InfoContext(rctx, "refreshing the zones that NetBox's webhooks named", "zones", b.names(),
 		"events", b.events, "netbox_users", b.users())
@@ -261,7 +269,7 @@ func (s *Service) refreshZones(ctx context.Context, start time.Time, b batch) {
 		return
 	}
 	if errors.Is(rctx.Err(), context.DeadlineExceeded) && (err != nil || !r.Complete) {
-		err = &TimeoutError{Timeout: s.o.Timeout}
+		err = &TimeoutError{Timeout: timeout}
 	}
 	if err != nil {
 		span.RecordError(err)

@@ -41,13 +41,19 @@ func load(t *testing.T, fileYAML string, env map[string]string, args ...string) 
 		}
 		args = append(args, "--config", path)
 	}
+	return loader(t, args...).Load()
+}
+
+// loader returns a Loader whose flags are parsed from args.
+func loader(t *testing.T, args ...string) *Loader {
+	t.Helper()
 	l := NewLoader()
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	l.AddFlags(fs)
 	if err := fs.Parse(args); err != nil {
 		t.Fatal(err)
 	}
-	return l.Load()
+	return l
 }
 
 // secretFile writes content to a new file and returns its path.

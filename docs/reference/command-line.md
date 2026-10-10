@@ -173,7 +173,9 @@ Subcommands: [`show`](#nbpdns-config-show).
 ### `nbpdns config show`
 
 Show each configuration key's effective value, and the flag, environment
-variable, config file, or default it came from. Secrets show as [redacted].
+variable, config file, database, or default it came from. Secrets show as
+[redacted]. The database, at database.url, counts if it exists: it stores the
+runtime settings that nbpdns settings set, which nbpdns serve applies.
 
 If any setting is invalid, nbpdns lists every problem and exits with status 1.
 
@@ -441,6 +443,76 @@ reads, and changes nothing. It stops on SIGINT or SIGTERM, and exits 0.
 ```text
 nbpdns serve
 ```
+
+### `nbpdns settings`
+
+Show and change the runtime settings, such as drift.interval, that the database
+at database.url stores, and that nbpdns serve applies within seconds, without a
+restart (ADR-0040). Each change is an audit event, with the operating system's
+user as its actor. A runtime key that a flag, the environment, or the config
+file sets is pinned: that value wins, and the stored one isn't used until it's
+unset there. Bootstrap keys, such as database.url, aren't settings.
+
+```text
+nbpdns settings [command]
+```
+
+Subcommands: [`get`](#nbpdns-settings-get), [`list`](#nbpdns-settings-list), [`set`](#nbpdns-settings-set), and [`unset`](#nbpdns-settings-unset).
+
+### `nbpdns settings get`
+
+Print a runtime key's effective value, from whichever source sets it, alone
+on a line. The JSON output adds its source, and its stored value.
+
+```text
+nbpdns settings get KEY [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `-o`, `--output` | `format` | `table` | The output format: `table` or `json`. |
+
+### `nbpdns settings list`
+
+List each runtime key's effective value, and where it comes from, with the
+value that the database stores for it, if any. A stored value that a flag, the
+environment or the config file overrides is marked pinned.
+
+```text
+nbpdns settings list [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `-o`, `--output` | `format` | `table` | The output format: `table` or `json`. |
+
+### `nbpdns settings set`
+
+Store a runtime key's value in the database, after checking it as the config
+file's would be. A running nbpdns serve applies it within seconds, unless the
+key is pinned. The change is an audit event, with --reason, if given.
+
+```text
+nbpdns settings set KEY VALUE [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--reason` | `string` | none | Why, for the change's audit event. |
+
+### `nbpdns settings unset`
+
+Remove a runtime key's stored value from the database, so that the key takes
+its default, unless it's pinned. A running nbpdns serve applies it within
+seconds. The change is an audit event, with --reason, if given.
+
+```text
+nbpdns settings unset KEY [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--reason` | `string` | none | Why, for the change's audit event. |
 
 ### `nbpdns version`
 

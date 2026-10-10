@@ -17,11 +17,17 @@ import (
 // New returns a logger that writes format ("json" or "text") to w, from
 // level ("debug", "info", "warn" or "error") up.
 func New(w io.Writer, format, level string) (*slog.Logger, error) {
-	var lv slog.Level
+	lv := &slog.LevelVar{}
 	if err := lv.UnmarshalText([]byte(level)); err != nil {
 		return nil, fmt.Errorf("log level %q: %w", level, err)
 	}
-	opts := &slog.HandlerOptions{Level: lv}
+	return NewLeveled(w, format, lv)
+}
+
+// NewLeveled is New, from the level that level holds, which can change while
+// the logger is in use, as `nbpdns serve` changes it when log.level does.
+func NewLeveled(w io.Writer, format string, level slog.Leveler) (*slog.Logger, error) {
+	opts := &slog.HandlerOptions{Level: level}
 	var h slog.Handler
 	switch format {
 	case "json":

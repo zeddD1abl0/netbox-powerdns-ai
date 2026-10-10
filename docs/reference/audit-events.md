@@ -39,6 +39,8 @@ inserted. `nbpdns audit list` reads the trail.
 | [`service.stopped`](#servicestopped) | `service` | `system` | `nbpdns serve` stopped, on SIGINT or SIGTERM, or because it failed after it started, such as when it couldn't listen. A serve that's killed, or crashes, records nothing. |
 | [`audit.pruned`](#auditpruned) | `audit` | `system` | `nbpdns serve` deleted the events older than `audit.retention_days`, as it does daily. |
 | [`zone.drift_changed`](#zonedrift_changed) | `zone` | `system` | A refresh of `nbpdns serve` found a zone in another drift state than its last, a new zone that drifted, or that a zone left its group's report. A zone whose changes differ, in the same state, has a new row in its drift history, but no event. |
+| [`setting.set`](#settingset) | `setting` | `os-user:<name>` | `nbpdns settings set` stored a runtime setting's value in the database, which `nbpdns serve` applies within seconds, unless the key is pinned. |
+| [`setting.unset`](#settingunset) | `setting` | `os-user:<name>` | `nbpdns settings unset` removed a runtime setting's stored value, so that the key takes its default, unless it's pinned. |
 
 ### `service.started`
 
@@ -75,3 +77,21 @@ A refresh of `nbpdns serve` found a zone in another drift state than its last, a
 - **Actor:** `system`
 - **Before:** `state`, the zone's last state, unless it's new.
 - **After:** `state`, its state now, which is `removed` if it left the report; `changes`, how many of its RRsets differ; and `policy`, its drift policy.
+
+### `setting.set`
+
+`nbpdns settings set` stored a runtime setting's value in the database, which `nbpdns serve` applies within seconds, unless the key is pinned.
+
+- **Target:** type `setting`, named by its key, such as `drift.interval`
+- **Actor:** `os-user:<name>`
+- **Before:** `value`, the stored value before, if there was one; `[redacted]` for a secret.
+- **After:** `value`, the value stored; `[redacted]` for a secret.
+
+### `setting.unset`
+
+`nbpdns settings unset` removed a runtime setting's stored value, so that the key takes its default, unless it's pinned.
+
+- **Target:** type `setting`, named by its key
+- **Actor:** `os-user:<name>`
+- **Before:** `value`, the stored value; `[redacted]` for a secret.
+- **After:** nothing.

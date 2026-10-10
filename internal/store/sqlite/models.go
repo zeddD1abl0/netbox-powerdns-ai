@@ -87,3 +87,10 @@ type Sequence struct {
 	Name  string
 	Value int64
 }
+
+type Setting struct {
+	Key       string
+	Value     string
+	UpdatedAt string
+	UpdatedBy string
+}
