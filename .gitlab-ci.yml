@@ -27,8 +27,17 @@ workflow:
   variables:
     GOTOOLCHAIN: local
 
+# The jobs that need the most memory: compiling every package, with the race
+# detector or for the linter, the lab, and the release's builds. They share
+# one resource group, so only one of them runs at a time across all of the
+# project's pipelines: a tag pushed on a merge commit starts a second
+# pipeline beside main's, and the runner killed main's unit-test while both
+# ran (ITEM-0100). Within a pipeline, they're in different stages anyway.
+.heavy:
+  resource_group: runner-memory
+
 go-lint:
-  extends: .go
+  extends: [.go, .heavy]
   stage: lint
   script:
     - make vet lint generate-check
@@ -52,7 +61,7 @@ project-lint:
     - make project-lint
 
 unit-test:
-  extends: .go
+  extends: [.go, .heavy]
   stage: test
   script:
     - make test
@@ -66,7 +75,7 @@ unit-test:
 # never share the runner's memory: run together, the runner killed it
 # (ITEM-0075).
 integration-test:
-  extends: .go
+  extends: [.go, .heavy]
   stage: test
   needs: [unit-test]
   services:
@@ -89,7 +98,7 @@ build:
 # and tests it (ADR-0030). Its image goes into a Docker-in-Docker service,
 # without the lab, so it needs a fraction of the integration job's memory.
 release-check:
-  extends: .go
+  extends: [.go, .heavy]
   stage: build
   services:
     - name: docker:29.8.1-dind@sha256:3f3c01aaaebf7cce837356b688b7c059a4749f10bd7660dec7c58fc454a283f0
