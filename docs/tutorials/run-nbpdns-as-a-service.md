@@ -107,11 +107,15 @@ explains what nbpdns compares. You don't need to do it first.
            api_key_file: pdns-lab.key
    server:
      listen: 127.0.0.1:8080
+   database:
+     url: sqlite:nbpdns.db
    drift:
      interval: 10s
    ```
 
    `server.listen` is where the service answers, here on this host only.
+   `database.url` is where it keeps its state: here `nbpdns.db`, in this
+   directory.
    `drift.interval` is how often it refreshes the drift report: here every
    10 seconds, the shortest interval nbpdns allows, so that you don't wait.
    The default is 5 minutes.
@@ -124,14 +128,17 @@ explains what nbpdns compares. You don't need to do it first.
    ```
 
    ```text
+   time=2026-10-07T11:49:23.391+10:00 level=INFO msg="applied a database migration" version=1 name=database duration_seconds=0.004 trace_id=73f9… span_id=c713… request_id=Q4A7…
+   time=2026-10-07T11:49:23.392+10:00 level=INFO msg="opened the database" path=/home/you/netbox-powerdns-ai/nbpdns.db database_id=6PZQ… trace_id=73f9… span_id=c713… request_id=Q4A7…
    time=2026-10-07T11:49:23.417+10:00 level=WARN msg="the NetBox URL uses http://, so the token crosses the network unencrypted; use https:// if NetBox offers it" url=http://localhost:8047/ trace_id=73f9… span_id=c713… request_id=Q4A7…
    time=2026-10-07T11:49:23.417+10:00 level=WARN msg="a PowerDNS API URL uses http://, so its API key, which can change every zone, crosses the network unencrypted; put the API behind TLS" group=lab-a url=http://localhost:8151/ trace_id=73f9… span_id=c713… request_id=Q4A7…
    time=2026-10-07T11:49:23.417+10:00 level=INFO msg=serving address=127.0.0.1:8080 interval_seconds=10 groups=1 trace_id=73f9… span_id=c713… request_id=Q4A7…
    time=2026-10-07T11:49:23.543+10:00 level=INFO msg="drift refreshed" group=lab-a in_sync=1 drift=0 missing=0 inactive_in_netbox=0 ignored=0 unmanaged=0 trace_id=5d68… span_id=839b… request_id=7SMH…
    ```
 
-   The lab has no TLS, so nbpdns warns that the token and the API key cross
-   the network unencrypted. Then it starts serving, and refreshes at once:
+   nbpdns creates its database, and applies its migrations. The lab has no
+   TLS, so nbpdns warns that the token and the API key cross the network
+   unencrypted. Then it starts serving, and refreshes at once:
    lab-a has one zone, in sync. A new `drift refreshed` line follows every
    10 seconds. Each refresh has its own `trace_id` and `request_id`.
 
@@ -316,7 +323,7 @@ Remove the lab, with its data, and the files you made:
 
 ```shell
 make lab-down
-rm nbpdns.yaml pdns-lab.key
+rm nbpdns.yaml pdns-lab.key nbpdns.db*
 ```
 
 ## Next steps

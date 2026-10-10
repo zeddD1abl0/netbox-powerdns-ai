@@ -10,6 +10,7 @@ import (
 // Config is nbpdns's configuration, with the defaults, the config file, the
 // environment and the flags applied.
 type Config struct {
+	Database DatabaseConfig
 	Log      LogConfig
 	NetBox   NetBoxConfig
 	PowerDNS PowerDNSConfig
@@ -30,6 +31,19 @@ type DriftConfig struct {
 	// WebhookDelay is how long `nbpdns serve` waits for NetBox's webhooks
 	// to stop before it refreshes the zones they named (ADR-0036).
 	WebhookDelay time.Duration
+}
+
+// DatabaseConfig says where `nbpdns serve` keeps its state (ADR-0038).
+type DatabaseConfig struct {
+	// URL is the database's location, such as
+	// sqlite:///var/lib/nbpdns/nbpdns.db.
+	URL string
+}
+
+// SQLitePath returns the file that URL names. The loader has checked URL.
+func (c DatabaseConfig) SQLitePath() string {
+	p, _ := sqlitePath(c.URL)
+	return p
 }
 
 // ServerConfig configures the listener of `nbpdns serve`.
@@ -104,6 +118,16 @@ const minWebhookSecret = 16
 // name.
 func keys(c *Config) []Key {
 	ks := []Key{
+		stringKey(&c.Database.URL, "a `sqlite:` URL", "url", Key{
+			Name:    "database.url",
+			Summary: "Where `nbpdns serve` keeps its state, such as `sqlite:///var/lib/nbpdns/nbpdns.db`.",
+			Details: "`sqlite:///` and an absolute path, with three slashes, or `sqlite:` and a path relative to the working directory. " +
+				"Its directory must exist, and nbpdns's user must be able to write to it: in the image, mount a volume at `/var/lib/nbpdns`, " +
+				"writable by user 65532. nbpdns creates the file, readable only by its owner, and a lock file beside it, " +
+				"named for it with `.lock` added, which stops a second `nbpdns serve` from using the same database. " +
+				"Commands that only read NetBox or PowerDNS, such as `nbpdns drift`, don't use it.",
+			Default: "sqlite:///var/lib/nbpdns/nbpdns.db",
+		}, checkDatabaseURL),
 		enumKey(&c.Log.Level, Key{
 			Name:    "log.level",
 			Summary: "The lowest level of log message to write.",

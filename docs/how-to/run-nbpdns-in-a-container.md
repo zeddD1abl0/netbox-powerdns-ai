@@ -6,8 +6,9 @@ weight: 38
 # Run nbpdns in a container
 
 This guide runs `nbpdns serve` from its image: first with Docker, then in
-Kubernetes. Each mounts the config file and the secrets read-only, runs the
-container with a read-only root file system, and checks its health.
+Kubernetes. Each mounts the config file and the secrets read-only, and a
+volume for the database, runs the container with a read-only root file
+system, and checks its health.
 
 ## Before you start
 
@@ -28,7 +29,13 @@ You need:
 
 - It runs `nbpdns` as user and group 65532, and has no shell. Give it a
   command, such as `serve`. Without one, it prints its help.
-- nbpdns writes no files, so the root file system can be read-only.
+- `serve` keeps its state in a database, at `/var/lib/nbpdns/nbpdns.db` by
+  default (`database.url`), and writes nothing else, so the root file
+  system can be read-only. The image has no `/var/lib/nbpdns`: mount a
+  volume there, writable by user 65532. `serve` creates the database, and
+  applies its migrations, when it starts.
+- Only one `serve` may use a database at a time. A second one refuses to
+  start, and names the first one's host and PID.
 - It logs JSON to standard error.
 - It trusts the CA certificates in the image, Debian's, and any `ca_file`
   you mount.
@@ -68,7 +75,14 @@ lists the image's settings.
    sudo chmod 0400 /etc/nbpdns/secrets/*
    ```
 
-3. Start the container:
+3. Make a directory for the database, owned by user 65532, and readable by
+   nobody else:
+
+   ```shell
+   sudo install -d -m 0700 -o 65532 -g 65532 /var/lib/nbpdns
+   ```
+
+4. Start the container:
 
    ```shell
    docker run --detach --name nbpdns --restart unless-stopped \
@@ -76,11 +90,12 @@ lists the image's settings.
      --publish 8080:8080 \
      --volume /etc/nbpdns/nbpdns.yaml:/etc/nbpdns/nbpdns.yaml:ro \
      --volume /etc/nbpdns/secrets:/run/secrets:ro \
+     --volume /var/lib/nbpdns:/var/lib/nbpdns \
      --env NBPDNS_CONFIG=/etc/nbpdns/nbpdns.yaml \
      registry.example.com/group/netbox-powerdns-ai:0.1.0 serve
    ```
 
-4. Wait for the first refresh, then check that it's ready:
+5. Wait for the first refresh, then check that it's ready:
 
    ```shell
    curl http://localhost:8080/readyz
@@ -98,8 +113,8 @@ lists the image's settings.
 
 ## Run it in Kubernetes
 
-1. Save the secrets, the config, and the deployment as `nbpdns.yaml`, with
-   your own values:
+1. Save the secrets, the config, the database's volume, and the
+   deployment as `nbpdns.yaml`, with your own values:
 
    ```yaml
    apiVersion: v1
@@ -127,12 +142,24 @@ lists the image's settings.
                url: https://pdns-a.example.com:8443
                api_key_file: /run/secrets/nbpdns/pdns-site-a
    ---
+   apiVersion: v1
+   kind: PersistentVolumeClaim
+   metadata:
+     name: nbpdns-data
+   spec:
+     accessModes: [ReadWriteOnce]
+     resources:
+       requests:
+         storage: 1Gi
+   ---
    apiVersion: apps/v1
    kind: Deployment
    metadata:
      name: nbpdns
    spec:
      replicas: 1
+     strategy:
+       type: Recreate
      selector:
        matchLabels:
          app.kubernetes.io/name: nbpdns
@@ -182,6 +209,8 @@ lists the image's settings.
                - name: secrets
                  mountPath: /run/secrets/nbpdns
                  readOnly: true
+               - name: data
+                 mountPath: /var/lib/nbpdns
          volumes:
            - name: config
              configMap:
@@ -190,10 +219,18 @@ lists the image's settings.
              secret:
                secretName: nbpdns
                defaultMode: 0440
+           - name: data
+             persistentVolumeClaim:
+               claimName: nbpdns-data
    ```
 
-   - **One replica:** until M09, instances of nbpdns don't share their
-     work, so each would read NetBox and every primary.
+   - **One replica, recreated:** only one `serve` may use the database, so
+     an update stops the old pod before it starts the new one. A rolling
+     update would wait forever for a new pod that can't start while the old
+     one holds the database. M09 adds instances that share the work.
+   - **The database:** on the volume `nbpdns-data`, which `fsGroup` makes
+     writable by group 65532. Use storage on a local disk, not NFS, which
+     SQLite's locks don't trust.
    - **Readiness:** `/readyz` is ready once the first refresh has
      finished.
    - **Liveness:** `/livez` fails only when no refresh has started for

@@ -78,6 +78,7 @@ func TestLoadDefaults(t *testing.T) {
 		t.Fatalf("Load() error = %v", err)
 	}
 	want := Config{
+		Database: DatabaseConfig{URL: "sqlite:///var/lib/nbpdns/nbpdns.db"},
 		Log:      LogConfig{Level: "info", Format: "json"},
 		NetBox:   NetBoxConfig{Timeout: 30 * time.Second, PageSize: 500, Concurrency: 4},
 		PowerDNS: PowerDNSConfig{Timeout: 30 * time.Second, Concurrency: 4},
@@ -235,6 +236,14 @@ func TestLoadErrors(t *testing.T) {
 			[]string{"netbox.webhook_secret (from env NBPDNS_NETBOX_WEBHOOK_SECRET)", "at least 16 characters"}},
 		{"URL with a query", "", map[string]string{"NBPDNS_NETBOX_URL": "https://netbox.example.com/?x=1"}, nil,
 			[]string{"mustn't have a query"}},
+		{"a database URL with another scheme", "", map[string]string{"NBPDNS_DATABASE_URL": "postgres://db.example.com/nbpdns"}, nil,
+			[]string{"database.url (from env NBPDNS_DATABASE_URL)", "isn't a sqlite: URL"}},
+		{"a database URL with a host", "database:\n  url: sqlite://nbpdns.db\n", nil, nil,
+			[]string{"database.url (from file", "names a host; write sqlite:/// and an absolute path"}},
+		{"a database URL with a query", "", nil, []string{"--database-url", "sqlite:///x.db?mode=ro"},
+			[]string{"mustn't have credentials, a query or a fragment"}},
+		{"a database URL naming a directory", "", map[string]string{"NBPDNS_DATABASE_URL": "sqlite:///var/lib/nbpdns/"}, nil,
+			[]string{"doesn't name a file"}},
 		{"a mapping for a string", "netbox:\n  url:\n    host: x\n", nil, nil,
 			[]string{"netbox.url (from file", "want a string, not a mapping"}},
 		{
@@ -275,6 +284,24 @@ func TestLoadAcceptsGoodValues(t *testing.T) {
 		n.Timeout != 2*time.Minute || n.CAFile != "/etc/ssl/netbox.pem" || n.Concurrency != 32 ||
 		n.WebhookSecret.Reveal() != "0123456789abcdef" {
 		t.Errorf("Load() = %+v", *cfg)
+	}
+}
+
+// TestSQLitePath covers the files that sqlite: URLs name.
+func TestSQLitePath(t *testing.T) {
+	tests := []struct{ url, want string }{
+		{"sqlite:///var/lib/nbpdns/nbpdns.db", "/var/lib/nbpdns/nbpdns.db"},
+		{"SQLite:///var/lib/nbpdns/../nbpdns.db", "/var/lib/nbpdns.db"},
+		{"sqlite:nbpdns.db", "nbpdns.db"},
+		{"sqlite:data/nbpdns.db", "data/nbpdns.db"},
+		{"sqlite:///srv/my%20state/nbpdns.db", "/srv/my state/nbpdns.db"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.url, func(t *testing.T) {
+			if got := (DatabaseConfig{URL: tt.url}).SQLitePath(); got != tt.want {
+				t.Errorf("SQLitePath() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 

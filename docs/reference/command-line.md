@@ -27,6 +27,7 @@ in the [configuration reference](configuration.md).
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--config` | `string` | none | The YAML config file to read, instead of `$NBPDNS_CONFIG`. |
+| `--database-url` | `url` | `sqlite:///var/lib/nbpdns/nbpdns.db` | Where `nbpdns serve` keeps its state, such as `sqlite:///var/lib/nbpdns/nbpdns.db`. |
 | `--drift-group-concurrency` | `integer` | `4` | How many server groups are read and compared at once. |
 | `--drift-interval` | `duration` | `5m` | How often `nbpdns serve` refreshes the drift report, from the start of one refresh to the start of the next. |
 | `--drift-timeout` | `duration` | `10m` | How long one refresh of `nbpdns serve` may take before it's stopped. |
@@ -133,6 +134,42 @@ If any setting is invalid, nbpdns lists every problem and exits with status 1.
 
 ```text
 nbpdns config show [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `-o`, `--output` | `format` | `table` | The output format: `table` or `json`. |
+
+### `nbpdns db`
+
+Show and migrate the database at database.url, where nbpdns serve keeps its
+state. nbpdns serve creates it, and applies its migrations, when it starts.
+Migrations only move forward: take a copy of the database before an upgrade.
+
+```text
+nbpdns db [command]
+```
+
+Subcommands: [`migrate`](#nbpdns-db-migrate) and [`status`](#nbpdns-db-status).
+
+### `nbpdns db migrate`
+
+Create the database at database.url if it doesn't exist, and apply the
+migrations it lacks, each in its own transaction. It refuses while nbpdns
+serve runs on the database, since serve applies them itself when it starts,
+and on a database that a newer nbpdns has migrated.
+
+```text
+nbpdns db migrate
+```
+
+### `nbpdns db status`
+
+Show the database at database.url: its file, its identity, and each migration
+that this nbpdns knows, with when it was applied, or that it's pending.
+
+```text
+nbpdns db status [flags]
 ```
 
 | Flag | Type | Default | Description |
@@ -320,6 +357,9 @@ or NetBox, can't be read. Serve, at server.listen:
   /readyz   200 once the first refresh has finished
   /status   the service's state, as text, or as JSON with ?json=1
   /metrics  the drift, refresh and request metrics, for Prometheus
+
+It keeps its state in the database at database.url, which it creates, and
+migrates, when it starts. Only one serve may use a database at a time.
 
 With netbox.webhook_secret set, NetBox's signed webhooks at /api/netbox-events
 refresh the zones they name, once they stop coming for drift.webhook_delay.

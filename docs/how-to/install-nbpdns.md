@@ -79,6 +79,21 @@ For the image, you need Docker, Kubernetes, or another container runtime.
    platform     linux/amd64
    ```
 
+## Make the database's directory
+
+`nbpdns serve` keeps its state in a database, by default
+`/var/lib/nbpdns/nbpdns.db` (`database.url`). It creates the database, but
+not its directory. Make the directory, owned by the user that runs the
+service, such as `nbpdns`, and readable by nobody else:
+
+```shell
+sudo install -d -m 0700 -o nbpdns -g nbpdns /var/lib/nbpdns
+```
+
+A systemd unit's `StateDirectory=nbpdns` makes the same directory. The
+commands that only read NetBox or PowerDNS, such as `nbpdns drift`, don't
+use the database.
+
 ## Pull the image
 
 The image is in the project's container registry, under **Deploy >

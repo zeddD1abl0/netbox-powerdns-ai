@@ -16,6 +16,7 @@ import (
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/logging"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/metrics"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/service"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/store"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/version"
 )
 
@@ -34,6 +35,8 @@ func newServeCmd(a *app) *cobra.Command {
 			"  /readyz   200 once the first refresh has finished\n" +
 			"  /status   the service's state, as text, or as JSON with ?json=1\n" +
 			"  /metrics  the drift, refresh and request metrics, for Prometheus\n\n" +
+			"It keeps its state in the database at database.url, which it creates, and\n" +
+			"migrates, when it starts. Only one serve may use a database at a time.\n\n" +
 			"With netbox.webhook_secret set, NetBox's signed webhooks at /api/netbox-events\n" +
 			"refresh the zones they name, once they stop coming for drift.webhook_delay.\n\n" +
 			"Each refresh is its own trace, exported if otlp.endpoint is set. nbpdns only\n" +
@@ -46,6 +49,26 @@ func newServeCmd(a *app) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// One serve per database (ADR-0038): the lock comes first, so
+			// that a second serve changes nothing.
+			lock, err := store.Acquire(s.cfg.Database.SQLitePath())
+			if err != nil {
+				return err
+			}
+			defer lock.Close()
+			st, err := s.openStore(ctx, true)
+			if err != nil {
+				return err
+			}
+			defer st.Close()
+			if _, err := s.migrate(ctx, st); err != nil {
+				return err
+			}
+			info, err := st.Info(ctx)
+			if err != nil {
+				return err
+			}
+			s.log.InfoContext(ctx, "opened the database", "path", st.Path(), "database_id", info.ID)
 			s.metrics = metrics.New(version.Get())
 			nb, err := s.netbox(ctx)
 			if err != nil {

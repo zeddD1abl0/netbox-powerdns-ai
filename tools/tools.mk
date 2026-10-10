@@ -9,7 +9,8 @@
 #
 # `make tools-update` rewrites the _VERSION and _SHA256_ lines from each
 # tool's latest release (tools/update.sh); _CHECKSUMS names that release's
-# checksums file. MEMBER is the binary's path inside the .tar.gz asset, or -
+# checksums file, or is empty when the release publishes none, and the
+# hashes come from the SHA-256 digest GitHub records for each asset. MEMBER is the binary's path inside the .tar.gz asset, or -
 # when the asset is the binary itself.
 
 GOLANGCI_LINT_REPO                  := golangci/golangci-lint
@@ -79,6 +80,16 @@ GORELEASER_ASSET_linux-amd64        = goreleaser_Linux_x86_64.tar.gz
 GORELEASER_SHA256_linux-amd64       := 0a96edc9d9bc594e4a41cc4d59467c182062910ab24d9d1f6dd7b667d32606d3
 GORELEASER_MEMBER_linux-amd64       = goreleaser
 
+# sqlc generates the store's query code from its SQL (ADR-0038). It needs
+# CGO to build, so it's pinned as a release binary, which is static. Its
+# releases publish no checksums file.
+SQLC_REPO                           := sqlc-dev/sqlc
+SQLC_VERSION                        := 1.31.1
+SQLC_CHECKSUMS                      =
+SQLC_ASSET_linux-amd64              = sqlc_$(SQLC_VERSION)_linux_amd64.tar.gz
+SQLC_SHA256_linux-amd64             := 497ae4fcdfa64c5b0c311ffe4c2bd991e43991e82e5367792ed78bc2dca27354
+SQLC_MEMBER_linux-amd64             = sqlc
+
 # Tools pinned as release binaries, as <VARIABLE PREFIX>:<binary name>.
 BINARY_TOOLS := GOLANGCI_LINT:golangci-lint HUGO:hugo VALE:vale VACUUM:vacuum GITLEAKS:gitleaks HTMLTEST:htmltest JQ:jq \
-	DOCKER_COMPOSE:docker-compose GORELEASER:goreleaser
+	DOCKER_COMPOSE:docker-compose GORELEASER:goreleaser SQLC:sqlc

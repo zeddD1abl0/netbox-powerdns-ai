@@ -29,6 +29,7 @@ a secret's value.
 
 | Key | Type | Default |
 |---|---|---|
+| [`database.url`](#databaseurl) | a `sqlite:` URL | `sqlite:///var/lib/nbpdns/nbpdns.db` |
 | [`drift.group_concurrency`](#driftgroup_concurrency) | integer, 1 to 32 | `4` |
 | [`drift.interval`](#driftinterval) | duration, at least `10s` | `5m` |
 | [`drift.timeout`](#drifttimeout) | duration | `10m` |
@@ -52,6 +53,23 @@ a secret's value.
 | [`server.listen`](#serverlisten) | a TCP address | `:8080` |
 | [`server.public_url`](#serverpublic_url) | an `http` or `https` URL | none |
 | [`powerdns.groups`](#powerdnsgroups) | list of server groups, config file only | none |
+
+## `database.url`
+
+Where `nbpdns serve` keeps its state, such as
+`sqlite:///var/lib/nbpdns/nbpdns.db`. `sqlite:///` and an absolute path, with
+three slashes, or `sqlite:` and a path relative to the working directory. Its
+directory must exist, and nbpdns's user must be able to write to it: in the
+image, mount a volume at `/var/lib/nbpdns`, writable by user 65532. nbpdns
+creates the file, readable only by its owner, and a lock file beside it, named
+for it with `.lock` added, which stops a second `nbpdns serve` from using the
+same database. Commands that only read NetBox or PowerDNS, such as `nbpdns
+drift`, don't use it.
+
+- **Type:** a `sqlite:` URL
+- **Default:** `sqlite:///var/lib/nbpdns/nbpdns.db`
+- **Environment variable:** `NBPDNS_DATABASE_URL`
+- **Flag:** `--database-url`
 
 ## `drift.group_concurrency`
 
@@ -375,6 +393,8 @@ powerdns:
 Every key except the secrets, with its default:
 
 ```yaml
+database:
+  url: sqlite:///var/lib/nbpdns/nbpdns.db
 drift:
   group_concurrency: 4
   interval: 5m

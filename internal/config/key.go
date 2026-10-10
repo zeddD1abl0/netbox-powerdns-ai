@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -273,6 +274,39 @@ func checkURL(s string) error {
 		return fmt.Errorf("%s mustn't have a query or fragment", shown)
 	}
 	return nil
+}
+
+// checkDatabaseURL accepts a sqlite: URL that names a file.
+func checkDatabaseURL(s string) error {
+	_, err := sqlitePath(s)
+	return err
+}
+
+// sqlitePath returns the file that a sqlite: URL names: the path after
+// sqlite:///, which is absolute, or after sqlite:, which is relative to the
+// working directory.
+func sqlitePath(s string) (string, error) {
+	u, err := url.Parse(s)
+	switch {
+	case err != nil:
+		return "", fmt.Errorf("%q isn't a URL", s)
+	case !strings.EqualFold(u.Scheme, "sqlite"):
+		return "", fmt.Errorf("%q isn't a sqlite: URL, such as sqlite:///var/lib/nbpdns/nbpdns.db", s)
+	case u.User != nil || u.RawQuery != "" || u.Fragment != "":
+		return "", fmt.Errorf("%q mustn't have credentials, a query or a fragment", s)
+	case u.Host != "":
+		return "", fmt.Errorf("%q names a host; write sqlite:/// and an absolute path, with three slashes, or sqlite: and a relative path", s)
+	}
+	p := u.Path
+	if u.Opaque != "" {
+		if p, err = url.PathUnescape(u.Opaque); err != nil {
+			return "", fmt.Errorf("%q isn't a URL", s)
+		}
+	}
+	if p == "" || strings.HasSuffix(p, "/") {
+		return "", fmt.Errorf("%q doesn't name a file", s)
+	}
+	return filepath.Clean(p), nil
 }
 
 // secretString accepts only a string. A secret that YAML reads as a number

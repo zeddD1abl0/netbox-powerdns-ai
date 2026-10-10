@@ -6,6 +6,24 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `nbpdns serve` keeps its state in a database, embedded SQLite, at
+  `database.url`, by default `sqlite:///var/lib/nbpdns/nbpdns.db`. It
+  creates the database, readable only by its owner, and applies its
+  migrations, when it starts. Only one `serve` may use a database at a
+  time: a second one refuses to start, and names the first one's host and
+  PID.
+- `nbpdns db status` shows the database and its migrations, and `nbpdns db
+  migrate` creates it, or applies the migrations it lacks.
+
+### Changed
+
+- `nbpdns serve` needs a directory that it can write its database to. In
+  the image, mount a volume at `/var/lib/nbpdns`, writable by user 65532,
+  and in Kubernetes, update the deployment with the `Recreate` strategy, as
+  "Run nbpdns in a container" shows.
+
 ## [0.7.0] - 2026-10-09
 
 The first release since 0.1.0, with the REST API of M06 and the

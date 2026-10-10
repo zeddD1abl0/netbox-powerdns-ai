@@ -59,6 +59,9 @@ func startServe(t *testing.T, env map[string]string) *served {
 	if env["NBPDNS_SERVER_LISTEN"] == "" {
 		env["NBPDNS_SERVER_LISTEN"] = "127.0.0.1:0"
 	}
+	if env["NBPDNS_DATABASE_URL"] == "" {
+		env["NBPDNS_DATABASE_URL"] = "sqlite://" + filepath.Join(t.TempDir(), "nbpdns.db")
+	}
 	env["NBPDNS_LOG_FORMAT"] = "json"
 	for k, v := range env {
 		t.Setenv(k, v)
@@ -168,6 +171,10 @@ func TestServeFailures(t *testing.T) {
 	two := configFile(t, twoGroups)
 	two["NBPDNS_NETBOX_URL"], two["NBPDNS_NETBOX_TOKEN"] = "http://127.0.0.1:1", "nbt_abc.def"
 	two["NBPDNS_SERVER_LISTEN"] = inUse.Addr().String()
+	two["NBPDNS_DATABASE_URL"] = "sqlite://" + filepath.Join(t.TempDir(), "nbpdns.db")
+	noDir := configFile(t, twoGroups)
+	missing := filepath.Join(t.TempDir(), "missing")
+	noDir["NBPDNS_DATABASE_URL"] = "sqlite://" + filepath.Join(missing, "nbpdns.db")
 	for _, tt := range []struct {
 		name string
 		env  map[string]string
@@ -175,6 +182,7 @@ func TestServeFailures(t *testing.T) {
 	}{
 		{"no groups", configFile(t, "log: {level: info}\n"), "no PowerDNS server groups are declared"},
 		{"an address in use", two, "server.listen: listen tcp " + inUse.Addr().String()},
+		{"no database directory", noDir, "the database's directory, " + missing + ", doesn't exist"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			code, _, stderr := run(t, tt.env, "serve")

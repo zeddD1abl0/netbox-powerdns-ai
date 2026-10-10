@@ -7,7 +7,9 @@
 #                            a diff if any differs. Writes nothing.
 #
 # For each tool it derives the _VERSION line and every _SHA256_<platform>
-# line, taking hashes from the checksums file each release publishes. It edits
+# line, taking hashes from the checksums file each release publishes, or, for
+# a release that publishes none, from the SHA-256 digest GitHub records for
+# each of its assets. It edits
 # a temporary copy, and replaces tools.mk only after every tool has succeeded.
 # Needs curl and network access. Set GITHUB_TOKEN to raise the GitHub API rate
 # limit.
@@ -80,7 +82,17 @@ for entry in $(mkval BINARY_TOOLS); do
 	esac
 
 	sums=$(mkval "${prefix}_CHECKSUMS" "${prefix}_VERSION=$new")
-	curl -fsSL -o "$tmp/sums" "https://github.com/$repo/releases/download/$(tag "$prefix" "$new")/$sums"
+	if [ -n "$sums" ]; then
+		curl -fsSL -o "$tmp/sums" "https://github.com/$repo/releases/download/$(tag "$prefix" "$new")/$sums"
+	else
+		# No checksums file: write one from the release's assets, each of
+		# whose names comes before its digest in the API's JSON.
+		sums="the release's asset digests"
+		api "https://api.github.com/repos/$repo/releases/tags/$(tag "$prefix" "$new")" | awk '
+			/^ *"name": *"/ { n = $0; sub(/^ *"name": *"/, "", n); sub(/".*/, "", n) }
+			/^ *"digest": *"sha256:/ { d = $0; sub(/^ *"digest": *"sha256:/, "", d); sub(/".*/, "", d); print d "  " n }
+		' >"$tmp/sums"
+	fi
 
 	sed -i -E "s/^(${prefix}_VERSION[[:space:]]*:= ).*/\\1$new/" "$out"
 	for platform in $(sed -n -E "s/^${prefix}_SHA256_([a-z0-9-]+).*/\\1/p" "$mk"); do
