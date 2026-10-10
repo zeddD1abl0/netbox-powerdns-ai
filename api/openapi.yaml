@@ -729,8 +729,9 @@ components:
         ready:
           type: boolean
           description: >-
-            Whether the first refresh has finished, whatever its outcome, as
-            `/readyz` reports.
+            Whether the service has restored the reports it kept before it
+            restarted, or, with none to restore, whether its first refresh has
+            finished, whatever its outcome, as `/readyz` reports.
           examples: [true]
         live:
           type: boolean

@@ -30,6 +30,7 @@ in the [configuration reference](configuration.md).
 | `--config` | `string` | none | The YAML config file to read, instead of `$NBPDNS_CONFIG`. |
 | `--database-url` | `url` | `sqlite:///var/lib/nbpdns/nbpdns.db` | Where `nbpdns serve` keeps its state, such as `sqlite:///var/lib/nbpdns/nbpdns.db`. |
 | `--drift-group-concurrency` | `integer` | `4` | How many server groups are read and compared at once. |
+| `--drift-history-retention-days` | `integer` | `400` | How many days the drift history keeps each refresh, and each zone's changes. |
 | `--drift-interval` | `duration` | `5m` | How often `nbpdns serve` refreshes the drift report, from the start of one refresh to the start of the next. |
 | `--drift-timeout` | `duration` | `10m` | How long one refresh of `nbpdns serve` may take before it's stopped. |
 | `--drift-webhook-delay` | `duration` | `3s` | How long `nbpdns serve` waits for NetBox's webhooks to stop coming before it refreshes the zones they named. |
@@ -398,12 +399,16 @@ would make it, and keep each server group's last-known state when its primary,
 or NetBox, can't be read. Serve, at server.listen:
 
   /livez    200 unless no refresh has started for longer than one can take
-  /readyz   200 once the first refresh has finished
+  /readyz   200 once it has restored its last reports, or, with none, once
+            the first refresh has finished
   /status   the service's state, as text, or as JSON with ?json=1
   /metrics  the drift, refresh and request metrics, for Prometheus
 
 It keeps its state in the database at database.url, which it creates, and
-migrates, when it starts. Only one serve may use a database at a time.
+migrates, when it starts: the audit trail, each refresh, and each zone's
+drift history. It restores its last reports from it at start, and serves
+them until its first refresh replaces them. Only one serve may use a
+database at a time.
 
 With netbox.webhook_secret set, NetBox's signed webhooks at /api/netbox-events
 refresh the zones they name, once they stop coming for drift.webhook_delay.

@@ -231,8 +231,9 @@ lists the image's settings.
    - **The database:** on the volume `nbpdns-data`, which `fsGroup` makes
      writable by group 65532. Use storage on a local disk, not NFS, which
      SQLite's locks don't trust.
-   - **Readiness:** `/readyz` is ready once the first refresh has
-     finished.
+   - **Readiness:** `/readyz` is ready once nbpdns has restored its last
+     reports from the database, or, on its first start, once its first
+     refresh has finished.
    - **Liveness:** `/livez` fails only when no refresh has started for
      `drift.interval` + `drift.timeout` + 1 minute, 16 minutes by default.
      Neither probe depends on NetBox or the primaries, so their outages

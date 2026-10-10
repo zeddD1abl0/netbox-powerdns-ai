@@ -48,6 +48,20 @@ const (
 // WebhookResults are the values of the result label.
 var WebhookResults = []string{WebhookAccepted, WebhookIgnored, WebhookBadSignature, WebhookInvalid}
 
+// The writes to the database that serve counts the failures of.
+const (
+	// WriteHistory is a refresh, written to the drift history (ADR-0042).
+	WriteHistory = "history"
+	// WriteAudit is one of serve's own audit events, such as its stop.
+	WriteAudit = "audit"
+	// WritePrune is the daily prune of the audit trail and the drift
+	// history.
+	WritePrune = "prune"
+)
+
+// WriteOps are the values of the op label.
+var WriteOps = []string{WriteHistory, WriteAudit, WritePrune}
+
 // The kinds of metric.
 const (
 	counter   = "counter"
@@ -146,6 +160,11 @@ var (
 		values: map[string][]string{"action": auditActions()},
 		help: "Audit events that `nbpdns serve` recorded, by action. Those that the command line records, " +
 			"in its own process, are in the trail, but not here."}
+	defDBWriteFailures = def{name: "nbpdns_db_write_failures_total", kind: counter, labels: []string{"op"},
+		values: map[string][]string{"op": WriteOps},
+		help: "Writes to the database that failed, by what they wrote: `history`, a refresh, to the drift history; " +
+			"`audit`, an audit event of serve's own, such as its stop; and `prune`, the daily prune of the audit trail and the drift history. " +
+			"A refresh whose history couldn't be written is still served."}
 	defBuildInfo = def{name: "nbpdns_build_info", kind: gauge, labels: []string{"version", "revision", "goversion"},
 		help: "1, with the running build's version, VCS revision, and Go version."}
 
@@ -155,7 +174,7 @@ var (
 		defZones, defRRsetChanges, defZoneDrifted, defProblems, defWarnings,
 		defNetBoxUp, defGroupUp, defGroupLastSuccess,
 		defRequests, defRequestDuration, defRetries, defAPIRequests, defAPIRequestDuration,
-		defWebhooks, defAuditEvents, defBuildInfo,
+		defWebhooks, defAuditEvents, defDBWriteFailures, defBuildInfo,
 	}
 )
 
@@ -189,6 +208,7 @@ type Metrics struct {
 	apiRequestDuration *prometheus.HistogramVec
 	webhooks           *prometheus.CounterVec
 	auditEvents        *prometheus.CounterVec
+	dbWriteFailures    *prometheus.CounterVec
 }
 
 // New returns nbpdns's metrics for the build info, registered in a new
@@ -220,6 +240,7 @@ func New(info version.Info) *Metrics {
 		apiRequestDuration:  register(reg, prometheus.NewHistogramVec(histogramOpts(defAPIRequestDuration), defAPIRequestDuration.labels)),
 		webhooks:            register(reg, prometheus.NewCounterVec(counterOpts(defWebhooks), defWebhooks.labels)),
 		auditEvents:         register(reg, prometheus.NewCounterVec(counterOpts(defAuditEvents), defAuditEvents.labels)),
+		dbWriteFailures:     register(reg, prometheus.NewCounterVec(counterOpts(defDBWriteFailures), defDBWriteFailures.labels)),
 	}
 	build := register(reg, prometheus.NewGaugeVec(gaugeOpts(defBuildInfo), defBuildInfo.labels))
 	build.WithLabelValues(info.Version, info.Commit, info.GoVersion).Set(1)
@@ -235,6 +256,9 @@ func New(info version.Info) *Metrics {
 	for _, a := range auditActions() {
 		m.auditEvents.WithLabelValues(a)
 	}
+	for _, op := range WriteOps {
+		m.dbWriteFailures.WithLabelValues(op)
+	}
 	return m
 }
 
@@ -247,6 +271,10 @@ func auditActions() []string {
 	}
 	return as
 }
+
+// DBWriteFailure counts a write to the database that failed, with one of
+// WriteOps.
+func (m *Metrics) DBWriteFailure(op string) { m.dbWriteFailures.WithLabelValues(op).Inc() }
 
 // AuditEvents counts the events that serve recorded.
 func (m *Metrics) AuditEvents(events []audit.Event) {

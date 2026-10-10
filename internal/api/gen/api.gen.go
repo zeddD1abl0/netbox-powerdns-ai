@@ -606,7 +606,7 @@ type Status struct {
 	// Netbox NetBox's state, as of the last refresh.
 	Netbox NetBoxState `json:"netbox"`
 
-	// Ready Whether the first refresh has finished, whatever its outcome, as `/readyz` reports.
+	// Ready Whether the service has restored the reports it kept before it restarted, or, with none to restore, whether its first refresh has finished, whatever its outcome, as `/readyz` reports.
 	//
 	// Examples: true
 	Ready bool `json:"ready"`

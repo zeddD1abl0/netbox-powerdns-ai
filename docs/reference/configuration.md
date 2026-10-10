@@ -32,6 +32,7 @@ a secret's value.
 | [`audit.retention_days`](#auditretention_days) | integer, 1 to 36500 | `2557` |
 | [`database.url`](#databaseurl) | a `sqlite:` URL | `sqlite:///var/lib/nbpdns/nbpdns.db` |
 | [`drift.group_concurrency`](#driftgroup_concurrency) | integer, 1 to 32 | `4` |
+| [`drift.history_retention_days`](#drifthistory_retention_days) | integer, 1 to 36500 | `400` |
 | [`drift.interval`](#driftinterval) | duration, at least `10s` | `5m` |
 | [`drift.timeout`](#drifttimeout) | duration | `10m` |
 | [`drift.webhook_delay`](#driftwebhook_delay) | duration, from `100ms` to `30s` | `3s` |
@@ -98,6 +99,20 @@ all the groups together, whatever this is.
 - **Default:** `4`
 - **Environment variable:** `NBPDNS_DRIFT_GROUP_CONCURRENCY`
 - **Flag:** `--drift-group-concurrency`
+
+## `drift.history_retention_days`
+
+How many days the drift history keeps each refresh, and each zone's changes.
+`nbpdns serve` deletes older refreshes, and older rows of each zone's history,
+daily, but keeps each zone's last row, which says what state it's been in
+since. The default, 400 days, is more than the year that PCI DSS asks for. A
+zone's changes of state are also audit events, which `audit.retention_days`
+keeps.
+
+- **Type:** integer, 1 to 36500
+- **Default:** `400`
+- **Environment variable:** `NBPDNS_DRIFT_HISTORY_RETENTION_DAYS`
+- **Flag:** `--drift-history-retention-days`
 
 ## `drift.interval`
 
@@ -416,6 +431,7 @@ database:
   url: sqlite:///var/lib/nbpdns/nbpdns.db
 drift:
   group_concurrency: 4
+  history_retention_days: 400
   interval: 5m
   timeout: 10m
   webhook_delay: 3s

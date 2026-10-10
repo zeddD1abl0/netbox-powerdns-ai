@@ -20,6 +20,7 @@ import (
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/drift"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/logging"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/metrics"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/store"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/webhook"
 )
 
@@ -267,16 +268,18 @@ func (s *Service) refreshZones(ctx context.Context, start time.Time, b batch) {
 		span.SetStatus(codes.Error, err.Error())
 	}
 	end := s.o.now()
-	outcome := s.recordZones(rctx, log, r, err, start, end)
+	outcome, changes := s.recordZones(rctx, log, r, err, start, end)
 	s.noteWebhookRefresh(b, false, start, end, outcome, err)
+	s.keep(rctx, log, store.RefreshRecord{Kind: store.RefreshZones, Cause: store.CauseWebhook, Started: start, Finished: end,
+		Outcome: outcome, Error: errText(err), Zones: b.names(), NetBoxRequestIDs: b.requestIDs()}, changes)
 }
 
 // recordZones keeps what a zone refresh found, merged into the last-known
 // state, sets the metrics, and logs it, as record does for a full refresh,
-// and returns its outcome. A zone refresh merges only into what a full
+// and returns its outcome, and what it kept. A zone refresh merges only into what a full
 // refresh has kept: a group with no report, or NetBox's records before
 // NetBox was first read, wait for the next full refresh.
-func (s *Service) recordZones(ctx context.Context, log *slog.Logger, r drift.Report, err error, start, end time.Time) string {
+func (s *Service) recordZones(ctx context.Context, log *slog.Logger, r drift.Report, err error, start, end time.Time) (string, []change) {
 	m := s.o.Metrics
 	outcome := outcomeOf(r, err)
 	m.ZoneRefreshes.WithLabelValues(outcome).Inc()
@@ -285,7 +288,7 @@ func (s *Service) recordZones(ctx context.Context, log *slog.Logger, r drift.Rep
 	if errors.As(err, &te) {
 		log.WarnContext(ctx, "the zone refresh took longer than drift.timeout, so it was stopped; its zones wait for the next scheduled refresh",
 			"timeout_seconds", te.Timeout.Seconds())
-		return outcome
+		return outcome, nil
 	}
 	if err != nil {
 		s.mu.Lock()
@@ -293,7 +296,7 @@ func (s *Service) recordZones(ctx context.Context, log *slog.Logger, r drift.Rep
 		s.mu.Unlock()
 		m.NetBoxUp.WithLabelValues().Set(0)
 		log.WarnContext(ctx, "the zone refresh couldn't read NetBox; its zones wait for the next scheduled refresh", "err", err)
-		return outcome
+		return outcome, nil
 	}
 	s.mu.Lock()
 	st := &s.st
@@ -309,7 +312,7 @@ func (s *Service) recordZones(ctx context.Context, log *slog.Logger, r drift.Rep
 	s.mu.Unlock()
 	m.NetBoxUp.WithLabelValues().Set(1)
 	s.publish(ctx, log, changes, end)
-	return outcome
+	return outcome, changes
 }
 
 // outcomeOf returns a refresh's outcome, one of metrics.Outcomes.

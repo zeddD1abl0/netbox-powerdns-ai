@@ -36,6 +36,25 @@ type Status struct {
 	Groups        []GroupInfo `json:"groups"`
 	Tracing       Tracing     `json:"tracing"`
 	Webhooks      Webhooks    `json:"webhooks"`
+	Database      Database    `json:"database"`
+}
+
+// Database is the state of the database that the service keeps its
+// history in (ADR-0038, ADR-0042).
+type Database struct {
+	// Path is the database's file.
+	Path string `json:"path"`
+	// Restored is whether the service started from the reports it kept
+	// before it restarted, and RestoredAsOf is when the refresh before the
+	// restart finished, or null.
+	Restored     bool       `json:"restored"`
+	RestoredAsOf *time.Time `json:"restored_as_of"`
+	// HistoryWriteFailures counts the refreshes that couldn't be written to
+	// the drift history since the service started, LastWriteFailure is
+	// when the last one was, or null, and LastWriteError its error.
+	HistoryWriteFailures int        `json:"history_write_failures"`
+	LastWriteFailure     *time.Time `json:"last_write_failure"`
+	LastWriteError       string     `json:"last_write_error"`
 }
 
 // Webhooks is the state of NetBox's webhooks (ADR-0036).
@@ -169,6 +188,14 @@ func (s *Service) Status() Status {
 		Groups:   []GroupInfo{},
 		Tracing:  Tracing{Exported: s.o.OTLP.Endpoint != "", Endpoint: s.o.OTLP.Endpoint, Protocol: s.o.OTLP.Protocol},
 		Webhooks: s.webhooks(),
+		Database: Database{Path: s.o.DatabasePath, Restored: st.restored, HistoryWriteFailures: st.writeFailures,
+			LastWriteError: st.lastWriteError},
+	}
+	if st.restored && !st.restoredAsOf.IsZero() {
+		out.Database.RestoredAsOf = utc(st.restoredAsOf)
+	}
+	if !st.lastWriteFailure.IsZero() {
+		out.Database.LastWriteFailure = utc(st.lastWriteFailure)
 	}
 	if st.ready {
 		out.Schedule.LastRefresh = &Refresh{
@@ -311,7 +338,8 @@ func writeStatus(w io.Writer, st Status) error {
 		return "no"
 	}
 	p("nbpdns %s, up %s, since %s\n", st.Version, (time.Duration(st.UptimeSeconds) * time.Second).Round(time.Second), when(&st.Started))
-	p("Ready: %s. Live: %s.\n\n", yes(st.Ready), yes(st.Live))
+	p("Ready: %s. Live: %s.\n", yes(st.Ready), yes(st.Live))
+	writeDatabase(p, st.Database)
 
 	sc := st.Schedule
 	p("Drift refreshes, every %s, each for up to %s:\n", seconds(sc.IntervalSeconds), seconds(sc.TimeoutSeconds))
@@ -378,6 +406,23 @@ func writeStatus(w io.Writer, st Status) error {
 	p("\nFor this page as JSON, add ?json=1. For each RRset's changes, run nbpdns drift.\n")
 	_, err := io.WriteString(w, b.String())
 	return err
+}
+
+// writeDatabase writes the database's state with p.
+func writeDatabase(p func(string, ...any), d Database) {
+	if d.Path == "" {
+		p("\n")
+		return
+	}
+	p("Database: %s\n", d.Path)
+	if d.Restored {
+		p("  restored:      the reports of the refresh that finished %s, before the restart\n", when(d.RestoredAsOf))
+	}
+	if d.HistoryWriteFailures > 0 {
+		p("  write failures: %d refreshes couldn't be written to the drift history; the last, %s: %s\n",
+			d.HistoryWriteFailures, when(d.LastWriteFailure), d.LastWriteError)
+	}
+	p("\n")
 }
 
 // writeWebhooks writes the webhooks' state with p.

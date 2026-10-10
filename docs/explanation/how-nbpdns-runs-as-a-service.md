@@ -107,16 +107,19 @@ should still be firing. Keeping it, with `up` at 0 and the time of the last
 success beside it, says both things at once: here's the last known drift,
 and it's getting old.
 
-The state lives in memory. A restart forgets it, and the first refresh
-after the restart finds it again. Keeping history across restarts arrives
-with the database, in M08.
+nbpdns keeps this state in its database too, with each refresh, and each
+zone's history (ADR-0042). When it starts, it restores each group's last
+report from there, and serves it until its first refresh replaces it, so a
+restart hides nothing that nbpdns knew. Each group's last success still says
+how old its report is.
 
 ## Ready and live
 
 Two endpoints tell an orchestrator, such as Kubernetes, how nbpdns is.
 
-- **`/readyz`** answers 200 once the first refresh has finished, whatever
-  its outcome. Before that, nbpdns has nothing to report.
+- **`/readyz`** answers 200 once nbpdns has restored the reports it kept
+  before it restarted, or, with none to restore, once its first refresh has
+  finished, whatever its outcome. Before that, nbpdns has nothing to report.
 - **`/livez`** answers 200 unless no refresh has started for
   `drift.interval` + `drift.timeout` + 1 minute. Since every refresh is
   bounded by its timeout, that only happens if the refresh loop itself is

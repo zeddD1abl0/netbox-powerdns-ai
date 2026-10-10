@@ -213,7 +213,7 @@ The nbpdns service's state.
 | `revision` | `string` | The build's Git commit. |
 | `started` | `string` (`date-time`) | When the service started. |
 | `uptime_seconds` | `number` (`double`) | The time since the service started. |
-| `ready` | `boolean` | Whether the first refresh has finished, whatever its outcome, as `/readyz` reports. |
+| `ready` | `boolean` | Whether the service has restored the reports it kept before it restarted, or, with none to restore, whether its first refresh has finished, whatever its outcome, as `/readyz` reports. |
 | `live` | `boolean` | Whether a refresh has started within `drift.interval` + `drift.timeout` + 1 minute, as `/livez` reports. |
 | `schedule` | [`Schedule`](#schedule) | The refreshes' schedule, and how they went. |
 | `netbox` | [`NetBoxState`](#netboxstate) | NetBox's state, as of the last refresh. |

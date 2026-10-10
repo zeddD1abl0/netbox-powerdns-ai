@@ -40,11 +40,15 @@ func newServeCmd(a *app) *cobra.Command {
 			"would make it, and keep each server group's last-known state when its primary,\n" +
 			"or NetBox, can't be read. Serve, at server.listen:\n\n" +
 			"  /livez    200 unless no refresh has started for longer than one can take\n" +
-			"  /readyz   200 once the first refresh has finished\n" +
+			"  /readyz   200 once it has restored its last reports, or, with none, once\n" +
+			"            the first refresh has finished\n" +
 			"  /status   the service's state, as text, or as JSON with ?json=1\n" +
 			"  /metrics  the drift, refresh and request metrics, for Prometheus\n\n" +
 			"It keeps its state in the database at database.url, which it creates, and\n" +
-			"migrates, when it starts. Only one serve may use a database at a time.\n\n" +
+			"migrates, when it starts: the audit trail, each refresh, and each zone's\n" +
+			"drift history. It restores its last reports from it at start, and serves\n" +
+			"them until its first refresh replaces them. Only one serve may use a\n" +
+			"database at a time.\n\n" +
 			"With netbox.webhook_secret set, NetBox's signed webhooks at /api/netbox-events\n" +
 			"refresh the zones they name, once they stop coming for drift.webhook_delay.\n\n" +
 			"Each refresh is its own trace, exported if otlp.endpoint is set. nbpdns only\n" +
@@ -92,6 +96,8 @@ func newServeCmd(a *app) *cobra.Command {
 				Timeout:      s.cfg.Drift.Timeout,
 				WebhookDelay: s.cfg.Drift.WebhookDelay,
 				Webhooks:     s.cfg.NetBox.WebhookSecret.IsSet(),
+				History:      st,
+				DatabasePath: st.Path(),
 				Log:          s.log,
 				Tracer:       s.tracer,
 				Metrics:      s.metrics,
@@ -100,17 +106,21 @@ func newServeCmd(a *app) *cobra.Command {
 				Groups:       primaries,
 				OTLP:         service.OTLP{Endpoint: s.cfg.OTLP.Endpoint, Protocol: s.cfg.OTLP.Protocol},
 			})
+			// The last reports are served at once (ADR-0042), and the first
+			// refresh starts as serve listens.
+			svc.Restore(ctx)
 			pruneCtx, stopPrune := context.WithCancel(ctx)
 			defer stopPrune()
-			go s.pruneAudit(pruneCtx, st)
+			go s.prune(pruneCtx, st)
 			return serve(ctx, s, svc)
 		})
 	}
 	return cmd
 }
 
-// auditPruneInterval is how often serve prunes the audit trail.
-const auditPruneInterval = 24 * time.Hour
+// pruneInterval is how often serve prunes the audit trail and the drift
+// history.
+const pruneInterval = 24 * time.Hour
 
 // openServeStore takes the database's lock, so that one serve uses it
 // (ADR-0038), opens and migrates the database, and records serve's start
@@ -168,6 +178,7 @@ func (s *session) openServeStore(ctx context.Context) (*store.Store, func(err er
 			e, err = st.Audit(sctx, audit.Event{Actor: audit.System(), Action: audit.ServiceStopped, Target: target, After: after}.WithContext(sctx))
 		}
 		if err != nil {
+			s.metrics.DBWriteFailure(metrics.WriteAudit)
 			s.log.ErrorContext(sctx, "couldn't record serve's stop in the audit trail", "err", err)
 		} else {
 			s.metrics.AuditEvents([]audit.Event{e})
@@ -191,26 +202,42 @@ func (s *session) configFingerprint() string {
 	return "sha384:" + hex.EncodeToString(sum[:])
 }
 
-// pruneAudit deletes the audit events older than audit.retention_days, at
-// once and then daily, until ctx is done. Each prune is its own trace.
-func (s *session) pruneAudit(ctx context.Context, st *store.Store) {
+// prune deletes the audit events older than audit.retention_days, and the
+// drift history older than drift.history_retention_days, at once and then
+// daily, until ctx is done. Each prune is its own trace.
+func (s *session) prune(ctx context.Context, st *store.Store) {
 	for {
-		pctx, span := s.tracer.Start(logging.WithRequestID(ctx, rand.Text()), "audit prune", trace.WithNewRoot())
+		pctx, span := s.tracer.Start(logging.WithRequestID(ctx, rand.Text()), "database prune", trace.WithNewRoot())
+		fail := func(err error) {
+			if ctx.Err() != nil {
+				return
+			}
+			span.RecordError(err)
+			s.metrics.DBWriteFailure(metrics.WritePrune)
+			s.log.ErrorContext(pctx, "couldn't prune the database; serve tries again in a day", "err", err)
+		}
 		days := s.cfg.Audit.RetentionDays
 		n, events, err := st.PruneAudit(pctx, time.Now().AddDate(0, 0, -days), days)
 		switch {
-		case err != nil && ctx.Err() == nil:
-			span.RecordError(err)
-			s.log.ErrorContext(pctx, "couldn't prune the audit trail; serve tries again in a day", "err", err)
+		case err != nil:
+			fail(err)
 		case n > 0:
 			s.metrics.AuditEvents(events)
 			s.log.InfoContext(pctx, "pruned the audit trail", "deleted", n, "retention_days", days)
+		}
+		days = s.cfg.Drift.HistoryRetentionDays
+		refreshes, rows, err := st.PruneDriftHistory(pctx, time.Now().AddDate(0, 0, -days))
+		switch {
+		case err != nil:
+			fail(err)
+		case refreshes > 0 || rows > 0:
+			s.log.InfoContext(pctx, "pruned the drift history", "refreshes", refreshes, "zone_rows", rows, "retention_days", days)
 		}
 		span.End()
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(auditPruneInterval):
+		case <-time.After(pruneInterval):
 		}
 	}
 }

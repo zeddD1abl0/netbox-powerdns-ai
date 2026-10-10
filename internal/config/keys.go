@@ -32,6 +32,9 @@ type DriftConfig struct {
 	// WebhookDelay is how long `nbpdns serve` waits for NetBox's webhooks
 	// to stop before it refreshes the zones they named (ADR-0036).
 	WebhookDelay time.Duration
+	// HistoryRetentionDays is how many days the drift history keeps a
+	// refresh, and a zone's row (ADR-0042).
+	HistoryRetentionDays int
 }
 
 // AuditConfig says how long the audit trail keeps its events (ADR-0039).
@@ -243,6 +246,15 @@ func keys(c *Config) []Key {
 				"a slow refresh says nothing about what PowerDNS serves. The next one starts on schedule.",
 			Default: "10m",
 		}),
+		intKey(&c.Drift.HistoryRetentionDays, Key{
+			Name:    "drift.history_retention_days",
+			Summary: "How many days the drift history keeps each refresh, and each zone's changes.",
+			Details: "`nbpdns serve` deletes older refreshes, and older rows of each zone's history, daily, " +
+				"but keeps each zone's last row, which says what state it's been in since. " +
+				"The default, 400 days, is more than the year that PCI DSS asks for. " +
+				"A zone's changes of state are also audit events, which `audit.retention_days` keeps.",
+			Default: "400",
+		}, 36500),
 		durationKeyWithin(&c.Drift.WebhookDelay, Key{
 			Name:    "drift.webhook_delay",
 			Summary: "How long `nbpdns serve` waits for NetBox's webhooks to stop coming before it refreshes the zones they named.",

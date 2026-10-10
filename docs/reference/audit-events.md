@@ -38,6 +38,7 @@ inserted. `nbpdns audit list` reads the trail.
 | [`service.started`](#servicestarted) | `service` | `system` | `nbpdns serve` started, and opened its database. |
 | [`service.stopped`](#servicestopped) | `service` | `system` | `nbpdns serve` stopped, on SIGINT or SIGTERM, or because it failed after it started, such as when it couldn't listen. A serve that's killed, or crashes, records nothing. |
 | [`audit.pruned`](#auditpruned) | `audit` | `system` | `nbpdns serve` deleted the events older than `audit.retention_days`, as it does daily. |
+| [`zone.drift_changed`](#zonedrift_changed) | `zone` | `system` | A refresh of `nbpdns serve` found a zone in another drift state than its last, a new zone that drifted, or that a zone left its group's report. A zone whose changes differ, in the same state, has a new row in its drift history, but no event. |
 
 ### `service.started`
 
@@ -65,3 +66,12 @@ inserted. `nbpdns audit list` reads the trail.
 - **Actor:** `system`
 - **Before:** `first_seq`, the first event before the prune.
 - **After:** `deleted`, how many events it deleted; `anchor_seq` and `anchor_hash`, the last one deleted, which the first remaining one links to; and `retention_days`.
+
+### `zone.drift_changed`
+
+A refresh of `nbpdns serve` found a zone in another drift state than its last, a new zone that drifted, or that a zone left its group's report. A zone whose changes differ, in the same state, has a new row in its drift history, but no event.
+
+- **Target:** type `zone`, named by the server group and the zone, as `<group>/<zone>`, such as `lab-a/example.com.`
+- **Actor:** `system`
+- **Before:** `state`, the zone's last state, unless it's new.
+- **After:** `state`, its state now, which is `removed` if it left the report; `changes`, how many of its RRsets differ; and `policy`, its drift policy.

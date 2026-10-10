@@ -26,9 +26,21 @@ All notable changes to this project are recorded here. The format follows
   `audit.retention_days`, by default seven years, daily.
   "Audit events" lists every event, and `nbpdns_audit_events_total` counts
   them.
+- A drift history, in the database: each refresh, with each group's
+  result, and each zone's row whenever its state or its RRset changes
+  differ from its last, kept for `drift.history_retention_days`, by default
+  400. A zone's change of state, and a new zone that drifted, are also
+  `zone.drift_changed` audit events.
+- `nbpdns serve` restores each group's last report from the database when
+  it starts, and is ready at once, serving it until its first refresh
+  replaces it. `/status` gains `database`, which says whether it restored,
+  and counts the refreshes that it couldn't write to the history, as
+  `nbpdns_db_write_failures_total` does.
 
 ### Changed
 
+- `/readyz` is ready once `nbpdns serve` has restored its last reports, or,
+  with none to restore, once its first refresh has finished.
 - `nbpdns serve` needs a directory that it can write its database to. In
   the image, mount a volume at `/var/lib/nbpdns`, writable by user 65532,
   and in Kubernetes, update the deployment with the `Recreate` strategy, as

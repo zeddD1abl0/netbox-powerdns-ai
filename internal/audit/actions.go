@@ -11,6 +11,8 @@ const (
 	ServiceStarted Action = "service.started"
 	ServiceStopped Action = "service.stopped"
 	AuditPruned    Action = "audit.pruned"
+	// ZoneDriftChanged is ADR-0008's drift detection.
+	ZoneDriftChanged Action = "zone.drift_changed"
 )
 
 // Def declares an action.
@@ -52,6 +54,15 @@ var defs = []Def{
 		Before:  "`first_seq`, the first event before the prune.",
 		After: "`deleted`, how many events it deleted; `anchor_seq` and `anchor_hash`, the last one deleted, " +
 			"which the first remaining one links to; and `retention_days`.",
+	},
+	{
+		Action: ZoneDriftChanged, Target: "zone", TargetID: "the server group and the zone, as `<group>/<zone>`, such as `lab-a/example.com.`",
+		Actor: "`system`",
+		Summary: "A refresh of `nbpdns serve` found a zone in another drift state than its last, a new zone that drifted, " +
+			"or that a zone left its group's report. A zone whose changes differ, in the same state, has a new row in its drift history, but no event.",
+		Before: "`state`, the zone's last state, unless it's new.",
+		After: "`state`, its state now, which is `removed` if it left the report; `changes`, how many of its RRsets differ; " +
+			"and `policy`, its drift policy.",
 	},
 }
 

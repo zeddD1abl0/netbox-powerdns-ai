@@ -39,3 +39,51 @@ type DatabaseInfo struct {
 	CreatedAt string
 	CreatedBy string
 }
+
+type DriftGroupReport struct {
+	GroupName   string
+	LastSuccess string
+	UpdatedAt   string
+	ReportJson  string
+}
+
+type DriftRefresh struct {
+	ID                   int64
+	Kind                 string
+	Cause                string
+	StartedAt            string
+	FinishedAt           string
+	Outcome              string
+	Error                string
+	ZonesJson            string
+	NetboxRequestIdsJson string
+	TraceID              string
+}
+
+type DriftRefreshGroup struct {
+	RefreshID  int64
+	GroupName  string
+	Status     string
+	Error      string
+	CountsJson string
+}
+
+type DriftZoneHistory struct {
+	ID             int64
+	GroupName      string
+	Zone           string
+	At             string
+	RefreshID      int64
+	State          string
+	ViewName       string
+	Policy         string
+	NetboxSerial   int64
+	PowerdnsSerial int64
+	ChangesJson    string
+	Digest         string
+}
+
+type Sequence struct {
+	Name  string
+	Value int64
+}

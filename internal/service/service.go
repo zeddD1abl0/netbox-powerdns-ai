@@ -17,11 +17,24 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/audit"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/drift"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/logging"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/metrics"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/store"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/version"
 )
+
+// historyWriteTimeout bounds writing a refresh to the drift history, which
+// happens after the refresh, whatever was left of its drift.timeout.
+const historyWriteTimeout = 30 * time.Second
+
+// A History keeps each refresh, and gives back the last reports at start
+// (ADR-0042). The store is one.
+type History interface {
+	RecordRefresh(ctx context.Context, r store.RefreshRecord) (int, []audit.Event, error)
+	RestoreDrift(ctx context.Context) (store.Restored, error)
+}
 
 // A RefreshFunc reads NetBox and every group's primary, and compares them,
 // as `nbpdns drift` does: every zone, or, if zones isn't nil, only those, as
@@ -41,9 +54,13 @@ type Options struct {
 	WebhookDelay time.Duration
 	// Webhooks says whether the API takes NetBox's webhooks, for /status.
 	Webhooks bool
-	Log      *slog.Logger
-	Tracer   trace.Tracer
-	Metrics  *metrics.Metrics
+	// History, if set, keeps each refresh, and restores the last reports
+	// at start; DatabasePath is where, for /status.
+	History      History
+	DatabasePath string
+	Log          *slog.Logger
+	Tracer       trace.Tracer
+	Metrics      *metrics.Metrics
 
 	// What /status and the API show besides the refreshes: the build,
 	// NetBox's URL, each group, in the configuration's order, and where
@@ -92,10 +109,21 @@ type Service struct {
 
 // state is what the refreshes found, guarded by Service.mu.
 type state struct {
-	// ready is set once the first refresh has finished.
-	ready     bool
-	lastStart time.Time
-	lastEnd   time.Time
+	// ready is set once the first refresh has finished, or the last
+	// reports are restored.
+	ready bool
+	// restored is set if the last reports were restored at start, and
+	// restoredAsOf is when the refresh before the restart finished.
+	restored     bool
+	restoredAsOf time.Time
+	// writeFailures counts the refreshes that couldn't be written to the
+	// history, and lastWriteError is the last one's error, at
+	// lastWriteFailure.
+	writeFailures    int
+	lastWriteError   string
+	lastWriteFailure time.Time
+	lastStart        time.Time
+	lastEnd          time.Time
 	// lastOutcome is the last refresh's: a metrics.Outcome constant.
 	lastOutcome string
 	// lastError is why the last refresh failed, if it did.
@@ -245,10 +273,60 @@ func (s *Service) refresh(ctx context.Context, start time.Time, b batch) {
 		span.SetStatus(codes.Error, err.Error())
 	}
 	end := s.o.now()
-	outcome := s.record(rctx, log, r, err, start, end)
+	outcome, changes := s.record(rctx, log, r, err, start, end)
 	if b.events > 0 {
 		s.noteWebhookRefresh(b, true, start, end, outcome, err)
 	}
+	cause := store.CauseSchedule
+	if b.full {
+		cause = store.CauseWebhook
+	}
+	s.keep(rctx, log, store.RefreshRecord{Kind: store.RefreshFull, Cause: cause, Started: start, Finished: end,
+		Outcome: outcome, Error: errText(err), NetBoxRequestIDs: b.requestIDs()}, changes)
+}
+
+// keep writes a refresh, rec, and what it kept, changes, to the history, if
+// there's one. A failed write is counted, logged and shown on /status; the
+// refresh is still served, and the next one writes the zones' changes since
+// their last rows.
+func (s *Service) keep(ctx context.Context, log *slog.Logger, rec store.RefreshRecord, changes []change) {
+	if s.o.History == nil {
+		return
+	}
+	rec.TraceID = trace.SpanContextFromContext(ctx).TraceID().String()
+	for _, c := range changes {
+		g := c.g
+		if c.failed {
+			rec.Groups = append(rec.Groups, store.GroupResult{Group: g.Group, Status: drift.StatusFailed, Error: g.Error})
+			continue
+		}
+		rec.Groups = append(rec.Groups, store.GroupResult{Group: g.Group, Status: drift.StatusOK, Counts: g.Counts})
+		rec.Reports = append(rec.Reports, store.KeptReport{Report: g, LastSuccess: c.lastSuccess})
+	}
+	// The refresh's own timeout may have passed.
+	wctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), historyWriteTimeout)
+	defer cancel()
+	rows, events, err := s.o.History.RecordRefresh(wctx, rec)
+	if err != nil {
+		s.o.Metrics.DBWriteFailure(metrics.WriteHistory)
+		s.mu.Lock()
+		s.st.writeFailures++
+		s.st.lastWriteError, s.st.lastWriteFailure = err.Error(), s.o.now()
+		s.mu.Unlock()
+		log.ErrorContext(wctx, "couldn't write the refresh to the drift history; it's still served, and the next refresh writes the zones' changes",
+			"err", err)
+		return
+	}
+	s.o.Metrics.AuditEvents(events)
+	log.DebugContext(wctx, "wrote the refresh to the drift history", "zone_rows", rows, "audit_events", len(events))
+}
+
+// errText returns err's text, or empty if it's nil.
+func errText(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }
 
 // TimeoutError is the error of a refresh stopped by drift.timeout.
@@ -259,10 +337,10 @@ func (e *TimeoutError) Error() string {
 }
 
 // record keeps what a full refresh found, sets the metrics, logs it to
-// log, and returns its outcome. A group that couldn't be read keeps its
-// last report, and if NetBox couldn't be read, or the refresh ran out of
-// time, every group does.
-func (s *Service) record(ctx context.Context, log *slog.Logger, r drift.Report, err error, start, end time.Time) string {
+// log, and returns its outcome, and what it kept for each group. A group
+// that couldn't be read keeps its last report, and if NetBox couldn't be
+// read, or the refresh ran out of time, every group does.
+func (s *Service) record(ctx context.Context, log *slog.Logger, r drift.Report, err error, start, end time.Time) (string, []change) {
 	m := s.o.Metrics
 	outcome := outcomeOf(r, err)
 	m.Refreshes.WithLabelValues(outcome).Inc()
@@ -285,7 +363,7 @@ func (s *Service) record(ctx context.Context, log *slog.Logger, r drift.Report, 
 		s.mu.Unlock()
 		log.WarnContext(ctx, "the drift refresh took longer than drift.timeout, so it was stopped, and every server group keeps its last report",
 			"timeout_seconds", te.Timeout.Seconds())
-		return outcome
+		return outcome, nil
 	}
 	if err != nil {
 		st.lastError = err.Error()
@@ -293,7 +371,7 @@ func (s *Service) record(ctx context.Context, log *slog.Logger, r drift.Report, 
 		s.mu.Unlock()
 		m.NetBoxUp.WithLabelValues().Set(0)
 		log.WarnContext(ctx, "the drift refresh couldn't read NetBox, so every server group keeps its last report", "err", err)
-		return outcome
+		return outcome, nil
 	}
 	st.netboxUp, st.netboxError = true, ""
 	if r.NetBox != nil {
@@ -308,7 +386,7 @@ func (s *Service) record(ctx context.Context, log *slog.Logger, r drift.Report, 
 
 	m.NetBoxUp.WithLabelValues().Set(1)
 	s.publish(ctx, log, changes, end)
-	return outcome
+	return outcome, changes
 }
 
 // A change is what a refresh found for a group, kept, for publish to set
@@ -322,6 +400,8 @@ type change struct {
 	removed [][2]string
 	// zones are those that a zone refresh compared, or nil.
 	zones []string
+	// lastSuccess is the group's last full comparison's time.
+	lastSuccess time.Time
 }
 
 // apply keeps each group's report from groups, read at end, and returns the
@@ -366,7 +446,7 @@ func (s *Service) apply(groups []drift.GroupReport, end time.Time, merge bool) [
 			}
 		}
 		gs.drifted = now
-		changes = append(changes, change{g: g, now: now, removed: removed, zones: zones})
+		changes = append(changes, change{g: g, now: now, removed: removed, zones: zones, lastSuccess: gs.lastSuccess})
 	}
 	return changes
 }
@@ -475,22 +555,23 @@ func (s *Service) livez(w http.ResponseWriter, _ *http.Request) {
 }
 
 // alive reports whether a refresh has started, since last, or since the
-// service started if none has, within the time a refresh can take.
+// service started if none has since, within the time a refresh can take. A
+// restored refresh from before the start doesn't count.
 func (s *Service) alive(last time.Time) (bool, time.Time) {
-	if last.IsZero() {
+	if last.Before(s.started) {
 		last = s.started
 	}
 	return s.o.now().Sub(last) <= s.o.Interval+s.o.Timeout+time.Minute, last
 }
 
 // readyz answers 200 once the first refresh has finished, whatever its
-// outcome (ADR-0029).
+// outcome (ADR-0029), or once the last reports are restored (ADR-0042).
 func (s *Service) readyz(w http.ResponseWriter, _ *http.Request) {
 	s.mu.Lock()
 	ready := s.st.ready
 	s.mu.Unlock()
 	if !ready {
-		text(w, http.StatusServiceUnavailable, "not ready: the first drift refresh hasn't finished")
+		text(w, http.StatusServiceUnavailable, "not ready: the first drift refresh hasn't finished, and there was no report to restore")
 		return
 	}
 	text(w, http.StatusOK, "ready")
