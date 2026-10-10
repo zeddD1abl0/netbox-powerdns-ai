@@ -1,8 +1,8 @@
 ---
 id: M08
 title: SQLite persistence
-status: planned # planned | in-progress | done
-started:
+status: in-progress # planned | in-progress | done
+started: 2026-10-10
 closed:
 ---
 
@@ -56,7 +56,7 @@ ITEM-0085 recorded this design.
 
 ## Acceptance criteria
 
-- [ ] ADR-0038 to ADR-0042 are accepted, after the design is checked at M08's
+- [x] ADR-0038 to ADR-0042 are accepted, after the design is checked at M08's
   start. REQ-049 to REQ-053 exist, and the questions are answered.
 - [ ] `serve` keeps its state in SQLite at `database.url`, applies migrations
   at start, and a second `serve` on the same database refuses to start.
@@ -84,6 +84,28 @@ ITEM-0085 recorded this design.
 ## Verification log
 
 Append-only and dated. Record what was run and what was seen.
+
+- 2026-10-10: **The design checked at the start** (ADR-0037), on
+  `m08-sqlite-persistence`, after `plan-m08-m12`'s merge and the v0.7.0
+  release. The user accepted ADR-0038 to ADR-0042 unchanged.
+  - **The driver:** a throwaway module's cold `go test -race` of
+    modernc.org/sqlite v1.60.1, in WAL mode, took 29 s on 16 cores, its
+    largest process peaking at 0.95 GB; ncruces/go-sqlite3 v0.35.6 took
+    18 s and 0.69 GB. The repo's own cold `go test -race` already peaks at
+    1.28 GB, so modernc.org/sqlite doesn't raise it. The runner's failure
+    on main's pipeline 795 came from two pipelines at once (ITEM-0100).
+  - **sqlc:** v1.31.1's linux-amd64 release is a static binary. From one
+    goose-style schema and one query file with `sqlc.arg` and
+    `sqlc.narg`, it generated both a SQLite and a PostgreSQL package. The
+    PostgreSQL engine refused `INSERT OR REPLACE`, `GLOB` and
+    `AUTOINCREMENT`, but not the SQLite-only functions `IFNULL` and
+    `datetime`. So the test that refuses SQL PostgreSQL wouldn't take is
+    sqlc's PostgreSQL engine in `generate-check`, and a test that refuses
+    SQLite-only functions.
+  - **Portable schemas:** `TEXT`, `BIGINT` and `BOOLEAN` columns only;
+    nbpdns assigns its own IDs, since SQLite's rowid alias and
+    PostgreSQL's identity columns can't share a migration; hashes are
+    stored as hex, and ciphertexts as base64.
 
 ## Approved design
 

@@ -1,6 +1,6 @@
 ---
 title: '0042: Drift history'
-status: proposed # proposed | accepted | rejected | deprecated | superseded by ADR-NNNN
+status: accepted # proposed | accepted | rejected | deprecated | superseded by ADR-NNNN
 date: 2026-10-09
 decision-makers: [jordan]
 requirements: [REQ-044, REQ-046, REQ-052]

@@ -1,6 +1,6 @@
 ---
 title: '0041: Secrets encrypted at rest'
-status: proposed # proposed | accepted | rejected | deprecated | superseded by ADR-NNNN
+status: accepted # proposed | accepted | rejected | deprecated | superseded by ADR-NNNN
 date: 2026-10-09
 decision-makers: [jordan]
 requirements: [REQ-051, REQ-053]

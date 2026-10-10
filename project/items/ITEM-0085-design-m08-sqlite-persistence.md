@@ -31,3 +31,7 @@ rest; the brief's dated answers; and M08's items.
 
 <!-- Append-only. Start each note with the date: "- YYYY-MM-DD: …" -->
 - 2026-10-09: Created from M08's approved design, on `plan-m08-m12`.
+- 2026-10-10: At M08's start, on `m08-sqlite-persistence`, the design was
+  checked against what the milestones before it found, as M08's
+  verification log records, and the user accepted ADR-0038 to ADR-0042
+  unchanged. M08 is in progress.

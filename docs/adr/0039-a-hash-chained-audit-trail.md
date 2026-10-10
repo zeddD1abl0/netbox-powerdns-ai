@@ -1,6 +1,6 @@
 ---
 title: '0039: A hash-chained audit trail'
-status: proposed # proposed | accepted | rejected | deprecated | superseded by ADR-NNNN
+status: accepted # proposed | accepted | rejected | deprecated | superseded by ADR-NNNN
 date: 2026-10-09
 decision-makers: [jordan]
 requirements: [REQ-011, REQ-049, REQ-053]

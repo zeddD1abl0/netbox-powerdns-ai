@@ -1,6 +1,6 @@
 ---
 title: '0040: Runtime settings and managed resources'
-status: proposed # proposed | accepted | rejected | deprecated | superseded by ADR-NNNN
+status: accepted # proposed | accepted | rejected | deprecated | superseded by ADR-NNNN
 date: 2026-10-09
 decision-makers: [jordan]
 requirements: [REQ-050]
