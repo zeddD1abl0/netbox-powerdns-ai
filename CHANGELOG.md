@@ -36,6 +36,13 @@ All notable changes to this project are recorded here. The format follows
   replaces it. `/status` gains `database`, which says whether it restored,
   and counts the refreshes that it couldn't write to the history, as
   `nbpdns_db_write_failures_total` does.
+- The API, now version 1.2.0, serves the drift history:
+  `/api/server-groups/{group}/zones/{zone}/history`, a zone's rows, and
+  `/api/server-groups/{group}/refreshes`, the refreshes, each with the
+  group's result. Both list the newest first, in pages with cursors.
+  `/api/status` gains `database`. `nbpdns drift history` shows a group's
+  refreshes, or, with `--zone`, a zone's history, in a table, or in JSON
+  with `--output json`. "Read a zone's drift history" shows how.
 
 ### Changed
 

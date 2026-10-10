@@ -112,7 +112,7 @@ func newServeCmd(a *app) *cobra.Command {
 			pruneCtx, stopPrune := context.WithCancel(ctx)
 			defer stopPrune()
 			go s.prune(pruneCtx, st)
-			return serve(ctx, s, svc)
+			return serve(ctx, s, svc, st)
 		})
 	}
 	return cmd
@@ -259,8 +259,9 @@ func (s *session) retryClients(ctx context.Context, clients []groupClient) {
 }
 
 // serve listens at server.listen, and runs svc until ctx is canceled or the
-// listener fails. Then it lets the requests in flight finish.
-func serve(ctx context.Context, s *session, svc *service.Service) error {
+// listener fails, with the API serving history's drift history. Then it lets
+// the requests in flight finish.
+func serve(ctx context.Context, s *session, svc *service.Service, history api.History) error {
 	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", s.cfg.Server.Listen)
 	if err != nil {
 		return fmt.Errorf("server.listen: %w", err)
@@ -270,7 +271,7 @@ func serve(ctx context.Context, s *session, svc *service.Service) error {
 	// NetBox's webhooks queue the service's zone refreshes (ADR-0036).
 	mux.Handle("/api/", api.New(api.Options{
 		Source: svc, Log: s.log, Tracer: s.tracer, Metrics: s.metrics, PublicURL: s.cfg.Server.PublicURL,
-		WebhookSecret: s.cfg.NetBox.WebhookSecret, Events: svc,
+		WebhookSecret: s.cfg.NetBox.WebhookSecret, Events: svc, History: history,
 	}))
 	mux.Handle("/", svc.Handler())
 	srv := &http.Server{

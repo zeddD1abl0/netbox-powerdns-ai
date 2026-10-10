@@ -7,6 +7,7 @@ package sqlite
 
 import (
 	"context"
+	"database/sql"
 )
 
 const deleteRefreshGroupsBefore = `-- name: DeleteRefreshGroupsBefore :exec
@@ -44,6 +45,75 @@ func (q *Queries) DeleteZoneRowsBefore(ctx context.Context, cutoff string) (int6
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const groupRefreshes = `-- name: GroupRefreshes :many
+SELECT r.id, r.kind, r.cause, r.started_at, r.finished_at, r.outcome, r.error, r.zones_json,
+    r.netbox_request_ids_json, r.trace_id, g.status AS group_status, g.error AS group_error, g.counts_json
+FROM drift_refreshes r
+LEFT JOIN drift_refresh_groups g ON g.refresh_id = r.id AND g.group_name = ?1
+WHERE r.id < ?2
+ORDER BY r.id DESC
+LIMIT ?3
+`
+
+type GroupRefreshesParams struct {
+	GroupName string
+	BeforeID  int64
+	MaxRows   int64
+}
+
+type GroupRefreshesRow struct {
+	ID                   int64
+	Kind                 string
+	Cause                string
+	StartedAt            string
+	FinishedAt           string
+	Outcome              string
+	Error                string
+	ZonesJson            string
+	NetboxRequestIdsJson string
+	TraceID              string
+	GroupStatus          sql.NullString
+	GroupError           sql.NullString
+	CountsJson           sql.NullString
+}
+
+func (q *Queries) GroupRefreshes(ctx context.Context, arg GroupRefreshesParams) ([]GroupRefreshesRow, error) {
+	rows, err := q.db.QueryContext(ctx, groupRefreshes, arg.GroupName, arg.BeforeID, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GroupRefreshesRow
+	for rows.Next() {
+		var i GroupRefreshesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.Cause,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.Outcome,
+			&i.Error,
+			&i.ZonesJson,
+			&i.NetboxRequestIdsJson,
+			&i.TraceID,
+			&i.GroupStatus,
+			&i.GroupError,
+			&i.CountsJson,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const groupReports = `-- name: GroupReports :many
@@ -331,4 +401,59 @@ func (q *Queries) UpsertGroupReport(ctx context.Context, arg UpsertGroupReportPa
 		arg.ReportJson,
 	)
 	return err
+}
+
+const zoneHistory = `-- name: ZoneHistory :many
+SELECT id, group_name, zone, at, refresh_id, state, view_name, policy, netbox_serial, powerdns_serial, changes_json, digest FROM drift_zone_history
+WHERE group_name = ?1 AND zone = ?2 AND id < ?3
+ORDER BY id DESC
+LIMIT ?4
+`
+
+type ZoneHistoryParams struct {
+	GroupName string
+	Zone      string
+	BeforeID  int64
+	MaxRows   int64
+}
+
+func (q *Queries) ZoneHistory(ctx context.Context, arg ZoneHistoryParams) ([]DriftZoneHistory, error) {
+	rows, err := q.db.QueryContext(ctx, zoneHistory,
+		arg.GroupName,
+		arg.Zone,
+		arg.BeforeID,
+		arg.MaxRows,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DriftZoneHistory
+	for rows.Next() {
+		var i DriftZoneHistory
+		if err := rows.Scan(
+			&i.ID,
+			&i.GroupName,
+			&i.Zone,
+			&i.At,
+			&i.RefreshID,
+			&i.State,
+			&i.ViewName,
+			&i.Policy,
+			&i.NetboxSerial,
+			&i.PowerdnsSerial,
+			&i.ChangesJson,
+			&i.Digest,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

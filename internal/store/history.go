@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"time"
 
@@ -434,4 +435,105 @@ func nonNil[T any](s []T) []T {
 		return []T{}
 	}
 	return s
+}
+
+// A ZoneHistoryRow is one row of a zone's drift history.
+type ZoneHistoryRow struct {
+	ID int64
+	// At is when the refresh that wrote it finished.
+	At        time.Time
+	RefreshID int64
+	// State is the zone's drift state, or StateRemoved.
+	State, View, Policy          string
+	NetBoxSerial, PowerDNSSerial uint32
+	// Changes are its RRsets that differed, in canonical order.
+	Changes []drift.Change
+}
+
+// ZoneHistory returns up to limit of a zone's rows in a group, newest
+// first, from the row before the row with ID before, or from the newest if
+// before is 0.
+func (s *Store) ZoneHistory(ctx context.Context, group, zone string, before int64, limit int) ([]ZoneHistoryRow, error) {
+	rows, err := s.q.ZoneHistory(ctx, sqlite.ZoneHistoryParams{GroupName: group, Zone: zone, BeforeID: beforeID(before), MaxRows: int64(limit)})
+	if err != nil {
+		return nil, fmt.Errorf("reading a zone's drift history: %w", err)
+	}
+	out := make([]ZoneHistoryRow, len(rows))
+	for i, r := range rows {
+		at, err := time.Parse(TimeLayout, r.At)
+		if err != nil {
+			return nil, fmt.Errorf("reading a zone's drift history: %w", err)
+		}
+		row := ZoneHistoryRow{ID: r.ID, At: at, RefreshID: r.RefreshID, State: r.State, View: r.ViewName, Policy: r.Policy,
+			NetBoxSerial: uint32(r.NetboxSerial), PowerDNSSerial: uint32(r.PowerdnsSerial)} //nolint:gosec // Serials were uint32s.
+		if err := json.Unmarshal([]byte(r.ChangesJson), &row.Changes); err != nil {
+			return nil, fmt.Errorf("reading a zone's drift history: row %d's changes: %w", r.ID, err)
+		}
+		out[i] = row
+	}
+	return out, nil
+}
+
+// A RefreshRow is a refresh, with a group's result in it.
+type RefreshRow struct {
+	ID int64
+	RefreshSummary
+	// Zones are those that a zone refresh compared, as view/name, or nil
+	// for a full refresh.
+	Zones            []string
+	NetBoxRequestIDs []string
+	TraceID          string
+	// Group is the group's result, or nil if the refresh didn't try the
+	// group, as one that couldn't read NetBox doesn't.
+	Group *GroupResult
+}
+
+// Refreshes returns up to limit refreshes, newest first, from the refresh
+// before the one with ID before, or from the newest if before is 0, each
+// with group's result in it.
+func (s *Store) Refreshes(ctx context.Context, group string, before int64, limit int) ([]RefreshRow, error) {
+	rows, err := s.q.GroupRefreshes(ctx, sqlite.GroupRefreshesParams{GroupName: group, BeforeID: beforeID(before), MaxRows: int64(limit)})
+	if err != nil {
+		return nil, fmt.Errorf("reading the refreshes: %w", err)
+	}
+	out := make([]RefreshRow, len(rows))
+	for i, r := range rows {
+		fail := func(err error) ([]RefreshRow, error) {
+			return nil, fmt.Errorf("reading the refreshes: refresh %d: %w", r.ID, err)
+		}
+		row := RefreshRow{ID: r.ID, RefreshSummary: RefreshSummary{Kind: r.Kind, Cause: r.Cause, Outcome: r.Outcome, Error: r.Error},
+			TraceID: r.TraceID}
+		if row.Started, err = time.Parse(TimeLayout, r.StartedAt); err != nil {
+			return fail(err)
+		}
+		if row.Finished, err = time.Parse(TimeLayout, r.FinishedAt); err != nil {
+			return fail(err)
+		}
+		if err := json.Unmarshal([]byte(r.NetboxRequestIdsJson), &row.NetBoxRequestIDs); err != nil {
+			return fail(err)
+		}
+		if r.Kind == RefreshZones {
+			if err := json.Unmarshal([]byte(r.ZonesJson), &row.Zones); err != nil {
+				return fail(err)
+			}
+		}
+		if r.GroupStatus.Valid {
+			g := GroupResult{Group: group, Status: r.GroupStatus.String, Error: r.GroupError.String}
+			if err := json.Unmarshal([]byte(r.CountsJson.String), &g.Counts); err != nil {
+				return fail(err)
+			}
+			row.Group = &g
+		}
+		out[i] = row
+	}
+	return out, nil
+}
+
+// beforeID returns the ID that a list starts before: before, or, for 0,
+// past every ID.
+func beforeID(before int64) int64 {
+	if before <= 0 {
+		return math.MaxInt64
+	}
+	return before
 }

@@ -46,6 +46,7 @@ func newDriftCmd(a *app) *cobra.Command {
 			"other groups are still reported.",
 		Args: usageArgs(cobra.NoArgs),
 	}
+	cmd.AddCommand(newDriftHistoryCmd(a))
 	output := addOutputFlag(cmd)
 	group := addGroupFlag(cmd, "Only compare this server group.", "Only compare this server group.")
 	zone := cmd.Flags().String("zone", "", "Only compare this zone, such as example.com.")

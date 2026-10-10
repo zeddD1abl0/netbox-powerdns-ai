@@ -59,3 +59,18 @@ DELETE FROM drift_zone_history
 WHERE drift_zone_history.at < sqlc.arg(cutoff)
   AND (drift_zone_history.state = 'removed'
     OR drift_zone_history.id NOT IN (SELECT MAX(l.id) FROM drift_zone_history l GROUP BY l.group_name, l.zone));
+
+-- name: ZoneHistory :many
+SELECT * FROM drift_zone_history
+WHERE group_name = sqlc.arg(group_name) AND zone = sqlc.arg(zone) AND id < sqlc.arg(before_id)
+ORDER BY id DESC
+LIMIT sqlc.arg(max_rows);
+
+-- name: GroupRefreshes :many
+SELECT r.id, r.kind, r.cause, r.started_at, r.finished_at, r.outcome, r.error, r.zones_json,
+    r.netbox_request_ids_json, r.trace_id, g.status AS group_status, g.error AS group_error, g.counts_json
+FROM drift_refreshes r
+LEFT JOIN drift_refresh_groups g ON g.refresh_id = r.id AND g.group_name = sqlc.arg(group_name)
+WHERE r.id < sqlc.arg(before_id)
+ORDER BY r.id DESC
+LIMIT sqlc.arg(max_rows);

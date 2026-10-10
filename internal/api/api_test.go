@@ -72,7 +72,14 @@ type reply struct {
 // OpenAPI document, and returns it.
 func get(t *testing.T, src Source, method, target string) reply {
 	t.Helper()
-	h := New(Options{Source: src, Log: slog.New(slog.DiscardHandler)})
+	return getWith(t, Options{Source: src}, method, target)
+}
+
+// getWith is get, with an API made with o.
+func getWith(t *testing.T, o Options, method, target string) reply {
+	t.Helper()
+	o.Log = slog.New(slog.DiscardHandler)
+	h := New(o)
 	req := httptest.NewRequestWithContext(t.Context(), method, target, nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)

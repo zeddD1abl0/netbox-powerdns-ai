@@ -61,6 +61,54 @@ func (e DriftPolicy) Valid() bool {
 	}
 }
 
+// Defines values for GroupResultStatus.
+const (
+	GroupResultStatusFailed GroupResultStatus = "failed"
+	GroupResultStatusOk     GroupResultStatus = "ok"
+)
+
+// Valid indicates whether the value is a known member of the GroupResultStatus enum.
+func (e GroupResultStatus) Valid() bool {
+	switch e {
+	case GroupResultStatusFailed:
+		return true
+	case GroupResultStatusOk:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HistoryState.
+const (
+	HistoryStateDrift            HistoryState = "drift"
+	HistoryStateIgnored          HistoryState = "ignored"
+	HistoryStateInSync           HistoryState = "in_sync"
+	HistoryStateInactiveInNetbox HistoryState = "inactive_in_netbox"
+	HistoryStateMissing          HistoryState = "missing"
+	HistoryStateRemoved          HistoryState = "removed"
+)
+
+// Valid indicates whether the value is a known member of the HistoryState enum.
+func (e HistoryState) Valid() bool {
+	switch e {
+	case HistoryStateDrift:
+		return true
+	case HistoryStateIgnored:
+		return true
+	case HistoryStateInSync:
+		return true
+	case HistoryStateInactiveInNetbox:
+		return true
+	case HistoryStateMissing:
+		return true
+	case HistoryStateRemoved:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OTLPProtocol.
 const (
 	OTLPProtocolGrpc         OTLPProtocol = "grpc"
@@ -94,6 +142,63 @@ func (e RefreshOutcome) Valid() bool {
 	case RefreshOutcomeFailed:
 		return true
 	case RefreshOutcomeIncomplete:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RefreshEntryCause.
+const (
+	RefreshEntryCauseSchedule RefreshEntryCause = "schedule"
+	RefreshEntryCauseWebhook  RefreshEntryCause = "webhook"
+)
+
+// Valid indicates whether the value is a known member of the RefreshEntryCause enum.
+func (e RefreshEntryCause) Valid() bool {
+	switch e {
+	case RefreshEntryCauseSchedule:
+		return true
+	case RefreshEntryCauseWebhook:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RefreshEntryKind.
+const (
+	RefreshEntryKindFull  RefreshEntryKind = "full"
+	RefreshEntryKindZones RefreshEntryKind = "zones"
+)
+
+// Valid indicates whether the value is a known member of the RefreshEntryKind enum.
+func (e RefreshEntryKind) Valid() bool {
+	switch e {
+	case RefreshEntryKindFull:
+		return true
+	case RefreshEntryKindZones:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RefreshEntryOutcome.
+const (
+	RefreshEntryOutcomeComplete   RefreshEntryOutcome = "complete"
+	RefreshEntryOutcomeFailed     RefreshEntryOutcome = "failed"
+	RefreshEntryOutcomeIncomplete RefreshEntryOutcome = "incomplete"
+)
+
+// Valid indicates whether the value is a known member of the RefreshEntryOutcome enum.
+func (e RefreshEntryOutcome) Valid() bool {
+	switch e {
+	case RefreshEntryOutcomeComplete:
+		return true
+	case RefreshEntryOutcomeFailed:
+		return true
+	case RefreshEntryOutcomeIncomplete:
 		return true
 	default:
 		return false
@@ -241,10 +346,69 @@ type ChangeRequest struct {
 	User *string `json:"user"`
 }
 
+// Database The database that the service keeps its state in.
+type Database struct {
+	// HistoryWriteFailures The refreshes that couldn't be written to the drift history since the service started. Each is still served.
+	//
+	// Examples: 0
+	HistoryWriteFailures int64 `json:"history_write_failures"`
+
+	// LastWriteError Its error, or null.
+	//
+	// Examples: null
+	LastWriteError *string `json:"last_write_error"`
+
+	// LastWriteFailure When the last of them was, or null.
+	//
+	// Examples: null
+	LastWriteFailure *time.Time `json:"last_write_failure"`
+
+	// Path The database's file, from `database.url`.
+	//
+	// Examples: /var/lib/nbpdns/nbpdns.db
+	Path string `json:"path"`
+
+	// Restored Whether the service started from the reports it kept before it restarted, which it serves until its first refresh replaces them.
+	//
+	// Examples: true
+	Restored bool `json:"restored"`
+
+	// RestoredAsOf When the refresh before the restart finished, or null if nothing was restored.
+	//
+	// Examples: 2026-10-08T00:55:40Z
+	RestoredAsOf *time.Time `json:"restored_as_of"`
+}
+
 // DriftPolicy What nbpdns does about a zone's drift: `report` reports it, `enforce` reports it and, from M14, corrects it, and `ignore` doesn't compare the zone.
 //
 // Examples: report
 type DriftPolicy string
+
+// GroupResult How a refresh went for a server group.
+type GroupResult struct {
+	// Counts The group's zones, by state, after the refresh, or null if it failed.
+	Counts *ZoneCounts `json:"counts"`
+
+	// Error Why the group's primary couldn't be read in that refresh, or null.
+	//
+	// Examples: null
+	Error *string `json:"error"`
+
+	// Status `ok` if the group's primary was read and compared, `failed` if it couldn't be read.
+	//
+	// Examples: ok
+	Status GroupResultStatus `json:"status"`
+}
+
+// GroupResultStatus `ok` if the group's primary was read and compared, `failed` if it couldn't be read.
+//
+// Examples: ok
+type GroupResultStatus string
+
+// HistoryState A zone's state in its drift history: as for `ZoneState`, but never `unmanaged`, which has no history; or `removed`, once the zone left the group's report, in neither its NetBox views nor its primary.
+//
+// Examples: drift
+type HistoryState string
 
 // NetBoxEvent A NetBox webhook's event, as NetBox 4.7 sends it without a body template: what happened to an object, the object, and the request that made the change. nbpdns reads only the fields below, and ignores the rest.
 //
@@ -478,6 +642,95 @@ type RefreshCounts struct {
 	Incomplete int64 `json:"incomplete"`
 }
 
+// RefreshEntry A refresh, as the drift history keeps it, with a server group's result in it.
+type RefreshEntry struct {
+	// Cause `schedule` if `drift.interval` started it, `webhook` if NetBox's webhooks did.
+	//
+	// Examples: schedule
+	Cause RefreshEntryCause `json:"cause"`
+
+	// Error Why this refresh failed, or null if it didn't.
+	//
+	// Examples: null
+	Error *string `json:"error"`
+
+	// Finished When this refresh finished.
+	//
+	// Examples: 2026-10-08T01:10:02Z
+	Finished time.Time `json:"finished"`
+
+	// Group The group's result in it, or null if it didn't try the group.
+	Group *GroupResult `json:"group"`
+
+	// Id The ID of the refresh.
+	//
+	// Examples: 1207
+	Id int64 `json:"id"`
+
+	// Kind `full` if it compared every zone, `zones` if only those that NetBox's webhooks named.
+	//
+	// Examples: full
+	Kind RefreshEntryKind `json:"kind"`
+
+	// NetboxRequestIds The IDs of the NetBox requests whose webhooks asked for it, if any did.
+	//
+	// Examples: []
+	NetboxRequestIds []string `json:"netbox_request_ids"`
+
+	// Outcome As for the status's last refresh.
+	//
+	// Examples: complete
+	Outcome RefreshEntryOutcome `json:"outcome"`
+
+	// Started When this refresh started.
+	//
+	// Examples: 2026-10-08T01:10:00Z
+	Started time.Time `json:"started"`
+
+	// TraceId Its trace's ID, as its log lines carry it.
+	//
+	// Examples: 4bf92f3577b34da6a3ce929d0e0e4736
+	TraceId string `json:"trace_id"`
+
+	// Zones The zones that a refresh of zones compared, each as `view/name`, or null for a full refresh.
+	//
+	// Examples: null
+	Zones *[]string `json:"zones"`
+}
+
+// RefreshEntryCause `schedule` if `drift.interval` started it, `webhook` if NetBox's webhooks did.
+//
+// Examples: schedule
+type RefreshEntryCause string
+
+// RefreshEntryKind `full` if it compared every zone, `zones` if only those that NetBox's webhooks named.
+//
+// Examples: full
+type RefreshEntryKind string
+
+// RefreshEntryOutcome As for the status's last refresh.
+//
+// Examples: complete
+type RefreshEntryOutcome string
+
+// RefreshPage One page of the refreshes, newest first, with its links.
+type RefreshPage struct {
+	// Items The page's refreshes.
+	//
+	// Examples: [{"cause":"schedule","error":"couldn't read NetBox: dial tcp: i/o timeout","finished":"2026-10-08T01:10:02Z","group":null,"id":1207,"kind":"full","netbox_request_ids":[],"outcome":"failed","started":"2026-10-08T01:10:00Z","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","zones":null}]
+	Items []RefreshEntry `json:"items"`
+
+	// Next The next page's absolute URL, or null on the last page.
+	//
+	// Examples: https://nbpdns.example.com/api/server-groups?cursor=eyJhIjoic2l0ZS1iIn0&limit=2
+	Next *string `json:"next"`
+
+	// Self This page's absolute URL.
+	//
+	// Examples: https://nbpdns.example.com/api/server-groups?limit=2
+	Self string `json:"self"`
+}
+
 // Schedule The refreshes' schedule, and how they went.
 type Schedule struct {
 	// IntervalSeconds The time from the start of one refresh to the start of the next, `drift.interval`.
@@ -598,6 +851,9 @@ type Side struct {
 
 // Status The nbpdns service's state.
 type Status struct {
+	// Database The database that the service keeps its state in.
+	Database Database `json:"database"`
+
 	// Live Whether a refresh has started within `drift.interval` + `drift.timeout` + 1 minute, as `/livez` reports.
 	//
 	// Examples: true
@@ -877,6 +1133,72 @@ type ZoneDetail struct {
 	Zone string `json:"zone"`
 }
 
+// ZoneHistoryEntry A row of a zone's drift history, which holds from its time until the next row's.
+type ZoneHistoryEntry struct {
+	// ChangeCount How many of the zone's RRsets differed.
+	//
+	// Examples: 1
+	ChangeCount int64 `json:"change_count"`
+
+	// Changes The RRsets that differed, in canonical order.
+	//
+	// Examples: []
+	Changes []Change `json:"changes"`
+
+	// DriftPolicy What nbpdns does about a zone's drift: `report` reports it, `enforce` reports it and, from M14, corrects it, and `ignore` doesn't compare the zone.
+	//
+	// Examples: report
+	DriftPolicy DriftPolicy `json:"drift_policy"`
+
+	// NetboxSerial NetBox's SOA serial for the zone, or null if NetBox had none.
+	//
+	// Examples: 2026100802
+	NetboxSerial *int64 `json:"netbox_serial"`
+
+	// PowerdnsSerial The primary's SOA serial for the zone, or null if it had none.
+	//
+	// Examples: 2026100801
+	PowerdnsSerial *int64 `json:"powerdns_serial"`
+
+	// RefreshId The ID of that refresh, as `listRefreshes` lists it.
+	//
+	// Examples: 1202
+	RefreshId int64 `json:"refresh_id"`
+
+	// State A zone's state in its drift history: as for `ZoneState`, but never `unmanaged`, which has no history; or `removed`, once the zone left the group's report, in neither its NetBox views nor its primary.
+	//
+	// Examples: drift
+	State HistoryState `json:"state"`
+
+	// Time When the refresh that wrote the row finished.
+	//
+	// Examples: 2026-10-08T00:45:01Z
+	Time time.Time `json:"time"`
+
+	// View The zone's NetBox view.
+	//
+	// Examples: _default_
+	View string `json:"view"`
+}
+
+// ZoneHistoryPage One page of a zone's drift history, newest first, with its links.
+type ZoneHistoryPage struct {
+	// Items The page's rows.
+	//
+	// Examples: [{"change_count":0,"changes":[],"drift_policy":"report","netbox_serial":2026100803,"powerdns_serial":2026100803,"refresh_id":1207,"state":"in_sync","time":"2026-10-08T01:10:02Z","view":"_default_"}]
+	Items []ZoneHistoryEntry `json:"items"`
+
+	// Next The next page's absolute URL, or null on the last page.
+	//
+	// Examples: https://nbpdns.example.com/api/server-groups?cursor=eyJhIjoic2l0ZS1iIn0&limit=2
+	Next *string `json:"next"`
+
+	// Self This page's absolute URL.
+	//
+	// Examples: https://nbpdns.example.com/api/server-groups?limit=2
+	Self string `json:"self"`
+}
+
 // ZonePage One page of a server group's zones, with its links.
 type ZonePage struct {
 	// AsOf What the zones are as of, the group's `last_success`, or null if the group was never read. Zones that NetBox's webhooks named may have been compared since.
@@ -974,6 +1296,18 @@ type GetServerGroupParams struct {
 	XFlowID *FlowID `json:"X-Flow-ID,omitempty"`
 }
 
+// ListRefreshesParams defines parameters for ListRefreshes.
+type ListRefreshesParams struct {
+	// Limit The most items the page may have.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Where the page starts: a previous page's `next` link carries it. It's opaque, and only good with the same filters as the page that gave it.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// XFlowID The request's flow ID, to follow it through the logs. A request without a valid one is given one. Either way, the response returns it, and it's the request's `request_id` in nbpdns's logs.
+	XFlowID *FlowID `json:"X-Flow-ID,omitempty"`
+}
+
 // ListZonesParams defines parameters for ListZones.
 type ListZonesParams struct {
 	// State Only the zones in these states, such as `drift,missing`. The drifted states are `drift`, `missing` and `inactive_in_netbox`.
@@ -997,6 +1331,18 @@ type GetZoneParams struct {
 
 // ListZoneChangesParams defines parameters for ListZoneChanges.
 type ListZoneChangesParams struct {
+	// Limit The most items the page may have.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Where the page starts: a previous page's `next` link carries it. It's opaque, and only good with the same filters as the page that gave it.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// XFlowID The request's flow ID, to follow it through the logs. A request without a valid one is given one. Either way, the response returns it, and it's the request's `request_id` in nbpdns's logs.
+	XFlowID *FlowID `json:"X-Flow-ID,omitempty"`
+}
+
+// ListZoneHistoryParams defines parameters for ListZoneHistory.
+type ListZoneHistoryParams struct {
 	// Limit The most items the page may have.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 
@@ -1205,6 +1551,9 @@ type ServerInterface interface {
 	// GetServerGroup Get a server group
 	// (GET /server-groups/{group})
 	GetServerGroup(w http.ResponseWriter, r *http.Request, group Group, params GetServerGroupParams)
+	// ListRefreshes List the refreshes, with a server group's result in each
+	// (GET /server-groups/{group}/refreshes)
+	ListRefreshes(w http.ResponseWriter, r *http.Request, group Group, params ListRefreshesParams)
 	// ListZones List a server group's zones
 	// (GET /server-groups/{group}/zones)
 	ListZones(w http.ResponseWriter, r *http.Request, group Group, params ListZonesParams)
@@ -1214,6 +1563,9 @@ type ServerInterface interface {
 	// ListZoneChanges List a zone's changes
 	// (GET /server-groups/{group}/zones/{zone}/changes)
 	ListZoneChanges(w http.ResponseWriter, r *http.Request, group Group, zone ZoneName, params ListZoneChangesParams)
+	// ListZoneHistory List a zone's drift history
+	// (GET /server-groups/{group}/zones/{zone}/history)
+	ListZoneHistory(w http.ResponseWriter, r *http.Request, group Group, zone ZoneName, params ListZoneHistoryParams)
 	// ListZoneRRsets List a zone's RRsets, as NetBox defines them
 	// (GET /server-groups/{group}/zones/{zone}/rrsets)
 	ListZoneRRsets(w http.ResponseWriter, r *http.Request, group Group, zone ZoneName, params ListZoneRRsetsParams)
@@ -1380,6 +1732,82 @@ func (siw *ServerInterfaceWrapper) GetServerGroup(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetServerGroup(w, r, group, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListRefreshes operation middleware
+func (siw *ServerInterfaceWrapper) ListRefreshes(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "group" -------------
+	var group Group
+
+	err = runtime.BindStyledParameterWithOptions("simple", "group", r.PathValue("group"), &group, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "group", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRefreshesParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Flow-ID" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Flow-ID")]; found {
+		var XFlowID FlowID
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Flow-ID", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Flow-ID", valueList[0], &XFlowID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Flow-ID", Err: err})
+			return
+		}
+
+		params.XFlowID = &XFlowID
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRefreshes(w, r, group, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1613,6 +2041,91 @@ func (siw *ServerInterfaceWrapper) ListZoneChanges(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListZoneChanges(w, r, group, zone, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListZoneHistory operation middleware
+func (siw *ServerInterfaceWrapper) ListZoneHistory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "group" -------------
+	var group Group
+
+	err = runtime.BindStyledParameterWithOptions("simple", "group", r.PathValue("group"), &group, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "group", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "zone" -------------
+	var zone ZoneName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "zone", r.PathValue("zone"), &zone, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "zone", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListZoneHistoryParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Flow-ID" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Flow-ID")]; found {
+		var XFlowID FlowID
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Flow-ID", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Flow-ID", valueList[0], &XFlowID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Flow-ID", Err: err})
+			return
+		}
+
+		params.XFlowID = &XFlowID
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListZoneHistory(w, r, group, zone, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1874,6 +2387,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/server-groups/{group}/zones", wrapper.ListZones)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/server-groups/{group}/zones/{zone}", wrapper.GetZone)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/server-groups/{group}/zones/{zone}/changes", wrapper.ListZoneChanges)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/server-groups/{group}/zones/{zone}/history", wrapper.ListZoneHistory)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/server-groups/{group}/refreshes", wrapper.ListRefreshes)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/server-groups/{group}/zones/{zone}/rrsets", wrapper.ListZoneRRsets)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/netbox-events", wrapper.ReceiveNetBoxEvent)
 
@@ -2214,6 +2729,98 @@ func (response GetServerGroupdefaultApplicationProblemPlusJSONResponse) VisitGet
 	return err
 }
 
+type ListRefreshesRequestObject struct {
+	Group  Group `json:"group"`
+	Params ListRefreshesParams
+}
+
+type ListRefreshesResponseObject interface {
+	VisitListRefreshesResponse(w http.ResponseWriter) error
+}
+
+type ListRefreshes200ResponseHeaders struct {
+	XFlowID *string
+}
+
+type ListRefreshes200JSONResponse struct {
+	Body    RefreshPage
+	Headers ListRefreshes200ResponseHeaders
+}
+
+func (response ListRefreshes200JSONResponse) VisitListRefreshesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRefreshes400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListRefreshes400ApplicationProblemPlusJSONResponse) VisitListRefreshesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRefreshes404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ListRefreshes404ApplicationProblemPlusJSONResponse) VisitListRefreshesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRefreshesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	Headers    ProblemResponseHeaders
+	StatusCode int
+}
+
+func (response ListRefreshesdefaultApplicationProblemPlusJSONResponse) VisitListRefreshesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListZonesRequestObject struct {
 	Group  Group `json:"group"`
 	Params ListZonesParams
@@ -2473,6 +3080,99 @@ func (response ListZoneChangesdefaultApplicationProblemPlusJSONResponse) VisitLi
 	return err
 }
 
+type ListZoneHistoryRequestObject struct {
+	Group  Group    `json:"group"`
+	Zone   ZoneName `json:"zone"`
+	Params ListZoneHistoryParams
+}
+
+type ListZoneHistoryResponseObject interface {
+	VisitListZoneHistoryResponse(w http.ResponseWriter) error
+}
+
+type ListZoneHistory200ResponseHeaders struct {
+	XFlowID *string
+}
+
+type ListZoneHistory200JSONResponse struct {
+	Body    ZoneHistoryPage
+	Headers ListZoneHistory200ResponseHeaders
+}
+
+func (response ListZoneHistory200JSONResponse) VisitListZoneHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListZoneHistory400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListZoneHistory400ApplicationProblemPlusJSONResponse) VisitListZoneHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListZoneHistory404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ListZoneHistory404ApplicationProblemPlusJSONResponse) VisitListZoneHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListZoneHistorydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	Headers    ProblemResponseHeaders
+	StatusCode int
+}
+
+func (response ListZoneHistorydefaultApplicationProblemPlusJSONResponse) VisitListZoneHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListZoneRRsetsRequestObject struct {
 	Group  Group    `json:"group"`
 	Zone   ZoneName `json:"zone"`
@@ -2630,6 +3330,9 @@ type StrictServerInterface interface {
 	// GetServerGroup Get a server group
 	// (GET /server-groups/{group})
 	GetServerGroup(ctx context.Context, request GetServerGroupRequestObject) (GetServerGroupResponseObject, error)
+	// ListRefreshes List the refreshes, with a server group's result in each
+	// (GET /server-groups/{group}/refreshes)
+	ListRefreshes(ctx context.Context, request ListRefreshesRequestObject) (ListRefreshesResponseObject, error)
 	// ListZones List a server group's zones
 	// (GET /server-groups/{group}/zones)
 	ListZones(ctx context.Context, request ListZonesRequestObject) (ListZonesResponseObject, error)
@@ -2639,6 +3342,9 @@ type StrictServerInterface interface {
 	// ListZoneChanges List a zone's changes
 	// (GET /server-groups/{group}/zones/{zone}/changes)
 	ListZoneChanges(ctx context.Context, request ListZoneChangesRequestObject) (ListZoneChangesResponseObject, error)
+	// ListZoneHistory List a zone's drift history
+	// (GET /server-groups/{group}/zones/{zone}/history)
+	ListZoneHistory(ctx context.Context, request ListZoneHistoryRequestObject) (ListZoneHistoryResponseObject, error)
 	// ListZoneRRsets List a zone's RRsets, as NetBox defines them
 	// (GET /server-groups/{group}/zones/{zone}/rrsets)
 	ListZoneRRsets(ctx context.Context, request ListZoneRRsetsRequestObject) (ListZoneRRsetsResponseObject, error)
@@ -2772,6 +3478,33 @@ func (sh *strictHandler) GetServerGroup(w http.ResponseWriter, r *http.Request, 
 	}
 }
 
+// ListRefreshes operation middleware
+func (sh *strictHandler) ListRefreshes(w http.ResponseWriter, r *http.Request, group Group, params ListRefreshesParams) {
+	var request ListRefreshesRequestObject
+
+	request.Group = group
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRefreshes(ctx, request.(ListRefreshesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRefreshes")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRefreshesResponseObject); ok {
+		if err := validResponse.VisitListRefreshesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListZones operation middleware
 func (sh *strictHandler) ListZones(w http.ResponseWriter, r *http.Request, group Group, params ListZonesParams) {
 	var request ListZonesRequestObject
@@ -2848,6 +3581,34 @@ func (sh *strictHandler) ListZoneChanges(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListZoneChangesResponseObject); ok {
 		if err := validResponse.VisitListZoneChangesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListZoneHistory operation middleware
+func (sh *strictHandler) ListZoneHistory(w http.ResponseWriter, r *http.Request, group Group, zone ZoneName, params ListZoneHistoryParams) {
+	var request ListZoneHistoryRequestObject
+
+	request.Group = group
+	request.Zone = zone
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListZoneHistory(ctx, request.(ListZoneHistoryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListZoneHistory")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListZoneHistoryResponseObject); ok {
+		if err := validResponse.VisitListZoneHistoryResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

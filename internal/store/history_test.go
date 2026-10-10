@@ -198,3 +198,60 @@ func TestPruneDriftHistory(t *testing.T) {
 		t.Errorf("%d group results left, %v, want the last refresh's 1", groups, err)
 	}
 }
+
+func TestReadHistory(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	t0 := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	records := []RefreshRecord{
+		full(t0, group(zone("b.example.", drift.StateInSync))),
+		full(t0.Add(time.Hour), group(zone("b.example.", drift.StateDrift, change("192.0.2.9")))),
+		{Kind: RefreshFull, Cause: CauseSchedule, Started: t0.Add(2 * time.Hour), Finished: t0.Add(2 * time.Hour),
+			Outcome: "failed", Error: "NetBox is down"},
+		{Kind: RefreshZones, Cause: CauseWebhook, Started: t0.Add(3 * time.Hour), Finished: t0.Add(3 * time.Hour),
+			Outcome: "complete", Zones: []string{"_default_/b.example."}, NetBoxRequestIDs: []string{"r1"},
+			Groups:  []GroupResult{{Group: "lab-a", Status: drift.StatusOK, Counts: drift.Counts{InSync: 1}}},
+			Reports: []KeptReport{{Report: group(zone("b.example.", drift.StateInSync)), LastSuccess: t0.Add(time.Hour)}}},
+	}
+	for _, r := range records {
+		if _, _, err := s.RecordRefresh(ctx, r); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	rows, err := s.ZoneHistory(ctx, "lab-a", "b.example.", 0, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 || rows[0].State != drift.StateInSync || !rows[0].At.Equal(t0.Add(3*time.Hour)) ||
+		rows[1].State != drift.StateDrift || len(rows[1].Changes) != 1 || rows[1].Changes[0].PowerDNS.Values[0] != "192.0.2.9" ||
+		rows[1].NetBoxSerial != 7 || rows[1].Policy != "report" {
+		t.Errorf("the zone's newest two rows = %+v", rows)
+	}
+	older, err := s.ZoneHistory(ctx, "lab-a", "b.example.", rows[1].ID, 10)
+	if err != nil || len(older) != 1 || older[0].State != drift.StateInSync || !older[0].At.Equal(t0) {
+		t.Errorf("the rows before %d = %+v, %v, want the first", rows[1].ID, older, err)
+	}
+	if none, err := s.ZoneHistory(ctx, "lab-a", "nothing.example.", 0, 10); err != nil || len(none) != 0 {
+		t.Errorf("a zone with no history = %+v, %v", none, err)
+	}
+
+	refreshes, err := s.Refreshes(ctx, "lab-a", 0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(refreshes) != 4 {
+		t.Fatalf("Refreshes() = %d, want 4", len(refreshes))
+	}
+	z, failed := refreshes[0], refreshes[1]
+	if z.Kind != RefreshZones || z.Cause != CauseWebhook || !reflect.DeepEqual(z.Zones, []string{"_default_/b.example."}) ||
+		!reflect.DeepEqual(z.NetBoxRequestIDs, []string{"r1"}) || z.Group == nil || z.Group.Counts.InSync != 1 {
+		t.Errorf("the zone refresh = %+v", z)
+	}
+	if failed.Outcome != "failed" || failed.Error != "NetBox is down" || failed.Group != nil || failed.Zones != nil {
+		t.Errorf("the failed refresh = %+v, want no result for lab-a, and no zones", failed)
+	}
+	if other, err := s.Refreshes(ctx, "lab-b", refreshes[1].ID, 10); err != nil || len(other) != 2 || other[0].Group != nil {
+		t.Errorf("lab-b's refreshes before %d = %+v, %v, want 2, without a result", refreshes[1].ID, other, err)
+	}
+}

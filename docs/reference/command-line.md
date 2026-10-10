@@ -238,7 +238,7 @@ primary. If a primary can't be read, its group is marked failed, and the
 other groups are still reported.
 
 ```text
-nbpdns drift [flags]
+nbpdns drift [command]
 ```
 
 | Flag | Type | Default | Description |
@@ -246,6 +246,28 @@ nbpdns drift [flags]
 | `--group` | `string` | none | Only compare this server group. |
 | `-o`, `--output` | `format` | `table` | The output format: `table` or `json`. |
 | `--zone` | `string` | none | Only compare this zone, such as `example.com`. |
+
+Subcommands: [`history`](#nbpdns-drift-history).
+
+### `nbpdns drift history`
+
+Show the drift history that nbpdns serve keeps in the database at
+database.url, oldest first. Without --zone, it lists the latest refreshes,
+each with the group's result. With --zone, it lists the zone's history: a row
+for each refresh that found it in another state, or with other changes, than
+the row before, which holds until the next row. The table counts each row's
+changes, which the JSON output lists.
+
+```text
+nbpdns drift history [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--group` | `string` | none | The server group, such as `site-a`. Required. |
+| `--limit` | `int` | `20` | Show at most this many, the latest. |
+| `-o`, `--output` | `format` | `table` | The output format: `table` or `json`. |
+| `--zone` | `string` | none | Show this zone's history, such as `example.com`. |
 
 ### `nbpdns netbox`
 

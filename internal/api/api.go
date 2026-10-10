@@ -59,6 +59,8 @@ type Options struct {
 	// Events queues the refreshes that webhooks ask for. It must be set if
 	// WebhookSecret is.
 	Events Notifier
+	// History is the drift history. If it's nil, there's none.
+	History History
 }
 
 // base is the API's path, where the spec's server is.
@@ -189,6 +191,9 @@ func (s *server) GetStatus(_ context.Context, _ gen.GetStatusRequestObject) (gen
 		out.Tracing.Endpoint, out.Tracing.Protocol = optional(st.Tracing.Endpoint), &p
 	}
 	out.Webhooks = webhooks(st.Webhooks)
+	d := st.Database
+	out.Database = gen.Database{Path: d.Path, Restored: d.Restored, RestoredAsOf: d.RestoredAsOf,
+		HistoryWriteFailures: int64(d.HistoryWriteFailures), LastWriteFailure: d.LastWriteFailure, LastWriteError: optional(d.LastWriteError)}
 	return gen.GetStatus200JSONResponse{Body: out}, nil
 }
 
