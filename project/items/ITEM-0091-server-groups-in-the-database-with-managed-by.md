@@ -5,7 +5,7 @@ type: feature # feature | bug | debt | task
 status: open # open | in-progress | blocked | done | wontfix
 milestone: M08
 requirements: [REQ-050]
-depends_on: [ITEM-0090]
+depends_on: [ITEM-0090, ITEM-0092]
 created: 2026-10-09
 closed:
 ---
@@ -29,3 +29,5 @@ changes within seconds; and `managed_by` in the API.
 
 <!-- Append-only. Start each note with the date: "- YYYY-MM-DD: …" -->
 - 2026-10-09: Created from M08's approved design, on `plan-m08-m12`.
+- 2026-10-10: Now after ITEM-0092, whose sealing a CLI-managed group's API
+  key needs; ITEM-0092 no longer depends on this item.

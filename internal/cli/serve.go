@@ -112,7 +112,7 @@ func newServeCmd(a *app) *cobra.Command {
 			defer stopBackground()
 			go s.prune(bgCtx, st, &live)
 			go s.watchSettings(bgCtx, st, settingsVersion, svc, &live)
-			return serve(ctx, s, svc, st)
+			return serve(ctx, s, svc, st, func() config.Secret { return live.Load().NetBox.WebhookSecret })
 		})
 	}
 	return cmd
@@ -268,7 +268,7 @@ func (s *session) retryClients(ctx context.Context, clients []groupClient) {
 // serve listens at server.listen, and runs svc until ctx is canceled or the
 // listener fails, with the API serving history's drift history. Then it lets
 // the requests in flight finish.
-func serve(ctx context.Context, s *session, svc *service.Service, history api.History) error {
+func serve(ctx context.Context, s *session, svc *service.Service, history api.History, webhookSecret func() config.Secret) error {
 	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", s.cfg.Server.Listen)
 	if err != nil {
 		return fmt.Errorf("server.listen: %w", err)
@@ -278,7 +278,7 @@ func serve(ctx context.Context, s *session, svc *service.Service, history api.Hi
 	// NetBox's webhooks queue the service's zone refreshes (ADR-0036).
 	mux.Handle("/api/", api.New(api.Options{
 		Source: svc, Log: s.log, Tracer: s.tracer, Metrics: s.metrics, PublicURL: s.cfg.Server.PublicURL,
-		WebhookSecret: s.cfg.NetBox.WebhookSecret, Events: svc, History: history,
+		LiveWebhookSecret: webhookSecret, Events: svc, History: history,
 	}))
 	mux.Handle("/", svc.Handler())
 	srv := &http.Server{

@@ -41,6 +41,7 @@ inserted. `nbpdns audit list` reads the trail.
 | [`zone.drift_changed`](#zonedrift_changed) | `zone` | `system` | A refresh of `nbpdns serve` found a zone in another drift state than its last, a new zone that drifted, or that a zone left its group's report. A zone whose changes differ, in the same state, has a new row in its drift history, but no event. |
 | [`setting.set`](#settingset) | `setting` | `os-user:<name>` | `nbpdns settings set` stored a runtime setting's value in the database, which `nbpdns serve` applies within seconds, unless the key is pinned. |
 | [`setting.unset`](#settingunset) | `setting` | `os-user:<name>` | `nbpdns settings unset` removed a runtime setting's stored value, so that the key takes its default, unless it's pinned. |
+| [`master_key.rotated`](#master_keyrotated) | `master-key` | `os-user:<name>` | `nbpdns secrets rotate-master-key` re-wrapped every secret that the database stores with a new master key (ADR-0041). The secrets themselves didn't change. |
 
 ### `service.started`
 
@@ -95,3 +96,12 @@ A refresh of `nbpdns serve` found a zone in another drift state than its last, a
 - **Actor:** `os-user:<name>`
 - **Before:** `value`, the stored value; `[redacted]` for a secret.
 - **After:** nothing.
+
+### `master_key.rotated`
+
+`nbpdns secrets rotate-master-key` re-wrapped every secret that the database stores with a new master key (ADR-0041). The secrets themselves didn't change.
+
+- **Target:** type `master-key`, named by the new key's ID, 16 hex digits of a hash of it
+- **Actor:** `os-user:<name>`
+- **Before:** `key_id`, the old master key's ID.
+- **After:** `key_id`, the new master key's ID, and `secrets`, how many secrets it re-wrapped.

@@ -112,6 +112,8 @@ type Service struct {
 	o       Options
 	started time.Time
 	timing  atomic.Pointer[Timing]
+	// webhooksOn is whether the API takes NetBox's webhooks, for /status.
+	webhooksOn atomic.Bool
 	// views are the views that the groups serve.
 	views map[string]bool
 	// wake tells Run that a webhook has queued a refresh.
@@ -186,8 +188,13 @@ func New(o Options) *Service {
 	s := &Service{o: o, started: o.now(), views: views, wake: make(chan struct{}, 1),
 		st: state{refreshes: map[string]int{}, groups: map[string]*groupState{}}}
 	s.storeTiming(Timing{Interval: o.Interval, Timeout: o.Timeout, WebhookDelay: o.WebhookDelay})
+	s.webhooksOn.Store(o.Webhooks)
 	return s
 }
+
+// SetWebhooks says whether the API takes NetBox's webhooks, as
+// netbox.webhook_secret, which can change while the service runs, says.
+func (s *Service) SetWebhooks(on bool) { s.webhooksOn.Store(on) }
 
 // Timing returns the refreshes' schedule.
 func (s *Service) Timing() Timing { return *s.timing.Load() }

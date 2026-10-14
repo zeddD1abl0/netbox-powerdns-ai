@@ -7,12 +7,14 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/audit"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/config"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/secrets"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/store"
 )
 
@@ -115,29 +117,97 @@ func newSettingsGetCmd(a *app) *cobra.Command {
 
 func newSettingsSetCmd(a *app) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "set KEY VALUE",
+		Use:   "set KEY [VALUE]",
 		Short: "Store a runtime setting's value, which nbpdns serve applies within seconds",
 		Long: "Store a runtime key's value in the database, after checking it as the config\n" +
 			"file's would be. A running nbpdns serve applies it within seconds, unless the\n" +
-			"key is pinned. The change is an audit event, with --reason, if given.",
-		Args: usageArgs(cobra.ExactArgs(2)),
+			"key is pinned. The change is an audit event, with --reason, if given.\n\n" +
+			"A secret, such as netbox.token, is read from the file that --from-file names,\n" +
+			"or from standard input with --from-file -, never from the command line, where\n" +
+			"other users can see it. It's sealed with database.master_key before it's\n" +
+			"stored, and its audit event shows it as [redacted].",
+		Args: usageArgs(cobra.RangeArgs(1, 2)),
 	}
 	reason := addReasonFlag(cmd)
+	from := cmd.Flags().String("from-file", "", "Read the value from this file, or from standard input if it's -.")
+	_ = cmd.Flags().SetAnnotation("from-file", config.MarkdownUsage, []string{"Read the value from this file, or from standard input if it's `-`."})
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
-		key, value := args[0], args[1]
+		key, arg := args[0], ""
+		if len(args) > 1 {
+			arg = args[len(args)-1]
+		}
+		value, err := settingValue(cmd, arg, *from)
+		if err != nil {
+			return usageError{err}
+		}
 		k, err := config.CheckSetting(key, value)
 		if err != nil {
 			return usageError{err}
 		}
-		if k.Secret {
-			return usageError{fmt.Errorf("%s is a secret, which the database doesn't store yet; "+
-				"set it in the config file, %s, or --%s", key, k.FileEnv(), k.FileFlag())}
+		if k.Secret && len(args) == 2 {
+			return usageError{fmt.Errorf("%s is a secret: pass it with --from-file, not on the command line, where other users can see it", key)}
 		}
 		return a.run(cmd, func(ctx context.Context, s *session) error {
-			return s.changeSetting(ctx, a.stdout, store.SettingChange{Key: key, Value: value, Actor: audit.OSUser(), Reason: *reason})
+			c := store.SettingChange{Key: key, Value: value, Secret: k.Secret, Actor: audit.OSUser(), Reason: *reason}
+			if k.Secret {
+				mk, err := s.masterKey()
+				if err != nil {
+					return err
+				}
+				if !mk.IsSet() {
+					return fmt.Errorf("%s is a secret, which the database stores sealed with database.master_key, which isn't set; "+
+						"make one with openssl rand -base64 32", key)
+				}
+				if c.Value, err = secrets.Seal(mk, store.SettingPlace(key), value); err != nil {
+					return err
+				}
+			}
+			return s.changeSetting(ctx, a.stdout, c)
 		})
 	}
 	return cmd
+}
+
+// settingValue returns the value that `nbpdns settings set` stores: arg, its
+// second argument, if it has one, or what --from-file names, without a final
+// newline.
+func settingValue(cmd *cobra.Command, arg, from string) (string, error) {
+	if arg != "" {
+		if from != "" {
+			return "", errors.New("give the value as an argument, or with --from-file, not both")
+		}
+		return arg, nil
+	}
+	if from == "" {
+		return "", errors.New("give the value as an argument, or, for a secret, with --from-file")
+	}
+	var b []byte
+	var err error
+	if from == "-" {
+		b, err = io.ReadAll(io.LimitReader(cmd.InOrStdin(), 64<<10))
+	} else {
+		b, err = os.ReadFile(from)
+	}
+	if err != nil {
+		return "", fmt.Errorf("reading the value: %w", err)
+	}
+	value := strings.TrimRight(string(b), "\r\n")
+	if value == "" {
+		return "", errors.New("the value is empty")
+	}
+	return value, nil
+}
+
+// masterKey returns database.master_key, or no key if it isn't set.
+func (s *session) masterKey() (secrets.MasterKey, error) {
+	if !s.cfg.Database.MasterKey.IsSet() {
+		return secrets.MasterKey{}, nil
+	}
+	mk, err := secrets.ParseMasterKey(s.cfg.Database.MasterKey.Reveal())
+	if err != nil {
+		return mk, fmt.Errorf("database.master_key: %w", err)
+	}
+	return mk, nil
 }
 
 func newSettingsUnsetCmd(a *app) *cobra.Command {
@@ -197,6 +267,8 @@ func (s *session) changeSetting(ctx context.Context, out io.Writer, c store.Sett
 		return nil
 	case c.Unset:
 		fmt.Fprintf(out, "Removed the stored value of %s.\n", c.Key)
+	case c.Secret:
+		fmt.Fprintf(out, "Stored %s for %s, sealed with the master key.\n", config.Redacted, c.Key)
 	default:
 		fmt.Fprintf(out, "Stored %s for %s.\n", c.Value, c.Key)
 	}
@@ -228,8 +300,20 @@ func (s *session) storedConfig(ctx context.Context, st *store.Store) (*config.Co
 		return nil, nil, 0, err
 	}
 	values := make(map[string]string, len(stored))
+	var mk secrets.MasterKey
 	for k, v := range stored {
 		values[k] = v.Value
+		if !v.Sealed {
+			continue
+		}
+		if !mk.IsSet() {
+			if mk, err = s.masterKey(); err != nil {
+				return nil, nil, 0, err
+			}
+		}
+		if values[k], err = secrets.Open(mk, store.SettingPlace(k), v.Value); err != nil {
+			return nil, nil, 0, fmt.Errorf("the database stores a secret for %s, which doesn't open: %w", k, err)
+		}
 	}
 	cfg, settings, err := s.loader.WithStored(values)
 	if err != nil {

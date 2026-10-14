@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"slices"
 	"time"
+
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/secrets"
 )
 
 // Config is nbpdns's configuration, with the defaults, the config file, the
@@ -48,6 +50,9 @@ type DatabaseConfig struct {
 	// URL is the database's location, such as
 	// sqlite:///var/lib/nbpdns/nbpdns.db.
 	URL string
+	// MasterKey seals the secrets that the database stores (ADR-0041), in
+	// base64.
+	MasterKey Secret
 }
 
 // SQLitePath returns the file that URL names. The loader has checked URL.
@@ -139,6 +144,20 @@ func keys(c *Config) []Key {
 				"Copy the trail elsewhere before you shorten it: the events it deletes are gone.",
 			Default: "2557",
 		}, 36500),
+		secretKey(&c.Database.MasterKey, Key{
+			Name: "database.master_key",
+			Summary: "The master key that seals the secrets the database stores, such as a `netbox.token` that `nbpdns settings set` stores: " +
+				"32 random bytes, in base64.",
+			Details: "Make one with `openssl rand -base64 32`, and pass it in a file. " +
+				"It's needed only once the database stores a secret: `nbpdns settings set` refuses to store one without it, " +
+				"and `nbpdns serve` refuses to start if the database holds secrets that it can't open. " +
+				"`nbpdns secrets rotate-master-key` replaces it.",
+			Warning: "Keep the master key apart from the database, and back it up: without it, the secrets that the database stores are lost. " +
+				"Anyone with both can read them.",
+		}, func(s string) error {
+			_, err := secrets.ParseMasterKey(s)
+			return err
+		}),
 		stringKey(&c.Database.URL, "a `sqlite:` URL", "url", Key{
 			Name:    "database.url",
 			Summary: "Where `nbpdns serve` keeps its state, such as `sqlite:///var/lib/nbpdns/nbpdns.db`.",

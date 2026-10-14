@@ -28,6 +28,8 @@ in the [configuration reference](configuration.md).
 |---|---|---|---|
 | `--audit-retention-days` | `integer` | `2557` | How many days the audit trail keeps an event. |
 | `--config` | `string` | none | The YAML config file to read, instead of `$NBPDNS_CONFIG`. |
+| `--database-master-key` | `string` | none | The master key that seals the secrets the database stores, such as a `netbox.token` that `nbpdns settings set` stores: 32 random bytes, in base64. |
+| `--database-master-key-file` | `path` | none | Read `database.master_key` from this file. |
 | `--database-url` | `url` | `sqlite:///var/lib/nbpdns/nbpdns.db` | Where `nbpdns serve` keeps its state, such as `sqlite:///var/lib/nbpdns/nbpdns.db`. |
 | `--drift-group-concurrency` | `integer` | `4` | How many server groups are read and compared at once. |
 | `--drift-history-retention-days` | `integer` | `400` | How many days the drift history keeps each refresh, and each zone's changes. |
@@ -416,6 +418,36 @@ nbpdns powerdns zones [flags]
 | `--group` | `string` | none | Only list this server group's zones. |
 | `-o`, `--output` | `format` | `table` | The output format: `table` or `json`. |
 
+### `nbpdns secrets`
+
+Manage database.master_key, which seals the secrets that the database stores,
+such as a netbox.token that nbpdns settings set stored (ADR-0041). Each secret
+is sealed with its own data key, which the master key wraps.
+
+```text
+nbpdns secrets [command]
+```
+
+Subcommands: [`rotate-master-key`](#nbpdns-secrets-rotate-master-key).
+
+### `nbpdns secrets rotate-master-key`
+
+Re-wrap every secret that the database stores with the new master key in the
+file that --new-key-file names, opening them with database.master_key, all in
+one transaction, which is an audit event. The secrets themselves don't change.
+It refuses while nbpdns serve runs on the database: stop serve, rotate, then
+start serve with database.master_key set to the new key. Keep the old key until
+serve has started with the new one.
+
+```text
+nbpdns secrets rotate-master-key [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--new-key-file` | `string` | none | The file that holds the new master key, in base64, such as `openssl rand -base64 32` prints. Required. |
+| `--reason` | `string` | none | Why, for the change's audit event. |
+
 ### `nbpdns serve`
 
 Refresh the drift report on a schedule, every drift.interval, as nbpdns drift
@@ -492,12 +524,18 @@ Store a runtime key's value in the database, after checking it as the config
 file's would be. A running nbpdns serve applies it within seconds, unless the
 key is pinned. The change is an audit event, with --reason, if given.
 
+A secret, such as netbox.token, is read from the file that --from-file names,
+or from standard input with --from-file -, never from the command line, where
+other users can see it. It's sealed with database.master_key before it's
+stored, and its audit event shows it as [redacted].
+
 ```text
-nbpdns settings set KEY VALUE [flags]
+nbpdns settings set KEY [VALUE] [flags]
 ```
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--from-file` | `string` | none | Read the value from this file, or from standard input if it's `-`. |
 | `--reason` | `string` | none | Why, for the change's audit event. |
 
 ### `nbpdns settings unset`

@@ -40,7 +40,8 @@ func (o Options) verified(ops map[string]operation) gen.MiddlewareFunc {
 				next.ServeHTTP(w, r)
 				return
 			}
-			if !o.WebhookSecret.IsSet() {
+			secret := o.webhookSecret()
+			if !secret.IsSet() {
 				writeProblem(w, r, http.StatusNotFound,
 					"Webhooks are off. Set netbox.webhook_secret, and give NetBox's webhook the same secret, to turn them on.")
 				return
@@ -56,7 +57,7 @@ func (o Options) verified(ops map[string]operation) gen.MiddlewareFunc {
 				return
 			}
 			sig := r.Header.Get(webhook.SignatureHeader)
-			if !webhook.Verify(o.WebhookSecret.Reveal(), body, sig) {
+			if !webhook.Verify(secret.Reveal(), body, sig) {
 				o.countWebhook(metrics.WebhookBadSignature)
 				detail := "The request's X-Hook-Signature isn't the body's: give NetBox's webhook the secret in netbox.webhook_secret."
 				if sig == "" {

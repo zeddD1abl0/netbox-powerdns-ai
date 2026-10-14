@@ -223,7 +223,7 @@ func (s *Service) Status() Status {
 func (s *Service) webhooks() Webhooks {
 	st := &s.st
 	delay := s.Timing().WebhookDelay
-	w := Webhooks{Enabled: s.o.Webhooks, DelaySeconds: delay.Seconds(), Pending: Pending{Zones: []string{}}}
+	w := Webhooks{Enabled: s.webhooksOn.Load(), DelaySeconds: delay.Seconds(), Pending: Pending{Zones: []string{}}}
 	if e := st.lastEvent; e != nil {
 		copied := *e
 		w.LastEvent = &copied

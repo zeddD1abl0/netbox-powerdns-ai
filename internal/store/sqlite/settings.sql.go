@@ -22,7 +22,7 @@ func (q *Queries) DeleteSetting(ctx context.Context, key string) (int64, error) 
 }
 
 const getSetting = `-- name: GetSetting :one
-SELECT "key", value, updated_at, updated_by FROM settings WHERE key = ?1
+SELECT "key", value, sealed, updated_at, updated_by FROM settings WHERE key = ?1
 `
 
 func (q *Queries) GetSetting(ctx context.Context, key string) (Setting, error) {
@@ -31,6 +31,7 @@ func (q *Queries) GetSetting(ctx context.Context, key string) (Setting, error) {
 	err := row.Scan(
 		&i.Key,
 		&i.Value,
+		&i.Sealed,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
 	)
@@ -38,7 +39,7 @@ func (q *Queries) GetSetting(ctx context.Context, key string) (Setting, error) {
 }
 
 const listSettings = `-- name: ListSettings :many
-SELECT "key", value, updated_at, updated_by FROM settings ORDER BY key
+SELECT "key", value, sealed, updated_at, updated_by FROM settings ORDER BY key
 `
 
 func (q *Queries) ListSettings(ctx context.Context) ([]Setting, error) {
@@ -53,9 +54,42 @@ func (q *Queries) ListSettings(ctx context.Context) ([]Setting, error) {
 		if err := rows.Scan(
 			&i.Key,
 			&i.Value,
+			&i.Sealed,
 			&i.UpdatedAt,
 			&i.UpdatedBy,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const sealedSettings = `-- name: SealedSettings :many
+SELECT key, value FROM settings WHERE sealed ORDER BY key
+`
+
+type SealedSettingsRow struct {
+	Key   string
+	Value string
+}
+
+func (q *Queries) SealedSettings(ctx context.Context) ([]SealedSettingsRow, error) {
+	rows, err := q.db.QueryContext(ctx, sealedSettings)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SealedSettingsRow
+	for rows.Next() {
+		var i SealedSettingsRow
+		if err := rows.Scan(&i.Key, &i.Value); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -80,15 +114,31 @@ func (q *Queries) SequenceValue(ctx context.Context, name string) (int64, error)
 	return value, err
 }
 
+const updateSealedSetting = `-- name: UpdateSealedSetting :exec
+UPDATE settings SET value = ?1 WHERE key = ?2 AND sealed
+`
+
+type UpdateSealedSettingParams struct {
+	Value string
+	Key   string
+}
+
+func (q *Queries) UpdateSealedSetting(ctx context.Context, arg UpdateSealedSettingParams) error {
+	_, err := q.db.ExecContext(ctx, updateSealedSetting, arg.Value, arg.Key)
+	return err
+}
+
 const upsertSetting = `-- name: UpsertSetting :exec
-INSERT INTO settings (key, value, updated_at, updated_by)
-VALUES (?1, ?2, ?3, ?4)
-ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at, updated_by = excluded.updated_by
+INSERT INTO settings (key, value, sealed, updated_at, updated_by)
+VALUES (?1, ?2, ?3, ?4, ?5)
+ON CONFLICT (key) DO UPDATE SET
+    value = excluded.value, sealed = excluded.sealed, updated_at = excluded.updated_at, updated_by = excluded.updated_by
 `
 
 type UpsertSettingParams struct {
 	Key       string
 	Value     string
+	Sealed    bool
 	UpdatedAt string
 	UpdatedBy string
 }
@@ -97,6 +147,7 @@ func (q *Queries) UpsertSetting(ctx context.Context, arg UpsertSettingParams) er
 	_, err := q.db.ExecContext(ctx, upsertSetting,
 		arg.Key,
 		arg.Value,
+		arg.Sealed,
 		arg.UpdatedAt,
 		arg.UpdatedBy,
 	)

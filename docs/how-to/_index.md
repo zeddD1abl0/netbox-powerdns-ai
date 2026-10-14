@@ -18,6 +18,7 @@ its goal and prerequisites, then gives numbered steps.
 - [Set a zone's drift policy](set-a-zones-drift-policy.md)
 - [Run nbpdns in a container](run-nbpdns-in-a-container.md)
 - [Change nbpdns's settings while it runs](change-nbpdns-settings-while-it-runs.md)
+- [Protect stored secrets with a master key](protect-stored-secrets-with-a-master-key.md)
 - [Read drift and DNS records through the API](read-drift-and-dns-records-through-the-api.md)
 - [Read a zone's drift history](read-a-zones-drift-history.md)
 - [Refresh drift as NetBox changes](refresh-drift-as-netbox-changes.md)

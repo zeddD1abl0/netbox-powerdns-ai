@@ -91,6 +91,7 @@ type Sequence struct {
 type Setting struct {
 	Key       string
 	Value     string
+	Sealed    bool
 	UpdatedAt string
 	UpdatedBy string
 }

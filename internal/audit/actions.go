@@ -15,6 +15,7 @@ const (
 	ZoneDriftChanged Action = "zone.drift_changed"
 	SettingSet       Action = "setting.set"
 	SettingUnset     Action = "setting.unset"
+	MasterKeyRotated Action = "master_key.rotated"
 )
 
 // Def declares an action.
@@ -78,6 +79,14 @@ var defs = []Def{
 		Actor:   "`os-user:<name>`",
 		Summary: "`nbpdns settings unset` removed a runtime setting's stored value, so that the key takes its default, unless it's pinned.",
 		Before:  "`value`, the stored value; `[redacted]` for a secret.",
+	},
+	{
+		Action: MasterKeyRotated, Target: "master-key", TargetID: "the new key's ID, 16 hex digits of a hash of it",
+		Actor: "`os-user:<name>`",
+		Summary: "`nbpdns secrets rotate-master-key` re-wrapped every secret that the database stores with a new master key (ADR-0041). " +
+			"The secrets themselves didn't change.",
+		Before: "`key_id`, the old master key's ID.",
+		After:  "`key_id`, the new master key's ID, and `secrets`, how many secrets it re-wrapped.",
 	},
 }
 

@@ -52,6 +52,14 @@ All notable changes to this project are recorded here. The format follows
   or `setting.unset` audit event, and `nbpdns_settings_reloads_total`
   counts serve's reloads. "Change nbpdns's settings while it runs" shows
   how.
+- Secret runtime settings, such as `netbox.token`, are stored sealed with
+  `database.master_key` (and its `_FILE` form), by envelope encryption with
+  AES-256-GCM, each bound to its key. `nbpdns settings set` takes a secret
+  only from `--from-file`, or standard input, and `nbpdns serve` refuses to
+  start with a secret that it can't open. `nbpdns secrets
+  rotate-master-key` re-wraps them with a new master key, in one audited
+  transaction, after which a secret sealed with the old key is refused.
+  "Protect stored secrets with a master key" shows how.
 
 ### Changed
 

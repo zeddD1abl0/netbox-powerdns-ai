@@ -1,10 +1,11 @@
 -- Runtime settings (ADR-0040): the values that `nbpdns settings set` stores,
--- by key. Each change bumps the settings_version sequence, which a running
--- serve watches.
+-- by key, a secret's sealed with the master key (ADR-0041). Each change
+-- bumps the settings_version sequence, which a running serve watches.
 -- +goose Up
 CREATE TABLE settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL,
+    sealed BOOLEAN NOT NULL,
     updated_at TEXT NOT NULL,
     updated_by TEXT NOT NULL
 );

@@ -40,6 +40,7 @@ a secret's value.
 | Key | Kind | Type | Default |
 |---|---|---|---|
 | [`audit.retention_days`](#auditretention_days) | runtime | integer, 1 to 36500 | `2557` |
+| [`database.master_key`](#databasemaster_key) | bootstrap | string, secret | none |
 | [`database.url`](#databaseurl) | bootstrap | a `sqlite:` URL | `sqlite:///var/lib/nbpdns/nbpdns.db` |
 | [`drift.group_concurrency`](#driftgroup_concurrency) | runtime | integer, 1 to 32 | `4` |
 | [`drift.history_retention_days`](#drifthistory_retention_days) | runtime | integer, 1 to 36500 | `400` |
@@ -82,6 +83,26 @@ is built to support. PCI DSS asks for one year.
 > [!WARNING]
 > A shorter retention may fall short of your compliance obligations. Copy the
 > trail elsewhere before you shorten it: the events it deletes are gone.
+
+## `database.master_key`
+
+The master key that seals the secrets the database stores, such as a
+`netbox.token` that `nbpdns settings set` stores: 32 random bytes, in base64.
+Make one with `openssl rand -base64 32`, and pass it in a file. It's needed
+only once the database stores a secret: `nbpdns settings set` refuses to store
+one without it, and `nbpdns serve` refuses to start if the database holds
+secrets that it can't open. `nbpdns secrets rotate-master-key` replaces it.
+
+- **Kind:** bootstrap
+- **Type:** string, secret
+- **Default:** none
+- **Environment variable:** `NBPDNS_DATABASE_MASTER_KEY`
+- **Flag:** `--database-master-key`
+- **From a file:** `NBPDNS_DATABASE_MASTER_KEY_FILE`, `--database-master-key-file`, or `database.master_key_file` in the config file
+
+> [!WARNING]
+> Keep the master key apart from the database, and back it up: without it, the
+> secrets that the database stores are lost. Anyone with both can read them.
 
 ## `database.url`
 

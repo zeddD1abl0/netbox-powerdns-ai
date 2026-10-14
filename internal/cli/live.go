@@ -134,6 +134,7 @@ func (s *session) reloadSettings(ctx context.Context, st *store.Store, current [
 		s.log.ErrorContext(ctx, "couldn't apply the log level", "err", err)
 	}
 	svc.SetTiming(service.Timing{Interval: cfg.Drift.Interval, Timeout: cfg.Drift.Timeout, WebhookDelay: cfg.Drift.WebhookDelay})
+	svc.SetWebhooks(cfg.NetBox.WebhookSecret.IsSet())
 	live.Store(cfg)
 	s.metrics.SettingsReload(metrics.ReloadApplied)
 	s.log.InfoContext(ctx, "applied the changed settings", "keys", changedKeys(current, settings))

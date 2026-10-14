@@ -126,8 +126,8 @@ event in full: its values before and after the change.
 > [!NOTE]
 > Until M10, anyone who can write the database can change the settings, so
 > keep it readable and writable by nbpdns's user only, as nbpdns creates
-> it. Secrets, such as `netbox.token`, stay in the config file, the
-> environment or a flag.
+> it. A secret, such as `netbox.token`, is stored sealed with a master key:
+> see [Protect stored secrets with a master key](protect-stored-secrets-with-a-master-key.md).
 
 ## Next steps
 

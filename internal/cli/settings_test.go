@@ -120,10 +120,11 @@ func TestSettingsErrors(t *testing.T) {
 			"database.url is a bootstrap key, which only the config file, NBPDNS_DATABASE_URL or --database-url sets"},
 		{[]string{"settings", "set", "drift.interval", "1s"}, exitUsage, "drift.interval: 1s is shorter than 10s"},
 		{[]string{"settings", "set", "drift.intervall", "1m"}, exitUsage, "there's no key drift.intervall"},
-		{[]string{"settings", "set", "netbox.token", "nbt_abc.s3cret"}, exitUsage, "netbox.token is a secret, which the database doesn't store yet"},
+		{[]string{"settings", "set", "netbox.token", "nbt_abc.s3cret"}, exitUsage, "netbox.token is a secret: pass it with --from-file"},
 		{[]string{"settings", "unset", "server.listen"}, exitUsage, "server.listen is a bootstrap key"},
 		{[]string{"settings", "get", "server.listen"}, exitError, "server.listen is a bootstrap key"},
-		{[]string{"settings", "set", "drift.interval"}, exitUsage, "accepts 2 arg(s)"},
+		{[]string{"settings", "set", "drift.interval"}, exitUsage, "give the value as an argument"},
+		{[]string{"settings", "set"}, exitUsage, "accepts between 1 and 2 arg(s)"},
 	} {
 		t.Run(strings.Join(tt.args, " "), func(t *testing.T) {
 			code, _, stderr := run(t, env, tt.args...)
