@@ -35,3 +35,5 @@ ignored by its fingerprint, which matches that one finding and nothing else.
   fixture like this one passes `make check` and fails after its commit;
   scanning the staged changes too would catch it first, which is left to
   decide with the user.
+- 2026-10-15: The user answered the open question: `make secrets` should
+  scan the staged changes too. ITEM-0105 does it.

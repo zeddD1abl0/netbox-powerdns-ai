@@ -17,7 +17,7 @@
 | [M05](milestones/M05-packaging.md) | Packaging | done | 5 of 5 |
 | [M06](milestones/M06-rest-api.md) | REST API | done | 10 of 10 |
 | [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | done | 9 of 9 |
-| [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | in-progress | 11 of 16 |
+| [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | in-progress | 11 of 17 |
 | [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | planned | 1 of 1 |
 | [M10](milestones/M10-authentication.md) | Authentication | planned | 1 of 2 |
 | [M11](milestones/M11-roles-and-permissions.md) | Roles and permissions | planned | 1 of 1 |
@@ -40,6 +40,7 @@
 | [ITEM-0094](items/ITEM-0094-the-m08-docs-and-changelog.md) | The M08 docs and CHANGELOG | task | open | ITEM-0093 |
 | [ITEM-0102](items/ITEM-0102-tidy-every-go-mod-and-go-sum-and-fail-make-check-w.md) | Tidy every go.mod and go.sum, and fail make check when one isn't | bug | open | — |
 | [ITEM-0103](items/ITEM-0103-pin-gopls-with-the-other-go-tools.md) | Pin gopls with the other Go tools | debt | open | — |
+| [ITEM-0105](items/ITEM-0105-scan-staged-changes-for-secrets-too.md) | Scan staged changes for secrets too | bug | open | — |
 | [ITEM-0084](items/ITEM-0084-plan-milestones-ahead-with-gitlab-as-their-view.md) | Plan milestones ahead, with GitLab as their view | task | done 2026-10-10 | — |
 | [ITEM-0085](items/ITEM-0085-design-m08-sqlite-persistence.md) | Design M08: SQLite persistence | task | done 2026-10-09 | — |
 | [ITEM-0086](items/ITEM-0086-the-sqlite-store-driver-migrations-sqlc-and-the-lo.md) | The SQLite store: driver, migrations, sqlc and the lock | feature | done 2026-10-10 | — |
