@@ -87,6 +87,14 @@ All notable changes to this project are recorded here. The format follows
   and in Kubernetes, update the deployment with the `Recreate` strategy, as
   "Run nbpdns in a container" shows.
 
+### Fixed
+
+- While a refresh runs, `/status` and `/api/status` show the last refresh
+  with its own start. They showed the start of the one running with the
+  end of the last one, and so a negative duration, which the contract of
+  `/api/status` refuses; since the restore, the first refresh after every
+  restart did.
+
 ## [0.7.0] - 2026-10-09
 
 The first release since 0.1.0, with the REST API of M06 and the

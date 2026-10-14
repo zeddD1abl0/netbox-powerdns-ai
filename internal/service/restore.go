@@ -39,7 +39,8 @@ func (s *Service) Restore(ctx context.Context) {
 		st.groups[g.Name] = gs
 	}
 	if last := r.Last; last != nil {
-		st.lastStart, st.lastEnd, st.lastOutcome, st.lastError = last.Started, last.Finished, last.Outcome, last.Error
+		st.lastStart, st.lastEndStart, st.lastEnd = last.Started, last.Started, last.Finished
+		st.lastOutcome, st.lastError = last.Outcome, last.Error
 		st.netboxUp = last.Outcome != metrics.OutcomeFailed
 		if !st.netboxUp {
 			st.netboxError = last.Error

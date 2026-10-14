@@ -174,3 +174,40 @@ func TestStatus(t *testing.T) {
 		}
 	}
 }
+
+// TestStatusDuringARefresh checks that, while a refresh runs, the status's
+// last refresh is the one before it, with its own start.
+func TestStatusDuringARefresh(t *testing.T) {
+	calls := 0
+	running, release := make(chan struct{}), make(chan struct{})
+	s, _, _ := testService(t, Options{
+		Groups: []Group{{Name: "site-a", URL: "https://pdns-a.example.com"}},
+		Refresh: func(context.Context, []drift.ZoneRef) (drift.Report, error) {
+			if calls++; calls == 2 {
+				close(running)
+				<-release
+			}
+			return report(group("site-a", drift.StateInSync)), nil
+		},
+	})
+	first := time.Now().Add(-time.Minute)
+	s.refresh(t.Context(), first, batch{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		s.refresh(t.Context(), time.Now(), batch{})
+	}()
+	defer func() {
+		close(release)
+		<-done
+	}()
+	<-running
+	code, body := get(t, s, http.MethodGet, "/status?json=1")
+	var st Status
+	if err := json.Unmarshal([]byte(body), &st); err != nil || code != http.StatusOK {
+		t.Fatalf("status JSON: %d, %v:\n%s", code, err, body)
+	}
+	if lr := st.Schedule.LastRefresh; lr == nil || !lr.Started.Equal(first) || lr.DurationSeconds < 59 {
+		t.Errorf("the last refresh during the next = %+v, want the first, from %s", lr, first)
+	}
+}

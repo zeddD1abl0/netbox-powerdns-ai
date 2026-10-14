@@ -17,7 +17,7 @@
 | [M05](milestones/M05-packaging.md) | Packaging | done | 5 of 5 |
 | [M06](milestones/M06-rest-api.md) | REST API | done | 10 of 10 |
 | [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | done | 9 of 9 |
-| [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | in-progress | 11 of 17 |
+| [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | in-progress | 12 of 18 |
 | [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | planned | 1 of 1 |
 | [M10](milestones/M10-authentication.md) | Authentication | planned | 1 of 2 |
 | [M11](milestones/M11-roles-and-permissions.md) | Roles and permissions | planned | 1 of 1 |
@@ -52,6 +52,7 @@
 | [ITEM-0092](items/ITEM-0092-secrets-encrypted-at-rest-and-master-key-rotation.md) | Secrets encrypted at rest, and master key rotation | feature | done 2026-10-14 | — |
 | [ITEM-0101](items/ITEM-0101-keep-sessions-to-one-item-and-send-read-only-searc.md) | Keep sessions to one item, and send read-only searches to a Haiku agent | task | done 2026-10-14 | — |
 | [ITEM-0104](items/ITEM-0104-make-secrets-fails-on-a-test-fixture-that-item-009.md) | Make secrets fails on a test fixture that ITEM-0092 committed | bug | done 2026-10-15 | — |
+| [ITEM-0106](items/ITEM-0106-status-mixes-a-running-refresh-s-start-with-the-la.md) | Status mixes a running refresh's start with the last one's end | bug | done 2026-10-15 | — |
 
 ## Open items in other milestones
 

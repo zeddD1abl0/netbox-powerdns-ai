@@ -146,8 +146,11 @@ type state struct {
 	writeFailures    int
 	lastWriteError   string
 	lastWriteFailure time.Time
-	lastStart        time.Time
-	lastEnd          time.Time
+	// lastStart is when the last refresh started, which may still run;
+	// lastEnd is when the last one finished, which started at lastEndStart.
+	lastStart    time.Time
+	lastEnd      time.Time
+	lastEndStart time.Time
 	// lastOutcome is the last refresh's: a metrics.Outcome constant.
 	lastOutcome string
 	// lastError is why the last refresh failed, if it did.
@@ -514,7 +517,7 @@ func (s *Service) record(ctx context.Context, log *slog.Logger, r drift.Report, 
 
 	s.mu.Lock()
 	st := &s.st
-	st.ready, st.lastEnd, st.lastOutcome, st.lastError = true, end, outcome, ""
+	st.ready, st.lastEndStart, st.lastEnd, st.lastOutcome, st.lastError = true, start, end, outcome, ""
 	st.refreshes[outcome]++
 	if outcome == metrics.OutcomeComplete {
 		st.lastComplete = end

@@ -108,7 +108,7 @@ func TestRestore(t *testing.T) {
 	if !status.Live {
 		t.Error("after Restore, not live: the restored refresh, an hour old, counted for liveness")
 	}
-	if lr := status.Schedule.LastRefresh; lr == nil || !lr.Finished.Equal(t0) || lr.Outcome != "incomplete" {
+	if lr := status.Schedule.LastRefresh; lr == nil || !lr.Finished.Equal(t0) || lr.Started.After(lr.Finished) || lr.Outcome != "incomplete" {
 		t.Errorf("after Restore, the last refresh = %+v, want the one before the restart", lr)
 	}
 	a, c := status.Groups[0], status.Groups[1]

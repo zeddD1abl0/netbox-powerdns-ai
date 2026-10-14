@@ -200,8 +200,8 @@ func (s *Service) Status() Status {
 	}
 	if st.ready {
 		out.Schedule.LastRefresh = &Refresh{
-			Started: st.lastStart.UTC(), Finished: st.lastEnd.UTC(),
-			DurationSeconds: st.lastEnd.Sub(st.lastStart).Seconds(), Outcome: st.lastOutcome, Error: st.lastError,
+			Started: st.lastEndStart.UTC(), Finished: st.lastEnd.UTC(),
+			DurationSeconds: st.lastEnd.Sub(st.lastEndStart).Seconds(), Outcome: st.lastOutcome, Error: st.lastError,
 		}
 		up := st.netboxUp
 		out.NetBox.Up = &up
