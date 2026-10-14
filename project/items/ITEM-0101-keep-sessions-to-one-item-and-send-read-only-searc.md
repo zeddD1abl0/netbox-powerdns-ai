@@ -76,3 +76,11 @@ CLAUDE.md rules, and records the measurements behind them.
   gitleaks, then, after the vocabulary and CLAUDE.md fixes, docs-lint,
   api-lint, generate-check and project-lint. The commit leaves out the
   uncommitted ITEM-0092 work.
+- 2026-10-14: `scout` loads in a new session, and ran on its own
+  definition: 7 tool calls, about 28k tokens and 36 seconds, every turn
+  on `claude-haiku-5-5`. It answered two questions on the tooling for
+  ITEM-0102 and ITEM-0103: how the Go tools are pinned, and whether
+  anything checks that `go.mod` is tidy. Its findings checked out; one
+  line number was out (`tool` directives are on line 7, not 5). The
+  harness flagged its report as instruction-shaped because it quoted
+  `.claude/settings.json`; it held only evidence.
