@@ -440,3 +440,12 @@ Given after a review of ITEM-0092's uncommitted work, before ITEM-0091.
 The replicas in the first question were `nbpdns serve`'s own, which M09
 runs several of (REQ-033), not PowerDNS's. M09's design confirms that with
 the user.
+
+### M09's replicas, clarified, 2026-10-14
+
+The user had read the replicas as PowerDNS's. For `nbpdns serve`'s own
+replicas, how they learn of a change of leader:
+
+| Question | Answer |
+|---|---|
+| `LISTEN` and `NOTIFY`, or polling? | "For nbpds, we should definitely support both. polling being the default, but NOTIFY and LISTEN would be preferred." |
