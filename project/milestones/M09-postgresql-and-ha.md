@@ -67,3 +67,8 @@ stops (REQ-033).
   may take there.
 - `database.url`'s form for PostgreSQL: TLS, client certificates, and the
   password from a `_FILE`.
+
+The user answered these on 2026-10-14, in the brief: both `LISTEN` and
+`NOTIFY`, and polling; the takeover test is for the design to work out,
+such as by stopping the leader's container; and `database.url` in
+PostgreSQL's standard URI form.

@@ -415,3 +415,28 @@ waiting until each is next. For M09:
 | Q-051: accessibility and language? | "WCAG 2.2 AA, English". |
 
 ADR-0043 records the re-plan, with REQ-057 and REQ-058.
+
+## Answers, 2026-10-14 (M08: secrets and server groups, and M09's open points)
+
+Given after a review of ITEM-0092's uncommitted work, before ITEM-0091.
+
+| Question | Answer |
+|---|---|
+| Fix the race between `secrets rotate-master-key` and `settings set`, which could store a secret sealed with the old key? | "Fix the rotation race". |
+| Should `settings list` and `settings get` work without the master key? | "No". |
+| When a group is removed, are its drift history and refreshes kept, or deleted? | "It should be retained". |
+| Where does a CLI group's API key come from? | "--api-key-file or an ENV". |
+| Should `groups add` and `groups set` check that the servers answer? | "Yes if they interact with servers. No otherwise". |
+| Can a group be renamed? | "Renaming shouldn't affect things in a critical way. If there are concenrs that renaming might break something, it should be discovered and we should work on that." |
+
+### M09's open points, 2026-10-14
+
+| Question | Answer |
+|---|---|
+| How do the replicas learn of a change of leader: `LISTEN` and `NOTIFY`, or polling? | "Both. replicas aren't really our concern. PowerDNS configuration is outside the scope of this project. This is merely a conduit between NetBox DNS and PowerDNS (and probably other DNS servers in the future)." |
+| How do the CI tests kill a leader, and how long may a takeover take? | "I don't know how the CI tests do this. Presumably through "docker stop --force", but I haven't investigated that testing" |
+| What form does `database.url` take for PostgreSQL? | "The URL for PostgreSQL should be in standard form" |
+
+The replicas in the first question were `nbpdns serve`'s own, which M09
+runs several of (REQ-033), not PowerDNS's. M09's design confirms that with
+the user.
