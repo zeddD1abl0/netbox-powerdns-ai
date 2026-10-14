@@ -28,3 +28,7 @@ references; and the CHANGELOG, with its `[0.8.0]` section at close.
 
 <!-- Append-only. Start each note with the date: "- YYYY-MM-DD: …" -->
 - 2026-10-09: Created from M08's approved design, on `plan-m08-m12`.
+- 2026-10-14: ADR-0044 tries Sonnet here once. A Sonnet 5.5 subagent drafts
+  the docs and the CHANGELOG lines from the M08 diff, against the style
+  guide, and Opus reviews the draft. Record how it compared: what Opus
+  changed, and whether a draft saved work.

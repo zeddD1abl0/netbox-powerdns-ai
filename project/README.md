@@ -17,7 +17,7 @@
 | [M05](milestones/M05-packaging.md) | Packaging | done | 5 of 5 |
 | [M06](milestones/M06-rest-api.md) | REST API | done | 10 of 10 |
 | [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | done | 9 of 9 |
-| [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | in-progress | 7 of 12 |
+| [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | in-progress | 8 of 13 |
 | [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | planned | 1 of 1 |
 | [M10](milestones/M10-authentication.md) | Authentication | planned | 1 of 2 |
 | [M11](milestones/M11-roles-and-permissions.md) | Roles and permissions | planned | 1 of 1 |
@@ -47,6 +47,7 @@
 | [ITEM-0088](items/ITEM-0088-drift-history-and-restore-at-start.md) | Drift history and restore at start | feature | done 2026-10-10 | — |
 | [ITEM-0089](items/ITEM-0089-drift-history-in-the-api-and-the-cli.md) | Drift history in the API and the CLI | feature | done 2026-10-10 | — |
 | [ITEM-0090](items/ITEM-0090-runtime-settings-key-kinds-precedence-and-live-app.md) | Runtime settings: key kinds, precedence and live application | feature | done 2026-10-10 | — |
+| [ITEM-0101](items/ITEM-0101-keep-sessions-to-one-item-and-send-read-only-searc.md) | Keep sessions to one item, and send read-only searches to a Haiku agent | task | done 2026-10-14 | — |
 
 ## Open items in other milestones
 
@@ -76,4 +77,4 @@
 
 ## Decisions
 
-43 ADRs (34 accepted, 9 superseded), listed in [docs/adr](../docs/adr/_index.md).
+44 ADRs (35 accepted, 9 superseded), listed in [docs/adr](../docs/adr/_index.md).
