@@ -273,6 +273,131 @@ nbpdns drift history [flags]
 | `-o`, `--output` | `format` | `table` | The output format: `table` or `json`. |
 | `--zone` | `string` | none | Show this zone's history, such as `example.com`. |
 
+### `nbpdns groups`
+
+Show and change the server groups that the database at database.url stores, and
+that nbpdns serve compares (ADR-0040). Each group is managed by the config file,
+whose groups serve mirrors into the database at each start, or by these
+commands, which change only their own groups. A running nbpdns serve applies
+their changes within seconds. Each change is an audit event, with the operating
+system's user as its actor.
+
+```text
+nbpdns groups [command]
+```
+
+Subcommands: [`add`](#nbpdns-groups-add), [`list`](#nbpdns-groups-list), [`remove`](#nbpdns-groups-remove), [`rename`](#nbpdns-groups-rename), and [`set`](#nbpdns-groups-set).
+
+### `nbpdns groups add`
+
+Add a server group, managed by the command line, after checking its fields as
+the config file's are, and checking that its primary's API answers and accepts
+the key, unless --no-check is given. The primary's URL and the group's views
+are required.
+
+The PowerDNS API key is read from the file that --api-key-file names, or from
+standard input with --api-key-file -, or, without it, from NBPDNS_GROUP_API_KEY;
+never from the command line, where other users can see it. It's sealed with
+database.master_key before it's stored. The change is an audit event, with
+--reason, if given. A name that the config file declares is refused, since it
+would stop nbpdns serve.
+
+```text
+nbpdns groups add NAME [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--api-key-file` | `string` | none | Read the PowerDNS API key from this file, or from standard input if it's `-`. Without it, the key comes from `NBPDNS_GROUP_API_KEY`, if it's set. |
+| `--ca-file` | `string` | none | A PEM file of CA certificates to trust for the primary, as well as the system's; empty for none. |
+| `--cert-file` | `string` | none | A PEM client certificate to present, with `--key-file`; empty for none. |
+| `--drift-policy` | `string` | none | The drift policy of the group's zones: `enforce`, `report` or `ignore`. By default, `report`. |
+| `--key-file` | `string` | none | The client certificate's PEM private key; empty for none. |
+| `--no-check` | `bool` | none | Don't check that the primary answers, such as for a server that isn't up yet. |
+| `--reason` | `string` | none | Why, for the change's audit event. |
+| `--server-id` | `string` | none | The server's ID in the PowerDNS API's paths. By default, `localhost`. |
+| `--url` | `string` | none | The primary's PowerDNS API, such as `https://pdns-a.example.com:8443`. |
+| `--views` | `stringSlice` | `[]` | The NetBox views whose zones the group serves, separated by commas. |
+| `--zone-policies` | `string` | none | Drift policies for single zones, as `zone=policy` separated by commas, such as `legacy.example.com=ignore`; empty for none. |
+
+### `nbpdns groups list`
+
+List the server groups that the database stores: the config file's, as nbpdns
+serve last mirrored them at its start, and those that nbpdns groups added. The
+JSON output has each one's fields, with a stored API key as [redacted].
+
+```text
+nbpdns groups list [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `-o`, `--output` | `format` | `table` | The output format: `table` or `json`. |
+
+### `nbpdns groups remove`
+
+Remove a server group that nbpdns groups added. A running nbpdns serve drops
+its state and metrics within seconds. Its drift history is kept until
+drift.history_retention_days prunes it, and nbpdns drift history still reads it.
+The change is an audit event, with --reason, if given.
+
+```text
+nbpdns groups remove NAME [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--reason` | `string` | none | Why, for the change's audit event. |
+
+### `nbpdns groups rename`
+
+Rename a server group that nbpdns groups added. Its drift history and its last
+report carry on under its new name (ADR-0045). A running nbpdns serve applies it
+within seconds, and moves the group's metrics to the new name. The audit trail
+keeps the events before the rename under the old name, and the event of the
+rename links the two. The change is an audit event, with --reason, if given.
+
+A new name that another group has, that the config file declares, or that a
+removed group's drift history still uses, is refused.
+
+```text
+nbpdns groups rename NAME NEW-NAME [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--reason` | `string` | none | Why, for the change's audit event. |
+
+### `nbpdns groups set`
+
+Change the fields of a server group that nbpdns groups added: each flag given
+replaces its field, and an empty value returns it to its default, or removes
+it. The group is checked as the config file's are. If the change touches how
+nbpdns reaches the primary, such as its URL or API key, the primary's API is
+checked too, as nbpdns groups add checks it, unless --no-check is given.
+
+A new API key is read as nbpdns groups add reads it: from --api-key-file, or
+NBPDNS_GROUP_API_KEY. Opening the stored key needs database.master_key. The
+change is an audit event, with --reason, if given.
+
+```text
+nbpdns groups set NAME [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--api-key-file` | `string` | none | Read the PowerDNS API key from this file, or from standard input if it's `-`. Without it, the key comes from `NBPDNS_GROUP_API_KEY`, if it's set. |
+| `--ca-file` | `string` | none | A PEM file of CA certificates to trust for the primary, as well as the system's; empty for none. |
+| `--cert-file` | `string` | none | A PEM client certificate to present, with `--key-file`; empty for none. |
+| `--drift-policy` | `string` | none | The drift policy of the group's zones: `enforce`, `report` or `ignore`. By default, `report`. |
+| `--key-file` | `string` | none | The client certificate's PEM private key; empty for none. |
+| `--no-check` | `bool` | none | Don't check that the primary answers, such as for a server that isn't up yet. |
+| `--reason` | `string` | none | Why, for the change's audit event. |
+| `--server-id` | `string` | none | The server's ID in the PowerDNS API's paths. By default, `localhost`. |
+| `--url` | `string` | none | The primary's PowerDNS API, such as `https://pdns-a.example.com:8443`. |
+| `--views` | `stringSlice` | `[]` | The NetBox views whose zones the group serves, separated by commas. |
+| `--zone-policies` | `string` | none | Drift policies for single zones, as `zone=policy` separated by commas, such as `legacy.example.com=ignore`; empty for none. |
+
 ### `nbpdns netbox`
 
 Read DNS data from NetBox's DNS plugin, the source of truth, through
@@ -465,6 +590,10 @@ migrates, when it starts: the audit trail, each refresh, and each zone's
 drift history. It restores its last reports from it at start, and serves
 them until its first refresh replaces them. Only one serve may use a
 database at a time.
+
+It compares the config file's server groups, which it mirrors into the
+database at start, and those that nbpdns groups added, whose changes it
+applies within seconds, as it applies the runtime settings.
 
 With netbox.webhook_secret set, NetBox's signed webhooks at /api/netbox-events
 refresh the zones they name, once they stop coming for drift.webhook_delay.

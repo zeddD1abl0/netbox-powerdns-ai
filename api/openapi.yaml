@@ -159,6 +159,7 @@ paths:
                     primary_url: https://pdns-a.example.com:8443
                     views: [_default_, internal]
                     drift_policy: report
+                    managed_by: file
                     status: ok
                     error: null
                     last_success: "2026-10-08T01:10:02Z"
@@ -199,6 +200,7 @@ paths:
                 primary_url: https://pdns-a.example.com:8443
                 views: [_default_, internal]
                 drift_policy: report
+                managed_by: file
                 status: ok
                 error: null
                 last_success: "2026-10-08T01:10:02Z"
@@ -1235,11 +1237,14 @@ components:
       description: >-
         A PowerDNS server group, with its last-known state. The counts are
         as of `last_success`.
-      required: [name, primary_url, views, drift_policy, status, error, last_success, counts, problem_count, warning_count]
+      required: [name, primary_url, views, drift_policy, managed_by, status, error, last_success, counts, problem_count, warning_count]
       properties:
         name:
           type: string
-          description: The group's name, its stable ID.
+          description: >-
+            The group's name, which identifies it in the API's paths. A
+            rename with `nbpdns groups rename` changes it, and its drift
+            history moves with it.
           examples: [site-a]
         primary_url:
           type: string
@@ -1254,6 +1259,14 @@ components:
           examples: [[_default_, internal]]
         drift_policy:
           $ref: "#/components/schemas/DriftPolicy"
+        managed_by:
+          type: string
+          x-extensible-enum: [file, cli]
+          description: >-
+            What manages the group: `file`, the config file, or `cli`,
+            `nbpdns groups`, which changes it while nbpdns runs. Later
+            releases add other managers, so take an unknown value as one.
+          examples: [file]
         status:
           type: string
           enum: [ok, failed, unknown]
@@ -1372,6 +1385,7 @@ components:
                     primary_url: https://pdns-a.example.com:8443
                     views: [_default_]
                     drift_policy: report
+                    managed_by: file
                     status: unknown
                     error: null
                     last_success: null

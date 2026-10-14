@@ -22,6 +22,9 @@ file, or an unknown `NBPDNS_` variable, is an error. nbpdns reports every proble
 it finds before it stops. To see each key's value and where it came from, run
 `nbpdns config show`.
 
+`NBPDNS_GROUP_API_KEY` isn't a key: `nbpdns groups add` and `nbpdns groups set` read a server
+group's PowerDNS API key from it, without `--api-key-file`.
+
 A **runtime** key, such as `drift.interval`, is one that `nbpdns serve` applies
 while it runs: `nbpdns settings set` stores it in the database, and serve uses
 it within seconds. If a flag, the environment or the config file sets the key
@@ -429,10 +432,14 @@ zones it serves, and its primary, the server nbpdns reads through the PowerDNS
 API. A view may be served by more than one group, as independent sites can
 serve the same zones.
 
-Groups are resources, not settings, so only the config file declares them:
-there's no environment variable or flag. `nbpdns config show` lists each field
-of each group, such as `powerdns.groups.site-a.primary.url`. An unknown field
-is an error.
+Groups are resources, not settings, so the config file declares them: there's
+no environment variable or flag. `nbpdns config show` lists each field of each
+group, such as `powerdns.groups.site-a.primary.url`. An unknown field is an
+error.
+
+`nbpdns serve` mirrors these groups into its database at each start, as managed
+by the file, and also compares the groups that `nbpdns groups add` added, which
+take the same fields as flags. A name that both claim stops serve.
 
 | Field | Type | Default | Description |
 |---|---|---|---|

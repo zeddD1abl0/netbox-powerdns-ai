@@ -64,8 +64,8 @@ type Options struct {
 	Metrics      *metrics.Metrics
 
 	// What /status and the API show besides the refreshes: the build,
-	// NetBox's URL, each group, in the configuration's order, and where
-	// spans are exported, if they are.
+	// NetBox's URL, each group, in the configuration's order, which
+	// SetGroups changes, and where spans are exported, if they are.
 	Version   version.Info
 	NetBoxURL string
 	Groups    []Group
@@ -80,6 +80,9 @@ type Options struct {
 // A Group is a server group's configuration, as /status and the API show
 // it.
 type Group struct {
+	// ID is the group's in the database, which a rename keeps (ADR-0045),
+	// or zero if it has none.
+	ID   int64
 	Name string
 	// URL is the group's primary's.
 	URL   string
@@ -87,6 +90,8 @@ type Group struct {
 	// DriftPolicy is the policy of the group's zones that it doesn't name
 	// a policy for.
 	DriftPolicy string
+	// ManagedBy is what manages the group: file or cli (ADR-0040).
+	ManagedBy string
 }
 
 // OTLP says where spans are exported. An empty Endpoint means nowhere.
@@ -114,13 +119,16 @@ type Service struct {
 	timing  atomic.Pointer[Timing]
 	// webhooksOn is whether the API takes NetBox's webhooks, for /status.
 	webhooksOn atomic.Bool
-	// views are the views that the groups serve.
-	views map[string]bool
-	// wake tells Run that a webhook has queued a refresh.
+	// wake tells Run that a webhook has queued a refresh, or that the
+	// schedule changed.
 	wake chan struct{}
 
 	mu sync.Mutex
-	st state
+	// groups are the groups compared, in the configuration's order, and
+	// views the views that they serve, which SetGroups changes.
+	groups []Group
+	views  map[string]bool
+	st     state
 }
 
 // state is what the refreshes found, guarded by Service.mu.
@@ -158,6 +166,8 @@ type state struct {
 	// last refresh that webhooks asked for, or nil.
 	lastEvent          *Event
 	lastWebhookRefresh *WebhookRefresh
+	// refreshNow brings the next full refresh forward to now.
+	refreshNow bool
 }
 
 // groupState is a server group's last-known state.
@@ -179,17 +189,99 @@ func New(o Options) *Service {
 	if o.maxWait == 0 {
 		o.maxWait = maxWait
 	}
-	views := map[string]bool{}
-	for _, g := range o.Groups {
-		for _, v := range g.Views {
-			views[v] = true
-		}
-	}
-	s := &Service{o: o, started: o.now(), views: views, wake: make(chan struct{}, 1),
+	s := &Service{o: o, started: o.now(), groups: o.Groups, views: viewsOf(o.Groups), wake: make(chan struct{}, 1),
 		st: state{refreshes: map[string]int{}, groups: map[string]*groupState{}}}
 	s.storeTiming(Timing{Interval: o.Interval, Timeout: o.Timeout, WebhookDelay: o.WebhookDelay})
 	s.webhooksOn.Store(o.Webhooks)
 	return s
+}
+
+// viewsOf returns the views that groups serve.
+func viewsOf(groups []Group) map[string]bool {
+	views := map[string]bool{}
+	for _, g := range groups {
+		for _, v := range g.Views {
+			views[v] = true
+		}
+	}
+	return views
+}
+
+// SetGroups changes the groups that the service compares, as `nbpdns
+// groups` and the config file's mirror change them (ADR-0040). /status and
+// the API show them at once, and webhooks' zones are matched with their
+// views. A removed group's state goes, with every metric series of its
+// name. A renamed group, matched by its ID, keeps its state under its new
+// name, and its series move there (ADR-0045). Their clients are the
+// caller's, and a refresh's results for a group that's gone are dropped.
+func (s *Service) SetGroups(groups []Group) {
+	s.mu.Lock()
+	oldName := map[int64]string{}
+	for _, g := range s.groups {
+		if g.ID != 0 {
+			oldName[g.ID] = g.Name
+		}
+	}
+	// renamed maps an old name to its new one; kept are the names that
+	// stay.
+	renamed, kept := map[string]string{}, map[string]bool{}
+	for _, g := range groups {
+		if old, ok := oldName[g.ID]; g.ID != 0 && ok && old != g.Name {
+			renamed[old] = g.Name
+		} else {
+			kept[g.Name] = true
+		}
+	}
+	var dropped []string
+	states := map[string]*groupState{}
+	moved := map[string]groupState{}
+	for _, g := range s.groups {
+		gs := s.st.groups[g.Name]
+		switch to := renamed[g.Name]; {
+		case to != "":
+			dropped = append(dropped, g.Name)
+			if gs != nil {
+				gs.report.Group = to
+				states[to], moved[to] = gs, *gs
+			}
+		case kept[g.Name]:
+			if gs != nil {
+				states[g.Name] = gs
+			}
+		default:
+			dropped = append(dropped, g.Name)
+		}
+	}
+	s.st.groups, s.groups, s.views = states, groups, viewsOf(groups)
+	s.mu.Unlock()
+	for _, name := range dropped {
+		s.o.Metrics.DropGroup(name)
+	}
+	for name, gs := range moved {
+		publishState(s.o.Metrics, name, gs)
+	}
+}
+
+// RefreshNow brings the next full refresh forward to now, as the
+// schedule's, so that a group that's new or changed is compared within
+// seconds. A refresh that's running is followed by another.
+func (s *Service) RefreshNow() {
+	s.mu.Lock()
+	s.st.refreshNow = true
+	if st := &s.st; !st.next.IsZero() && !st.lastStart.After(st.lastEnd) {
+		st.next = s.o.now()
+	}
+	s.mu.Unlock()
+	select {
+	case s.wake <- struct{}{}:
+	default:
+	}
+}
+
+// configured reports whether the service compares a group named name. It's
+// called with s.mu held.
+func (s *Service) configured(name string) bool {
+	return slices.ContainsFunc(s.groups, func(g Group) bool { return g.Name == name })
 }
 
 // SetWebhooks says whether the API takes NetBox's webhooks, as
@@ -265,24 +357,34 @@ func (s *Service) Run(ctx context.Context) {
 }
 
 // wait waits until next(), when the scheduled refresh is due, which is now
-// if it's zero, or until what webhooks queued is due, whichever is sooner,
-// and takes what's queued. full reports whether a full refresh is due: the
-// scheduled one, which covers every zone queued, or one that a webhook
-// asked for. A wake, from a webhook or a change of timing, works the time
-// out again.
+// if it's zero, or RefreshNow brought it forward, or until what webhooks
+// queued is due, whichever is sooner, and takes what's queued. full reports
+// whether a full refresh is due: the scheduled one, which covers every zone
+// queued, or one that a webhook asked for. A wake, from a webhook or a
+// change of timing or of the groups, works the time out again.
 func (s *Service) wait(ctx context.Context, nextFn func() time.Time) (b batch, full bool) {
 	for {
 		now := s.o.now()
 		next := nextFn()
-		until := next
 		s.mu.Lock()
+		if s.st.refreshNow {
+			next = now
+		}
+		until := next
 		if p := &s.st.pending; p.events > 0 {
 			until = minTime(until, p.due(s.Timing().WebhookDelay, s.o.maxWait))
 		}
 		s.mu.Unlock()
 		if !until.After(now) {
 			b := s.take()
-			return b, !now.Before(next) || b.full
+			full := !now.Before(next) || b.full
+			if full {
+				// This refresh covers what RefreshNow asked for.
+				s.mu.Lock()
+				s.st.refreshNow = false
+				s.mu.Unlock()
+			}
+			return b, full
 		}
 		t := time.NewTimer(until.Sub(now))
 		select {
@@ -467,11 +569,15 @@ type change struct {
 // apply keeps each group's report from groups, read at end, and returns the
 // changes. A group that failed keeps its last report. With merge, groups
 // are a zone refresh's, which are merged into the last reports; a group
-// with no report waits for the next full refresh. It's called with s.mu
-// held.
+// with no report waits for the next full refresh. A group that SetGroups
+// removed, or renamed, since the refresh started is dropped. It's called
+// with s.mu held.
 func (s *Service) apply(groups []drift.GroupReport, end time.Time, merge bool) []change {
 	var changes []change
 	for _, g := range groups {
+		if !s.configured(g.Group) {
+			continue
+		}
 		gs := s.st.groups[g.Group]
 		if gs == nil {
 			if merge {

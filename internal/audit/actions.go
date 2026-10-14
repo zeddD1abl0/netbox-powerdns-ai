@@ -16,6 +16,10 @@ const (
 	SettingSet       Action = "setting.set"
 	SettingUnset     Action = "setting.unset"
 	MasterKeyRotated Action = "master_key.rotated"
+	GroupCreated     Action = "group.created"
+	GroupChanged     Action = "group.changed"
+	GroupRemoved     Action = "group.removed"
+	GroupRenamed     Action = "group.renamed"
 )
 
 // Def declares an action.
@@ -87,6 +91,39 @@ var defs = []Def{
 			"The secrets themselves didn't change.",
 		Before: "`key_id`, the old master key's ID.",
 		After:  "`key_id`, the new master key's ID, and `secrets`, how many secrets it re-wrapped.",
+	},
+	{
+		Action: GroupCreated, Target: "server-group", TargetID: "the group's name",
+		Actor: "`os-user:<name>`, or `file:<path>` for the config file's",
+		Summary: "`nbpdns groups add` added a server group, or `nbpdns serve`, at its start, mirrored a group that's new in the config file " +
+			"(ADR-0040). A running `serve` compares it within seconds.",
+		After: "the group's fields, named as the config file names them, such as `views` and `primary.url`, with `managed_by`, " +
+			"`file` or `cli`. The `primary.api_key` of a group that `nbpdns groups add` added is `[redacted]`; a file group's key " +
+			"stays in the file. For `nbpdns groups add`, `check` is `passed` if the group's primary answered the checks that " +
+			"`nbpdns powerdns check` makes, or `skipped` with `--no-check`.",
+	},
+	{
+		Action: GroupChanged, Target: "server-group", TargetID: "the group's name",
+		Actor:   "`os-user:<name>`, or `file:<path>` for the config file's",
+		Summary: "`nbpdns groups set` changed a server group, or `nbpdns serve`, at its start, mirrored a change to one in the config file.",
+		Before:  "the fields that changed, as they were.",
+		After: "the fields that changed, as they are. A changed API key is `primary.api_key`, `[redacted]` on both sides. " +
+			"If the change touched how nbpdns reaches the primary, `check` is `passed` or `skipped`, as for `group.created`.",
+	},
+	{
+		Action: GroupRemoved, Target: "server-group", TargetID: "the group's name",
+		Actor: "`os-user:<name>`, or `file:<path>` for the config file's",
+		Summary: "`nbpdns groups remove` removed a server group, or `nbpdns serve`, at its start, removed one that the config file no longer declares. " +
+			"Its drift history stays until `drift.history_retention_days` prunes it.",
+		Before: "the group's fields, as `group.created` shows them.",
+	},
+	{
+		Action: GroupRenamed, Target: "server-group", TargetID: "the group's new name",
+		Actor: "`os-user:<name>`",
+		Summary: "`nbpdns groups rename` renamed a server group, with its drift history (ADR-0045). " +
+			"The events before it keep the old name.",
+		Before: "`name`, the old name.",
+		After:  "`name`, the new name.",
 	},
 }
 

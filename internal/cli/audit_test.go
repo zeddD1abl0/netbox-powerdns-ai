@@ -27,15 +27,18 @@ func TestServeRecordsItsStartAndStop(t *testing.T) {
 	code, stdout, stderr := run(t, dbEnv, "audit", "list")
 	for _, re := range []string{
 		`(?m)^SEQ +TIME +ACTOR +ACTION +TARGET +OUTCOME +REASON$`,
-		`(?m)^1 +\S+ +system +service\.started +service:\S+ +success +-$`,
-		`(?m)^2 +\S+ +system +service\.stopped +service:\S+ +success +-$`,
+		// The config file's groups, mirrored as serve starts.
+		`(?m)^1 +\S+ +file:\S+ +group\.created +server-group:site-a +success +-$`,
+		`(?m)^2 +\S+ +file:\S+ +group\.created +server-group:site-b +success +-$`,
+		`(?m)^3 +\S+ +system +service\.started +service:\S+ +success +-$`,
+		`(?m)^4 +\S+ +system +service\.stopped +service:\S+ +success +-$`,
 	} {
 		if !regexp.MustCompile(re).MatchString(stdout) {
 			t.Errorf("audit list: exit %d, no match for %s:\n%s%s", code, re, stdout, stderr)
 		}
 	}
 
-	code, stdout, stderr = run(t, dbEnv, "audit", "list", "-o", "json")
+	code, stdout, stderr = run(t, dbEnv, "audit", "list", "-o", "json", "--target", "service")
 	var events []struct {
 		Seq       int64          `json:"seq"`
 		Action    string         `json:"action"`
@@ -68,7 +71,7 @@ func TestServeRecordsItsStartAndStop(t *testing.T) {
 	}
 
 	code, stdout, stderr = run(t, dbEnv, "audit", "verify")
-	if code != exitOK || !regexp.MustCompile(`^The audit trail is intact: 2 events, from event 1, at \S+, to event 2, at \S+\.\n$`).MatchString(stdout) {
+	if code != exitOK || !regexp.MustCompile(`^The audit trail is intact: 4 events, from event 1, at \S+, to event 4, at \S+\.\n$`).MatchString(stdout) {
 		t.Errorf("audit verify: exit %d:\n%s%s", code, stdout, stderr)
 	}
 
@@ -77,11 +80,11 @@ func TestServeRecordsItsStartAndStop(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer raw.Close()
-	if _, err := raw.ExecContext(t.Context(), "UPDATE audit_events SET actor = 'os-user:mallory' WHERE seq = 1"); err != nil {
+	if _, err := raw.ExecContext(t.Context(), "UPDATE audit_events SET actor = 'os-user:mallory' WHERE seq = 3"); err != nil {
 		t.Fatal(err)
 	}
 	code, _, stderr = run(t, dbEnv, "audit", "verify")
-	if code != exitError || !strings.Contains(stderr, "the audit trail is broken at event 1: its contents don't match its hash") {
+	if code != exitError || !strings.Contains(stderr, "the audit trail is broken at event 3: its contents don't match its hash") {
 		t.Errorf("audit verify of an edited trail: exit %d:\n%s", code, stderr)
 	}
 }

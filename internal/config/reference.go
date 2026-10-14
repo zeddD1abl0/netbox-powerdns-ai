@@ -28,6 +28,8 @@ func WriteReference(w io.Writer) error {
 	p("file, or an unknown `%s` variable, is an error. nbpdns reports every problem\n", EnvPrefix)
 	p("it finds before it stops. To see each key's value and where it came from, run\n")
 	p("`nbpdns config show`.\n\n")
+	p("`%s` isn't a key: `nbpdns groups add` and `nbpdns groups set` read a server\n", GroupAPIKeyEnv)
+	p("group's PowerDNS API key from it, without `--api-key-file`.\n\n")
 	p("A **runtime** key, such as `drift.interval`, is one that `nbpdns serve` applies\n")
 	p("while it runs: `nbpdns settings set` stores it in the database, and serve uses\n")
 	p("it within seconds. If a flag, the environment or the config file sets the key\n")
@@ -89,9 +91,12 @@ func writeGroupsReference(p func(string, ...any)) {
 	p("%s\n\n", wrap("The PowerDNS server groups. Each entry is one group: the NetBox views whose "+
 		"zones it serves, and its primary, the server nbpdns reads through the PowerDNS API. "+
 		"A view may be served by more than one group, as independent sites can serve the same zones.", 79))
-	p("%s\n\n", wrap("Groups are resources, not settings, so only the config file declares them: "+
+	p("%s\n\n", wrap("Groups are resources, not settings, so the config file declares them: "+
 		"there's no environment variable or flag. `nbpdns config show` lists each field of each group, "+
 		"such as `powerdns.groups.site-a.primary.url`. An unknown field is an error.", 79))
+	p("%s\n\n", wrap("`nbpdns serve` mirrors these groups into its database at each start, as managed by the file, "+
+		"and also compares the groups that `nbpdns groups add` added, which take the same fields as flags. "+
+		"A name that both claim stops serve.", 79))
 	p("| Field | Type | Default | Description |\n|---|---|---|---|\n")
 	for _, f := range GroupFields() {
 		def := code(f.Default)

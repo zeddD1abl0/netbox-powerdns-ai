@@ -180,7 +180,6 @@ func TestServeFailures(t *testing.T) {
 		env  map[string]string
 		want string
 	}{
-		{"no groups", configFile(t, "log: {level: info}\n"), "no PowerDNS server groups are declared"},
 		{"an address in use", two, "server.listen: listen tcp " + inUse.Addr().String()},
 		{"no database directory", noDir, "the database's directory, " + missing + ", doesn't exist"},
 	} {

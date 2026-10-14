@@ -128,9 +128,15 @@ func Run(ctx context.Context, nb NetBox, groups []Group, o Options) (Report, err
 			}
 		}
 	}
-	if o.Zones != nil && len(groups) == 0 {
-		// No group serves them, so there's nothing to read.
-		return Report{Complete: true, Groups: []GroupReport{}, NetBox: []dns.Zone{}, Scope: &Scope{}}, nil
+	if len(groups) == 0 {
+		// No group serves them, or, as for a serve whose groups are all yet
+		// to be added (ADR-0040), there's no group, so there's nothing to
+		// read.
+		r := Report{Complete: true, Groups: []GroupReport{}, NetBox: []dns.Zone{}}
+		if o.Zones != nil {
+			r.Scope = &Scope{}
+		}
+		return r, nil
 	}
 	listed, err := nb.Zones(ctx, views, allNames)
 	if err != nil {

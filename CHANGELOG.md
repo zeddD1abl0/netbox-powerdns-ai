@@ -60,6 +60,18 @@ All notable changes to this project are recorded here. The format follows
   rotate-master-key` re-wraps them with a new master key, in one audited
   transaction, after which a secret sealed with the old key is refused.
   "Protect stored secrets with a master key" shows how.
+- Server groups in the database, each with its owner, `managed_by`:
+  `nbpdns serve` mirrors the config file's groups into it at each start,
+  and `nbpdns groups list|add|set|remove|rename` manages more, which a
+  running `serve` compares, changes, or stops comparing within seconds. A
+  group's API key comes from `--api-key-file` or `NBPDNS_GROUP_API_KEY`,
+  and is stored sealed with the master key, which `rotate-master-key`
+  covers. `add`, and a `set` that changes how nbpdns reaches the primary,
+  check that it answers, unless `--no-check` is given. A rename keeps the
+  group's drift history, and a removed group's history is kept until
+  `drift.history_retention_days` prunes it. Each change is a `group.*`
+  audit event. The API's server groups gain `managed_by`. "Manage server
+  groups from the command line" shows how.
 
 ### Changed
 
@@ -67,6 +79,9 @@ All notable changes to this project are recorded here. The format follows
   with none to restore, once its first refresh has finished.
 - `nbpdns config show` takes the runtime settings that the database stores
   into account, if the database exists, and names it as their source.
+- `nbpdns serve` starts with no server groups, since `nbpdns groups add`
+  can add them while it runs, where it used to refuse to start. The API
+  no longer calls a group's name its stable ID: a rename changes it.
 - `nbpdns serve` needs a directory that it can write its database to. In
   the image, mount a volume at `/var/lib/nbpdns`, writable by user 65532,
   and in Kubernetes, update the deployment with the `Recreate` strategy, as

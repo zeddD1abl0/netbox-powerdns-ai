@@ -216,7 +216,7 @@ func TestHealth(t *testing.T) {
 		defer mu.Unlock()
 		clock = clock.Add(d)
 	}
-	s, _, _ := testService(t, Options{now: now, Interval: 5 * time.Minute, Timeout: 10 * time.Minute,
+	s, _, _ := testService(t, Options{now: now, Interval: 5 * time.Minute, Timeout: 10 * time.Minute, Groups: []Group{{Name: "a"}},
 		Refresh: func(context.Context, []drift.ZoneRef) (drift.Report, error) {
 			return report(group("a", drift.StateInSync)), nil
 		}})
@@ -255,7 +255,7 @@ func TestHealth(t *testing.T) {
 }
 
 func TestLastKnownState(t *testing.T) {
-	s, logs, _ := testService(t, Options{})
+	s, logs, _ := testService(t, Options{Groups: twoGroups})
 	m := s.o.Metrics
 	zones := func(g, state string) float64 { return testutil.ToFloat64(m.Zones.WithLabelValues(g, state)) }
 	up := func(g string) float64 { return testutil.ToFloat64(m.GroupUp.WithLabelValues(g)) }
@@ -313,7 +313,7 @@ func gathered(t *testing.T, m *metrics.Metrics) string {
 }
 
 func TestEachRefreshIsATrace(t *testing.T) {
-	s, logs, spans := testService(t, Options{Refresh: func(context.Context, []drift.ZoneRef) (drift.Report, error) {
+	s, logs, spans := testService(t, Options{Groups: []Group{{Name: "a"}}, Refresh: func(context.Context, []drift.ZoneRef) (drift.Report, error) {
 		return report(group("a", drift.StateInSync)), nil
 	}})
 	// The service's context has a span of its own, as `nbpdns serve`'s

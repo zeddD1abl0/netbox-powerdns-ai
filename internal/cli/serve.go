@@ -50,6 +50,9 @@ func newServeCmd(a *app) *cobra.Command {
 			"drift history. It restores its last reports from it at start, and serves\n" +
 			"them until its first refresh replaces them. Only one serve may use a\n" +
 			"database at a time.\n\n" +
+			"It compares the config file's server groups, which it mirrors into the\n" +
+			"database at start, and those that nbpdns groups added, whose changes it\n" +
+			"applies within seconds, as it applies the runtime settings.\n\n" +
 			"With netbox.webhook_secret set, NetBox's signed webhooks at /api/netbox-events\n" +
 			"refresh the zones they name, once they stop coming for drift.webhook_delay.\n\n" +
 			"Each refresh is its own trace, exported if otlp.endpoint is set. nbpdns only\n" +
@@ -58,29 +61,33 @@ func newServeCmd(a *app) *cobra.Command {
 	}
 	cmd.RunE = func(cmd *cobra.Command, _ []string) error {
 		return a.run(cmd, func(ctx context.Context, s *session) (err error) {
-			groups, err := s.groups("")
-			if err != nil {
-				return err
-			}
 			s.metrics = metrics.New(version.Get())
 			st, settingsVersion, closeStore, err := s.openServeStore(ctx)
 			if err != nil {
 				return err
 			}
 			defer func() { closeStore(err) }()
-			c, err := s.newClients(ctx, groups)
+			// The config file's groups, which openServeStore mirrored, and the
+			// CLI's, which follow them (ADR-0040).
+			file := s.cfg.PowerDNS.Groups
+			groups, groupsVersion, err := s.servedGroups(ctx, st, file)
+			if err != nil {
+				return err
+			}
+			if len(groups) == 0 {
+				s.log.WarnContext(ctx, "there are no server groups to compare; declare them in the config file, or add them with nbpdns groups add")
+			}
+			s.cfg = withGroups(s.cfg, groups)
+			c, err := s.newClients(ctx)
 			if err != nil {
 				return err
 			}
 			defer c.close()
-			// live is the configuration as the settings change it: serve's
-			// background loops read it, and each refresh applies it.
+			// live is the configuration as the settings and the groups change
+			// it: serve's background loops read it, and each refresh applies
+			// it.
 			var live atomic.Pointer[config.Config]
 			live.Store(s.cfg)
-			primaries := make([]service.Group, len(groups))
-			for i, g := range groups {
-				primaries[i] = service.Group{Name: g.Name, URL: g.Primary.URL, Views: g.Views, DriftPolicy: g.DriftPolicy}
-			}
 			svc := service.New(service.Options{
 				Refresh: func(ctx context.Context, zones []drift.ZoneRef) (drift.Report, error) {
 					// Refreshes never overlap, so this is the one place that
@@ -102,7 +109,7 @@ func newServeCmd(a *app) *cobra.Command {
 				Metrics:      s.metrics,
 				Version:      version.Get(),
 				NetBoxURL:    s.cfg.NetBox.URL,
-				Groups:       primaries,
+				Groups:       serviceGroups(groups),
 				OTLP:         service.OTLP{Endpoint: s.cfg.OTLP.Endpoint, Protocol: s.cfg.OTLP.Protocol},
 			})
 			// The last reports are served at once (ADR-0042), and the first
@@ -111,7 +118,9 @@ func newServeCmd(a *app) *cobra.Command {
 			bgCtx, stopBackground := context.WithCancel(ctx)
 			defer stopBackground()
 			go s.prune(bgCtx, st, &live)
-			go s.watchSettings(bgCtx, st, settingsVersion, svc, &live)
+			w := &watcher{s: s, st: st, svc: svc, live: &live, file: file, settings: s.settings, groups: groups,
+				settingsVersion: settingsVersion, groupsVersion: groupsVersion}
+			go w.run(bgCtx)
 			return serve(ctx, s, svc, st, func() config.Secret { return live.Load().NetBox.WebhookSecret })
 		})
 	}
@@ -123,8 +132,9 @@ func newServeCmd(a *app) *cobra.Command {
 const pruneInterval = 24 * time.Hour
 
 // openServeStore takes the database's lock, so that one serve uses it
-// (ADR-0038), opens and migrates the database, and records serve's start
-// in the audit trail (ADR-0039). Its close function records serve's stop,
+// (ADR-0038), opens and migrates the database, applies its settings,
+// mirrors the config file's groups into it (ADR-0040), and records serve's
+// start in the audit trail (ADR-0039). Its close function records serve's stop,
 // with err, the error it stopped with, if any, then closes the database and
 // releases the lock.
 func (s *session) openServeStore(ctx context.Context) (*store.Store, int64, func(err error), error) {
@@ -156,6 +166,16 @@ func (s *session) openServeStore(ctx context.Context) (*store.Store, int64, func
 	settingsVersion, err := s.applyStored(ctx, st)
 	if err != nil {
 		return fail(err)
+	}
+	// The config file's groups, mirrored as managed_by file; a name that the
+	// CLI holds stops serve.
+	events, err := st.MirrorFileGroups(ctx, s.cfg.PowerDNS.Groups, audit.File(s.loader.ConfigFile()))
+	if err != nil {
+		return fail(err)
+	}
+	s.metrics.AuditEvents(events)
+	if len(events) > 0 {
+		s.log.InfoContext(ctx, "mirrored the config file's changed server groups into the database", "changes", len(events))
 	}
 	host, _ := os.Hostname()
 	target := audit.Target{Type: "service", ID: host}

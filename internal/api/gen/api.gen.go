@@ -782,7 +782,12 @@ type ServerGroup struct {
 	// Examples: 2026-10-08T01:10:02Z
 	LastSuccess *time.Time `json:"last_success"`
 
-	// Name The group's name, its stable ID.
+	// ManagedBy What manages the group: `file`, the config file, or `cli`, `nbpdns groups`, which changes it while nbpdns runs. Later releases add other managers, so take an unknown value as one.
+	//
+	// Examples: file
+	ManagedBy string `json:"managed_by"`
+
+	// Name The group's name, which identifies it in the API's paths. A rename with `nbpdns groups rename` changes it, and its drift history moves with it.
 	//
 	// Examples: site-a
 	Name string `json:"name"`
@@ -822,7 +827,7 @@ type ServerGroupStatus string
 type ServerGroupPage struct {
 	// Items The page's server groups.
 	//
-	// Examples: [{"counts":null,"drift_policy":"report","error":null,"last_success":null,"name":"site-a","primary_url":"https://pdns-a.example.com:8443","problem_count":null,"status":"unknown","views":["_default_"],"warning_count":null}]
+	// Examples: [{"counts":null,"drift_policy":"report","error":null,"last_success":null,"managed_by":"file","name":"site-a","primary_url":"https://pdns-a.example.com:8443","problem_count":null,"status":"unknown","views":["_default_"],"warning_count":null}]
 	Items []ServerGroup `json:"items"`
 
 	// Next The next page's absolute URL, or null on the last page.

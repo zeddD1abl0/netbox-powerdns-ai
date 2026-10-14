@@ -27,17 +27,17 @@ func threeGroups() fakeSource {
 	}
 	return fakeSource{groups: []service.GroupView{
 		{
-			Group:  service.Group{Name: "site-a", URL: "https://pdns-a.example.com:8443", Views: []string{"_default_", "internal"}, DriftPolicy: "report"},
+			Group:  service.Group{Name: "site-a", URL: "https://pdns-a.example.com:8443", Views: []string{"_default_", "internal"}, DriftPolicy: "report", ManagedBy: "file"},
 			Info:   service.GroupInfo{Name: "site-a", Status: "ok", LastSuccess: &last},
 			Report: report,
 		},
 		{
-			Group:  service.Group{Name: "site-b", URL: "https://pdns-b.example.com:8443", Views: []string{"_default_"}, DriftPolicy: "enforce"},
+			Group:  service.Group{Name: "site-b", URL: "https://pdns-b.example.com:8443", Views: []string{"_default_"}, DriftPolicy: "enforce", ManagedBy: "file"},
 			Info:   service.GroupInfo{Name: "site-b", Status: "failed", Error: "the primary isn't reachable", LastSuccess: &last},
 			Report: &drift.GroupReport{Group: "site-b", Status: drift.StatusOK, Problems: []dns.Problem{}, Warnings: []drift.Warning{{Text: "w"}}},
 		},
 		{
-			Group: service.Group{Name: "site-c", URL: "http://pdns-c.example.com:8081", Views: []string{"lab"}, DriftPolicy: "ignore"},
+			Group: service.Group{Name: "site-c", URL: "http://pdns-c.example.com:8081", Views: []string{"lab"}, DriftPolicy: "ignore", ManagedBy: "cli"},
 			Info:  service.GroupInfo{Name: "site-c", Status: "unknown"},
 		},
 	}}
@@ -64,7 +64,7 @@ func TestListServerGroups(t *testing.T) {
 	a, b, c := page.Items[0], page.Items[1], page.Items[2]
 	if a.Name != "site-a" || a.Status != gen.ServerGroupStatusOk || a.Counts == nil || a.Counts.InSync != 980 ||
 		a.Counts.Unmanaged != 2 || *a.ProblemCount != 1 || *a.WarningCount != 0 || a.Error != nil ||
-		a.DriftPolicy != gen.DriftPolicyReport || len(a.Views) != 2 {
+		a.DriftPolicy != gen.DriftPolicyReport || len(a.Views) != 2 || a.ManagedBy != "file" {
 		t.Errorf("site-a: %+v", a)
 	}
 	if b.Status != gen.ServerGroupStatusFailed || b.Error == nil || *b.Error != "the primary isn't reachable" ||
@@ -72,7 +72,7 @@ func TestListServerGroups(t *testing.T) {
 		t.Errorf("site-b: %+v", b)
 	}
 	if c.Status != gen.ServerGroupStatusUnknown || c.LastSuccess != nil || c.Counts != nil || c.ProblemCount != nil ||
-		c.DriftPolicy != gen.DriftPolicyIgnore {
+		c.DriftPolicy != gen.DriftPolicyIgnore || c.ManagedBy != "cli" {
 		t.Errorf("site-c: %+v", c)
 	}
 	// Nothing known is null, not absent.

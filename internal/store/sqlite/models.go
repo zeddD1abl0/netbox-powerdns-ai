@@ -88,6 +88,18 @@ type Sequence struct {
 	Value int64
 }
 
+type ServerGroup struct {
+	ID        int64
+	Name      string
+	ManagedBy string
+	SpecJson  string
+	ApiKey    string
+	CreatedAt string
+	CreatedBy string
+	UpdatedAt string
+	UpdatedBy string
+}
+
 type Setting struct {
 	Key       string
 	Value     string

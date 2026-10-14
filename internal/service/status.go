@@ -213,7 +213,7 @@ func (s *Service) Status() Status {
 	if !st.next.IsZero() && !st.lastStart.After(st.lastEnd) {
 		out.Schedule.NextRefresh = utc(st.next)
 	}
-	for _, g := range s.o.Groups {
+	for _, g := range s.groups {
 		out.Groups = append(out.Groups, groupInfo(g, st.groups[g.Name]))
 	}
 	return out
@@ -279,8 +279,8 @@ type GroupView struct {
 func (s *Service) Groups() []GroupView {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	out := make([]GroupView, len(s.o.Groups))
-	for i, g := range s.o.Groups {
+	out := make([]GroupView, len(s.groups))
+	for i, g := range s.groups {
 		out[i] = s.view(g)
 	}
 	return out
@@ -290,7 +290,7 @@ func (s *Service) Groups() []GroupView {
 func (s *Service) Group(name string) (GroupView, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, g := range s.o.Groups {
+	for _, g := range s.groups {
 		if g.Name == name {
 			return s.view(g), true
 		}

@@ -42,6 +42,10 @@ inserted. `nbpdns audit list` reads the trail.
 | [`setting.set`](#settingset) | `setting` | `os-user:<name>` | `nbpdns settings set` stored a runtime setting's value in the database, which `nbpdns serve` applies within seconds, unless the key is pinned. |
 | [`setting.unset`](#settingunset) | `setting` | `os-user:<name>` | `nbpdns settings unset` removed a runtime setting's stored value, so that the key takes its default, unless it's pinned. |
 | [`master_key.rotated`](#master_keyrotated) | `master-key` | `os-user:<name>` | `nbpdns secrets rotate-master-key` re-wrapped every secret that the database stores with a new master key (ADR-0041). The secrets themselves didn't change. |
+| [`group.created`](#groupcreated) | `server-group` | `os-user:<name>`, or `file:<path>` for the config file's | `nbpdns groups add` added a server group, or `nbpdns serve`, at its start, mirrored a group that's new in the config file (ADR-0040). A running `serve` compares it within seconds. |
+| [`group.changed`](#groupchanged) | `server-group` | `os-user:<name>`, or `file:<path>` for the config file's | `nbpdns groups set` changed a server group, or `nbpdns serve`, at its start, mirrored a change to one in the config file. |
+| [`group.removed`](#groupremoved) | `server-group` | `os-user:<name>`, or `file:<path>` for the config file's | `nbpdns groups remove` removed a server group, or `nbpdns serve`, at its start, removed one that the config file no longer declares. Its drift history stays until `drift.history_retention_days` prunes it. |
+| [`group.renamed`](#grouprenamed) | `server-group` | `os-user:<name>` | `nbpdns groups rename` renamed a server group, with its drift history (ADR-0045). The events before it keep the old name. |
 
 ### `service.started`
 
@@ -105,3 +109,39 @@ A refresh of `nbpdns serve` found a zone in another drift state than its last, a
 - **Actor:** `os-user:<name>`
 - **Before:** `key_id`, the old master key's ID.
 - **After:** `key_id`, the new master key's ID, and `secrets`, how many secrets it re-wrapped.
+
+### `group.created`
+
+`nbpdns groups add` added a server group, or `nbpdns serve`, at its start, mirrored a group that's new in the config file (ADR-0040). A running `serve` compares it within seconds.
+
+- **Target:** type `server-group`, named by the group's name
+- **Actor:** `os-user:<name>`, or `file:<path>` for the config file's
+- **Before:** nothing.
+- **After:** the group's fields, named as the config file names them, such as `views` and `primary.url`, with `managed_by`, `file` or `cli`. The `primary.api_key` of a group that `nbpdns groups add` added is `[redacted]`; a file group's key stays in the file. For `nbpdns groups add`, `check` is `passed` if the group's primary answered the checks that `nbpdns powerdns check` makes, or `skipped` with `--no-check`.
+
+### `group.changed`
+
+`nbpdns groups set` changed a server group, or `nbpdns serve`, at its start, mirrored a change to one in the config file.
+
+- **Target:** type `server-group`, named by the group's name
+- **Actor:** `os-user:<name>`, or `file:<path>` for the config file's
+- **Before:** the fields that changed, as they were.
+- **After:** the fields that changed, as they are. A changed API key is `primary.api_key`, `[redacted]` on both sides. If the change touched how nbpdns reaches the primary, `check` is `passed` or `skipped`, as for `group.created`.
+
+### `group.removed`
+
+`nbpdns groups remove` removed a server group, or `nbpdns serve`, at its start, removed one that the config file no longer declares. Its drift history stays until `drift.history_retention_days` prunes it.
+
+- **Target:** type `server-group`, named by the group's name
+- **Actor:** `os-user:<name>`, or `file:<path>` for the config file's
+- **Before:** the group's fields, as `group.created` shows them.
+- **After:** nothing.
+
+### `group.renamed`
+
+`nbpdns groups rename` renamed a server group, with its drift history (ADR-0045). The events before it keep the old name.
+
+- **Target:** type `server-group`, named by the group's new name
+- **Actor:** `os-user:<name>`
+- **Before:** `name`, the old name.
+- **After:** `name`, the new name.

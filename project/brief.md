@@ -449,3 +449,15 @@ replicas, how they learn of a change of leader:
 | Question | Answer |
 |---|---|
 | `LISTEN` and `NOTIFY`, or polling? | "For nbpds, we should definitely support both. polling being the default, but NOTIFY and LISTEN would be preferred." |
+
+### ITEM-0091's plan, 2026-10-14
+
+Given on ITEM-0091's plan for server groups in the database, before its
+implementation. The plan and its rename are in ADR-0045.
+
+| Question | Answer |
+|---|---|
+| Renaming a file group in the config file is a removal and an addition, so its history stays under the old name until it's pruned. Fine, or a `renamed_from:` field? | "That's fine. I would expect that to be the case". |
+| A `--no-check` on `groups add` and `groups set`, for a server that's down or not built yet? | "--no-check is a great idea". |
+| The API calls a group's name "its stable ID". Say instead that a rename changes it, and leave exposing an internal ID to M10 or M19? | "Yes, this is fine". |
+| The one-shot commands, such as `nbpdns drift`, read only the config file, as for settings, so they don't see CLI groups. Leave that? | "This is good". |

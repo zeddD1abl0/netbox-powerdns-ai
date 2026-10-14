@@ -45,10 +45,10 @@ func TestGroups(t *testing.T) {
 			ZonePolicies: map[string]string{"example.com.": PolicyEnforce, "legacy.example.com.": PolicyReport}, Primary: Primary{
 				URL: "https://pdns-a.example.com:8443", APIKey: NewSecret("inline-key"), ServerID: "localhost",
 				CAFile: "/etc/nbpdns/ca.pem", CertFile: "/etc/nbpdns/client.pem", KeyFile: "/etc/nbpdns/client-key.pem",
-			}},
+			}, ManagedBy: ManagedByFile},
 		{Name: "site-b", Views: []string{"_default_"}, DriftPolicy: PolicyReport, Primary: Primary{
 			URL: "http://pdns-b.example.com:8081", APIKey: NewSecret("pdns-key-from-file"), APIKeyFile: keyFile, ServerID: "other",
-		}},
+		}, ManagedBy: ManagedByFile},
 	}
 	if !reflect.DeepEqual(cfg.PowerDNS.Groups, want) {
 		t.Errorf("groups = %+v,\nwant %+v", cfg.PowerDNS.Groups, want)

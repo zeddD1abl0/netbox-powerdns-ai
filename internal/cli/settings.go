@@ -181,6 +181,12 @@ func settingValue(cmd *cobra.Command, arg, from string) (string, error) {
 	if from == "" {
 		return "", errors.New("give the value as an argument, or, for a secret, with --from-file")
 	}
+	return readValue(cmd, from)
+}
+
+// readValue returns what the file from holds, or standard input if from is
+// -, without a final newline. It fails if that's empty.
+func readValue(cmd *cobra.Command, from string) (string, error) {
 	var b []byte
 	var err error
 	if from == "-" {

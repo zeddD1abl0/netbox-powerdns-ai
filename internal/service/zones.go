@@ -186,21 +186,22 @@ func (b *batch) attributes() []attribute.KeyValue {
 // api.Notifier. ctx carries the webhook's span, which the refresh links
 // to.
 func (s *Service) Notify(ctx context.Context, e webhook.Event, r webhook.Refresh) bool {
+	now := s.o.now()
+	s.mu.Lock()
+	views := s.views
+	s.st.lastEvent = &Event{Received: now.UTC(), Event: e.Event, ObjectType: e.ObjectType, Request: Request{ID: e.RequestID(), User: e.User()}}
+	s.mu.Unlock()
 	var zones []drift.ZoneRef
 	for _, z := range r.Zones {
-		if s.views[z.View] {
+		if views[z.View] {
 			zones = append(zones, drift.ZoneRef{View: z.View, Name: z.Name})
 		}
 	}
-	now := s.o.now()
-	s.mu.Lock()
-	s.st.lastEvent = &Event{Received: now.UTC(), Event: e.Event, ObjectType: e.ObjectType, Request: Request{ID: e.RequestID(), User: e.User()}}
-	s.mu.Unlock()
 	if !r.Full && len(zones) == 0 {
 		return false
 	}
 	// A view that no group serves changes nothing that nbpdns compares.
-	if r.Views != nil && !slices.ContainsFunc(r.Views, func(v string) bool { return s.views[v] }) {
+	if r.Views != nil && !slices.ContainsFunc(r.Views, func(v string) bool { return views[v] }) {
 		return false
 	}
 	s.mu.Lock()

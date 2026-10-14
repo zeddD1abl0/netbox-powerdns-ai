@@ -55,7 +55,13 @@ type Loader struct {
 	base          map[string]resolved
 	groups        []Group
 	groupSettings []Setting
+	// path is the config file that the last Load read, if any.
+	path string
 }
+
+// ConfigFile returns the config file that the last Load read, or empty if it
+// read none.
+func (l *Loader) ConfigFile() string { return l.path }
 
 // resolved is a key's raw value and where it came from.
 type resolved struct {
@@ -115,6 +121,7 @@ func (l *Loader) Load() (*Config, []Setting, error) {
 	if path == "" {
 		path = os.Getenv(ConfigEnv)
 	}
+	l.path = path
 	if path != "" {
 		v.SetConfigFile(path)
 		v.SetConfigType("yaml")
@@ -277,7 +284,7 @@ func readSecretFile(path string) (string, error) {
 
 // unknownEnv reports every NBPDNS_ environment variable that names no key.
 func unknownEnv(ks []Key) []error {
-	known := []string{ConfigEnv}
+	known := []string{ConfigEnv, GroupAPIKeyEnv}
 	for _, k := range ks {
 		known = append(known, k.Env())
 		if k.Secret {

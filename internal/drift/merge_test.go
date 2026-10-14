@@ -113,6 +113,16 @@ func TestZoneRefreshOfZonesNoGroupServes(t *testing.T) {
 	}
 }
 
+func TestRunWithNoGroups(t *testing.T) {
+	// serve may have no groups until nbpdns groups adds one: NetBox isn't
+	// listed, view by view, for nothing.
+	nb := &memory{zones: []dns.Zone{zone("a.example.", "v", 1)}}
+	r, err := Run(t.Context(), memNetBox{nb}, nil, Options{ReadNetBox: true})
+	if err != nil || !r.Complete || len(r.Groups) != 0 || r.Scope != nil || r.NetBox == nil || len(nb.lists) != 0 {
+		t.Errorf("report %+v, %v; listed NetBox %q", r, err, nb.lists)
+	}
+}
+
 func TestZoneRefreshOfOneZone(t *testing.T) {
 	// One zone is looked up on each primary, not listed with every other.
 	nb := &memory{zones: []dns.Zone{zone("a.example.", "v", 1)}}

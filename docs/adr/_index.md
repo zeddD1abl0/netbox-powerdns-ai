@@ -58,5 +58,6 @@ from [`template.md`](template.md).
 | [0042](0042-drift-history.md) | Drift history | accepted |
 | [0043](0043-re-plan-m11-to-m20-roles-then-sign-in-then-the-web.md) | Re-plan M11 to M20: roles, then sign-in, then the web UI | accepted |
 | [0044](0044-one-item-per-session-and-a-haiku-agent-for-read-on.md) | One item per session, and a Haiku agent for read-only searches | accepted |
+| [0045](0045-rename-a-server-group-by-moving-its-name-keyed-row.md) | Rename a server group by moving its name-keyed rows | accepted |
 
 <!-- projctl:adr-index:end -->

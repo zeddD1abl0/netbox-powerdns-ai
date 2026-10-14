@@ -93,7 +93,8 @@ type NetBoxConfig struct {
 type PowerDNSConfig struct {
 	Timeout     time.Duration
 	Concurrency int
-	// Groups come from the config file's powerdns.groups (ADR-0026).
+	// Groups come from the config file's powerdns.groups (ADR-0026). In
+	// serve, the database's CLI groups follow them (ADR-0040).
 	Groups []Group
 }
 

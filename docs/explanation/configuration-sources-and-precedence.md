@@ -43,21 +43,26 @@ same declarations, so the documentation can't drift from the code. nbpdns
 uses [Cobra and Viper](../adr/0021-cobra-and-viper-for-commands-and-configuration.md)
 for its commands and for reading the sources, with this registry on top.
 
-## Resources that only the config file declares
+## Resources that the config file declares
 
 Some configuration isn't a single setting but a list of resources, each with
 fields of its own. The PowerDNS server groups are one: each group has a name,
 the NetBox views it serves, and its primary's URL and API key
 ([ADR-0026](../adr/0026-read-powerdns-through-its-api-with-powerdns-5-1-on.md)).
 A list like that doesn't map onto environment variables and flags without an
-invented naming scheme, so only the config file declares it, under
-`powerdns.groups`.
+invented naming scheme, so the config file declares it, under
+`powerdns.groups`, and the environment and flags can't.
 
 The same rules apply to its fields: each is declared once in the code, which
 also generates their reference; an unknown field is an error; an API key can
 come from a file, with `primary.api_key_file`; and `nbpdns config show` lists
-each field of each group, with the key redacted. Once nbpdns has a database
-(M08), resources declared in the file are marked as managed by the file.
+each field of each group, with the key redacted.
+
+`nbpdns serve` mirrors the file's groups into its database at each start,
+each managed by the file, and `nbpdns groups` adds more, managed by the
+command line, which serve applies while it runs
+([ADR-0040](../adr/0040-runtime-settings-and-managed-resources.md)). Each
+group has one owner: a name that both claim stops serve.
 
 ## Unknown names are errors
 

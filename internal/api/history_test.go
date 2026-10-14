@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/api/gen"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/audit"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/config"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/drift"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/store"
 )
@@ -23,6 +25,10 @@ func historyStore(t *testing.T) *store.Store {
 	}
 	t.Cleanup(func() { _ = st.Close() })
 	if _, err := st.Migrate(t.Context(), "test"); err != nil {
+		t.Fatal(err)
+	}
+	// serve keeps the history of the groups that the database stores.
+	if _, err := st.MirrorFileGroups(t.Context(), []config.Group{{Name: "site-a"}}, audit.File("nbpdns.yaml")); err != nil {
 		t.Fatal(err)
 	}
 	t0 := at("2026-10-08T00:00:00Z")

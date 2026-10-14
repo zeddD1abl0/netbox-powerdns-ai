@@ -43,6 +43,7 @@ func change(value string) drift.Change {
 // writes.
 func TestZoneHistory(t *testing.T) {
 	s := migrated(t)
+	mirror(t, s, "lab-a", "lab-b")
 	ctx := t.Context()
 	a := zone("a.example.", drift.StateInSync)
 	t0 := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
@@ -82,10 +83,11 @@ func TestZoneHistory(t *testing.T) {
 			t.Errorf("%s: %d rows, events to %v, want %d rows, events to %v", step.name, rows, states, step.rows, step.events)
 		}
 	}
-	// The events are a valid trail, each linked to its refresh's.
+	// The events are a valid trail, each linked to its refresh's, after the
+	// mirror's two.
 	sum, err := s.VerifyAudit(ctx)
-	if err != nil || sum.Count != 3 {
-		t.Errorf("VerifyAudit() = %d events, %v, want 3", sum.Count, err)
+	if err != nil || sum.Count != 5 {
+		t.Errorf("VerifyAudit() = %d events, %v, want 5", sum.Count, err)
 	}
 	var n int
 	if err := s.db.QueryRowContext(ctx, "SELECT count(*) FROM drift_zone_history").Scan(&n); err != nil || n != 6 {
@@ -109,6 +111,7 @@ func TestDigestIgnoresOrder(t *testing.T) {
 
 func TestRestoreDrift(t *testing.T) {
 	s := migrated(t)
+	mirror(t, s, "lab-a", "lab-b")
 	ctx := t.Context()
 	empty, err := s.RestoreDrift(ctx)
 	if err != nil || empty.Last != nil || len(empty.Groups) != 0 || !empty.LastComplete.IsZero() {
@@ -150,6 +153,7 @@ func TestRestoreDrift(t *testing.T) {
 
 func TestPruneDriftHistory(t *testing.T) {
 	s := migrated(t)
+	mirror(t, s, "lab-a", "lab-b")
 	ctx := t.Context()
 	now := time.Now().UTC()
 	old := now.AddDate(0, 0, -10)
@@ -201,6 +205,7 @@ func TestPruneDriftHistory(t *testing.T) {
 
 func TestReadHistory(t *testing.T) {
 	s := migrated(t)
+	mirror(t, s, "lab-a", "lab-b")
 	ctx := t.Context()
 	t0 := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
 	records := []RefreshRecord{

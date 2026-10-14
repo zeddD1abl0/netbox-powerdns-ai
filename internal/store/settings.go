@@ -164,14 +164,14 @@ func (s *Store) ChangeSetting(ctx context.Context, c SettingChange) (bool, error
 // sealed. The transaction holds the write lock, so a rotation can't come
 // between the check and the write.
 func (tx *Tx) checkMasterKey(ctx context.Context, keyID string) error {
-	rows, err := tx.q.SealedSettings(ctx)
+	sealed, err := tx.sealed(ctx)
 	if err != nil {
 		return err
 	}
-	for _, r := range rows {
-		id, err := secrets.KeyID(r.Value)
+	for _, v := range sealed {
+		id, err := secrets.KeyID(v.value)
 		if err != nil {
-			return fmt.Errorf("%s: %w", SettingPlace(r.Key), err)
+			return fmt.Errorf("%s: %w", v.place, err)
 		}
 		if id != keyID {
 			return fmt.Errorf("the database's secrets are sealed with master key %s, but database.master_key is master key %s; "+
@@ -181,27 +181,60 @@ func (tx *Tx) checkMasterKey(ctx context.Context, keyID string) error {
 	return nil
 }
 
+// A sealedValue is a value that the database stores sealed, at its place,
+// with the function that replaces it.
+type sealedValue struct {
+	place, value string
+	update       func(ctx context.Context, value string) error
+}
+
+// sealed returns every value that the database stores sealed: the secret
+// settings', and the CLI groups' API keys.
+func (tx *Tx) sealed(ctx context.Context) ([]sealedValue, error) {
+	settings, err := tx.q.SealedSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	groups, err := tx.q.SealedGroupKeys(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]sealedValue, 0, len(settings)+len(groups))
+	for _, r := range settings {
+		out = append(out, sealedValue{place: SettingPlace(r.Key), value: r.Value, update: func(ctx context.Context, value string) error {
+			return tx.q.UpdateSealedSetting(ctx, sqlite.UpdateSealedSettingParams{Key: r.Key, Value: value})
+		}})
+	}
+	for _, r := range groups {
+		out = append(out, sealedValue{place: GroupPlace(r.ID), value: r.ApiKey, update: func(ctx context.Context, value string) error {
+			return tx.q.UpdateGroupKey(ctx, sqlite.UpdateGroupKeyParams{ApiKey: value, ID: r.ID})
+		}})
+	}
+	return out, nil
+}
+
 // A Rewrap returns a value sealed for place, stored, with its data key
 // wrapped by the new master key.
 type Rewrap func(place, stored string) (string, error)
 
-// RotateMasterKey re-wraps every sealed value that the database stores, with
-// rewrap, from the master key oldID to newID, and records it as a
-// master_key.rotated event, in one transaction (ADR-0041). It returns how
-// many values it re-wrapped. If any fails, it changes nothing.
+// RotateMasterKey re-wraps every sealed value that the database stores, the
+// secret settings and the CLI groups' API keys, with rewrap, from the
+// master key oldID to newID, and records it as a master_key.rotated event,
+// in one transaction (ADR-0041). It returns how many values it re-wrapped.
+// If any fails, it changes nothing.
 func (s *Store) RotateMasterKey(ctx context.Context, oldID, newID string, rewrap Rewrap, actor audit.Actor, reason string) (int, error) {
 	n := 0
 	_, err := s.InTx(ctx, func(tx *Tx) error {
-		rows, err := tx.q.SealedSettings(ctx)
+		sealed, err := tx.sealed(ctx)
 		if err != nil {
 			return err
 		}
-		for _, r := range rows {
-			value, err := rewrap(SettingPlace(r.Key), r.Value)
+		for _, v := range sealed {
+			value, err := rewrap(v.place, v.value)
 			if err != nil {
-				return fmt.Errorf("%s: %w", SettingPlace(r.Key), err)
+				return fmt.Errorf("%s: %w", v.place, err)
 			}
-			if err := tx.q.UpdateSealedSetting(ctx, sqlite.UpdateSealedSettingParams{Key: r.Key, Value: value}); err != nil {
+			if err := v.update(ctx, value); err != nil {
 				return err
 			}
 			n++

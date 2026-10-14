@@ -89,6 +89,10 @@ type def struct {
 	buckets []float64
 }
 
+// ServicePowerDNS is the service label of the requests to the groups'
+// primaries, whose target label is the group's name.
+const ServicePowerDNS = "PowerDNS"
+
 // The zone states and RRset changes, as the drift report names them.
 var (
 	zoneStates    = drift.States
@@ -96,7 +100,7 @@ var (
 	changeKinds   = drift.ChangeKinds
 	// The services nbpdns sends requests to, as internal/httpclient names
 	// them, and the methods it sends.
-	services = []string{"NetBox", "PowerDNS"}
+	services = []string{"NetBox", ServicePowerDNS}
 	methods  = []string{"GET"}
 )
 
@@ -176,8 +180,8 @@ var (
 			"A refresh whose history couldn't be written is still served."}
 	defSettingsReloads = def{name: "nbpdns_settings_reloads_total", kind: counter, labels: []string{"outcome"},
 		values: map[string][]string{"outcome": ReloadOutcomes},
-		help: "Reloads of the runtime settings, after `nbpdns settings` changed them, by outcome: " +
-			"`applied`, or `failed` if a stored value wasn't valid, and serve kept the settings it had."}
+		help: "Reloads of the runtime settings or the server groups, after `nbpdns settings` or `nbpdns groups` changed them, by outcome: " +
+			"`applied`, or `failed` if a stored value wasn't valid, or a group's API key didn't open, and serve kept what it had."}
 	defBuildInfo = def{name: "nbpdns_build_info", kind: gauge, labels: []string{"version", "revision", "goversion"},
 		help: "1, with the running build's version, VCS revision, and Go version."}
 
@@ -290,8 +294,24 @@ func auditActions() []string {
 	return as
 }
 
-// SettingsReload counts a reload of the runtime settings, with one of
-// ReloadOutcomes.
+// DropGroup deletes every series of the server group named name, its drift
+// metrics and its primary's requests, for a group removed or renamed while
+// serve runs (ADR-0040).
+func (m *Metrics) DropGroup(name string) {
+	group := prometheus.Labels{"group": name}
+	for _, v := range []interface {
+		DeletePartialMatch(prometheus.Labels) int
+	}{m.Zones, m.RRsetChanges, m.ZoneDrifted, m.Problems, m.Warnings, m.GroupUp, m.GroupLastSuccess} {
+		v.DeletePartialMatch(group)
+	}
+	target := prometheus.Labels{"service": ServicePowerDNS, "target": name}
+	m.requests.DeletePartialMatch(target)
+	m.requestDuration.DeletePartialMatch(target)
+	m.retries.DeletePartialMatch(target)
+}
+
+// SettingsReload counts a reload of the runtime settings or the server
+// groups, with one of ReloadOutcomes.
 func (m *Metrics) SettingsReload(outcome string) { m.settingsReloads.WithLabelValues(outcome).Inc() }
 
 // DBWriteFailure counts a write to the database that failed, with one of

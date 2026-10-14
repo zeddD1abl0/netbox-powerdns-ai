@@ -7,7 +7,8 @@ weight: 40
 
 A secret runtime setting, such as `netbox.token`, can be stored in nbpdns's
 database, where `nbpdns serve` reads it, and a change reaches serve without
-a restart. nbpdns seals each secret it stores with the **master key**,
+a restart. So is the API key of each server group that `nbpdns groups add`
+adds. nbpdns seals each secret it stores with the **master key**,
 `database.master_key`, so that the database file alone gives none of them
 away. This guide makes a master key, stores a secret, and rotates the key.
 
@@ -122,7 +123,8 @@ themselves don't change.
 
 Keep a copy of the old key until serve has started with the new one.
 
-From the rotation on, `nbpdns settings set` refuses a secret sealed with the
+The rotation re-wraps the server groups' API keys too. From the rotation on,
+`nbpdns settings set` and `nbpdns groups` refuse a secret sealed with the
 old key, even one sealed while the rotation ran, so that serve can open every
 secret with the new key. Give the new key to each host that stores secrets.
 
@@ -134,6 +136,11 @@ and store it again with a new master key:
 ```shell
 nbpdns settings unset netbox.token --reason "master key lost"
 ```
+
+A server group's key goes with its group: remove the group with
+`nbpdns groups remove`, and add it again, as
+[Manage server groups from the command line](manage-server-groups-from-the-command-line.md)
+shows.
 
 The new key can store a secret only once none sealed with the lost key is
 left.

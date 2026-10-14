@@ -140,8 +140,8 @@ func TestSettingsErrors(t *testing.T) {
 func TestReconfigure(t *testing.T) {
 	s := testSession(t)
 	s.cfg.NetBox = config.NetBoxConfig{URL: "http://127.0.0.1:1", Token: config.NewSecret("nbt_a.b"), Timeout: time.Second, PageSize: 10, Concurrency: 1}
-	groups := []config.Group{{Name: "site-a", Primary: config.Primary{URL: "http://127.0.0.1:1", APIKey: config.NewSecret("k"), ServerID: "localhost"}}}
-	c, err := s.newClients(t.Context(), groups)
+	s.cfg.PowerDNS.Groups = []config.Group{{Name: "site-a", Primary: config.Primary{URL: "http://127.0.0.1:1", APIKey: config.NewSecret("k"), ServerID: "localhost"}}}
+	c, err := s.newClients(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -13,11 +13,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/audit"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/config"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/drift"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/store"
 )
 
-// testStore returns a new, migrated database in a test's directory.
+// testStore returns a new, migrated database in a test's directory, which
+// stores the groups site-a and site-b, as serve's start would.
 func testStore(t *testing.T) *store.Store {
 	t.Helper()
 	st, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "nbpdns.db"), store.Options{Create: true})
@@ -26,6 +28,9 @@ func testStore(t *testing.T) *store.Store {
 	}
 	t.Cleanup(func() { _ = st.Close() })
 	if _, err := st.Migrate(t.Context(), "test"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.MirrorFileGroups(t.Context(), []config.Group{{Name: "site-a"}, {Name: "site-b"}}, audit.File("nbpdns.yaml")); err != nil {
 		t.Fatal(err)
 	}
 	return st

@@ -26,7 +26,7 @@ func (s *Service) Restore(ctx context.Context) {
 	s.mu.Lock()
 	st := &s.st
 	var restored []drift.GroupReport
-	for _, g := range s.o.Groups {
+	for _, g := range s.groups {
 		rg, ok := r.Groups[g.Name]
 		if !ok {
 			continue
@@ -60,11 +60,7 @@ func (s *Service) Restore(ctx context.Context) {
 	s.mu.Unlock()
 
 	for name, gs := range groups {
-		m.GroupUp.WithLabelValues(name).Set(gauge(gs.up))
-		if !gs.lastSuccess.IsZero() {
-			m.GroupLastSuccess.WithLabelValues(name).Set(unix(gs.lastSuccess))
-			setGroup(m, gs.report, gs.drifted, nil)
-		}
+		publishState(m, name, gs)
 	}
 	if !ready {
 		return
@@ -78,6 +74,16 @@ func (s *Service) Restore(ctx context.Context) {
 	}
 	s.o.Log.InfoContext(ctx, "restored the last drift reports, so the service is ready; its first refresh starts now",
 		"groups", len(restored), "as_of", asOf, "age_seconds", s.o.now().Sub(asOf).Seconds())
+}
+
+// publishState sets the metrics of the group named name from its kept
+// state, gs, as restored at start, or moved by a rename.
+func publishState(m *metrics.Metrics, name string, gs groupState) {
+	m.GroupUp.WithLabelValues(name).Set(gauge(gs.up))
+	if !gs.lastSuccess.IsZero() {
+		m.GroupLastSuccess.WithLabelValues(name).Set(unix(gs.lastSuccess))
+		setGroup(m, gs.report, gs.drifted, nil)
+	}
 }
 
 // gauge returns a Boolean as a gauge's value: 1 or 0.

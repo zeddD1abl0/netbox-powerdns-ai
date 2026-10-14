@@ -84,11 +84,19 @@ type KeptReport struct {
 // removed row for each zone that has left its group's report; and each
 // group's report, replacing its last. Each zone's change of state is also a
 // zone.drift_changed event (ADR-0008, ADR-0039), with ctx's trace and request
-// IDs, as is a new zone's, if it drifted. It returns how many zone rows it
-// wrote, and the events.
+// IDs, as is a new zone's, if it drifted. Only the groups that the database
+// stores are written. It returns how many zone rows it wrote, and the
+// events.
 func (s *Store) RecordRefresh(ctx context.Context, r RefreshRecord) (int, []audit.Event, error) {
 	rows := 0
 	events, err := s.InTx(ctx, func(tx *Tx) error {
+		names, err := tx.q.GroupNames(ctx)
+		if err != nil {
+			return err
+		}
+		// A refresh that a group's removal or rename overtook has results
+		// under a name that the history no longer keeps (ADR-0045).
+		stored := func(group string) bool { return slices.Contains(names, group) }
 		id, err := tx.q.NextIDs(ctx, sqlite.NextIDsParams{N: 1, Name: seqRefreshes})
 		if err != nil {
 			return err
@@ -109,6 +117,9 @@ func (s *Store) RecordRefresh(ctx context.Context, r RefreshRecord) (int, []audi
 			return err
 		}
 		for _, g := range r.Groups {
+			if !stored(g.Group) {
+				continue
+			}
 			counts, err := jsonText(g.Counts)
 			if err != nil {
 				return err
@@ -120,6 +131,9 @@ func (s *Store) RecordRefresh(ctx context.Context, r RefreshRecord) (int, []audi
 			}
 		}
 		for _, k := range r.Reports {
+			if !stored(k.Report.Group) {
+				continue
+			}
 			n, err := tx.recordZones(ctx, id, finished, k.Report)
 			if err != nil {
 				return err
@@ -398,8 +412,9 @@ func (s *Store) RestoreDrift(ctx context.Context) (Restored, error) {
 
 // PruneDriftHistory deletes the refreshes that finished before cutoff, with
 // their groups' results, and the zone rows written before it, but for each
-// zone's last row, unless that row says the zone was removed. It returns how
-// many refreshes and zone rows it deleted.
+// zone's last row, unless that row says the zone was removed, or its group
+// is. It also deletes the last reports of groups that the database no
+// longer stores. It returns how many refreshes and zone rows it deleted.
 func (s *Store) PruneDriftHistory(ctx context.Context, cutoff time.Time) (refreshes, rows int64, err error) {
 	at := cutoff.UTC().Format(TimeLayout)
 	_, err = s.InTx(ctx, func(tx *Tx) error {
@@ -410,8 +425,10 @@ func (s *Store) PruneDriftHistory(ctx context.Context, cutoff time.Time) (refres
 		if refreshes, err = tx.q.DeleteRefreshesBefore(ctx, at); err != nil {
 			return err
 		}
-		rows, err = tx.q.DeleteZoneRowsBefore(ctx, at)
-		return err
+		if rows, err = tx.q.DeleteZoneRowsBefore(ctx, at); err != nil {
+			return err
+		}
+		return tx.q.DeleteOrphanGroupReports(ctx)
 	})
 	if err != nil {
 		return 0, 0, fmt.Errorf("pruning the drift history: %w", err)

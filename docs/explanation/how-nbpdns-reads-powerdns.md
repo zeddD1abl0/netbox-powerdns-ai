@@ -35,7 +35,9 @@ nbpdns checks them with DNS queries.
 Server groups are declared in the config file, under `powerdns.groups`
 ([ADR-0026](../adr/0026-read-powerdns-through-its-api-with-powerdns-5-1-on.md)).
 They're resources rather than settings, so the environment and flags can't
-declare them.
+declare them. `nbpdns serve` also compares the groups that `nbpdns groups
+add` adds to its database, which it applies while it runs
+([ADR-0040](../adr/0040-runtime-settings-and-managed-resources.md)).
 
 ## Which zones a group serves
 

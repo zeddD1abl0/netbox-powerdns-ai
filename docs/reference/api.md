@@ -407,10 +407,11 @@ A PowerDNS server group, with its last-known state. The counts are as of `last_s
 
 | Field | Type | Description |
 |---|---|---|
-| `name` | `string` | The group's name, its stable ID. |
+| `name` | `string` | The group's name, which identifies it in the API's paths. A rename with `nbpdns groups rename` changes it, and its drift history moves with it. |
 | `primary_url` | `string` (`uri`) | The URL of the group's primary's PowerDNS API. |
 | `views` | array of `string` | The NetBox views whose zones the group serves. |
 | `drift_policy` | [`DriftPolicy`](#driftpolicy) | What nbpdns does about a zone's drift: `report` reports it, `enforce` reports it and, from M14, corrects it, and `ignore` doesn't compare the zone. |
+| `managed_by` | `string` | What manages the group: `file`, the config file, or `cli`, `nbpdns groups`, which changes it while nbpdns runs. Later releases add other managers, so take an unknown value as one. |
 | `status` | `ok`, `failed`, or `unknown` | `ok` if the last refresh that tried the group's primary read it, `failed` if it couldn't, and `unknown` before any did. |
 | `error` | `string`, or null | Why the primary couldn't be read, or null. |
 | `last_success` | `string` (`date-time`), or null | When the group was last read and compared in full, or null if it never was. Zones that NetBox's webhooks named may have been compared since. |

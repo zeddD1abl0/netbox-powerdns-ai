@@ -58,6 +58,7 @@ DELETE FROM drift_refreshes WHERE finished_at < sqlc.arg(cutoff);
 DELETE FROM drift_zone_history
 WHERE drift_zone_history.at < sqlc.arg(cutoff)
   AND (drift_zone_history.state = 'removed'
+    OR drift_zone_history.group_name NOT IN (SELECT name FROM server_groups)
     OR drift_zone_history.id NOT IN (SELECT MAX(l.id) FROM drift_zone_history l GROUP BY l.group_name, l.zone));
 
 -- name: ZoneHistory :many
