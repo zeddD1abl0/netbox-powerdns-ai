@@ -127,16 +127,29 @@ configuration changed between the two starts.
 
 `nbpdns serve` deletes events older than `audit.retention_days` once a day,
 and records that it did, as an `audit.pruned` event. The default, 2557
-days, is seven years, the minimum that the ISM sets for event logs. To change it, set
-`audit.retention_days` in the config file, and restart the service.
+days, is seven years, the minimum that the ISM sets for event logs.
+`audit.retention_days` is a runtime key. To change it, store a new value,
+which `serve` uses at its next daily prune, without a restart:
+
+```shell
+nbpdns settings set audit.retention_days 3650 --reason "keep ten years"
+```
+
+If the config file, the environment or a flag sets `audit.retention_days`
+too, that value wins, and the stored one isn't used until it's unset there:
+see [Change nbpdns's settings while it
+runs](change-nbpdns-settings-while-it-runs.md#if-the-setting-is-pinned).
 
 > [!WARNING]
-> The events it deletes are gone. Copy the database first if you shorten
+> The events it deletes are gone.
+> [Back up the database](back-up-nbpdns-database.md) first if you shorten
 > the retention, and check that the new one meets your compliance
 > obligations.
 
 ## Next steps
 
+- [How nbpdns stores its state](../explanation/how-nbpdns-stores-its-state.md#the-audit-trail)
+  explains the chain, and what it proves.
 - [Audit events](../reference/audit-events.md) describes every event's
   fields, and each action.
 - [Configuration](../reference/configuration.md#auditretention_days)

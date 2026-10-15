@@ -15,9 +15,12 @@ system, and checks its health.
 You need:
 
 - the image, as in [Install nbpdns](install-nbpdns.md#pull-the-image);
-- a config file for the service, with NetBox's URL and your server groups,
-  as in [Configure nbpdns](configure-nbpdns.md) and
-  [Connect nbpdns to PowerDNS](connect-nbpdns-to-powerdns.md);
+- a config file for the service, with NetBox's URL and token, as in
+  [Configure nbpdns](configure-nbpdns.md). `serve` needs both, even with no
+  server groups. The groups can be in the file, as in
+  [Connect nbpdns to PowerDNS](connect-nbpdns-to-powerdns.md), or you can add
+  them later with `nbpdns groups add`, as in
+  [Manage server groups from the command line](manage-server-groups-from-the-command-line.md);
 - NetBox's read-only token, and each primary's API key.
 
 > [!WARNING]
@@ -33,7 +36,11 @@ You need:
   default (`database.url`), and writes nothing else, so the root file
   system can be read-only. The image has no `/var/lib/nbpdns`: mount a
   volume there, writable by user 65532. `serve` creates the database, and
-  applies its migrations, when it starts.
+  applies its migrations, when it starts. Without the volume, it stops with:
+
+  ```text
+  the database's directory, /var/lib/nbpdns, doesn't exist; create it, or mount a volume there, writable by user 65532
+  ```
 - Only one `serve` may use a database at a time. A second one refuses to
   start, and names the first one's host and PID.
 - It logs JSON to standard error.
@@ -81,6 +88,21 @@ lists the image's settings.
    ```shell
    sudo install -d -m 0700 -o 65532 -g 65532 /var/lib/nbpdns
    ```
+
+   > [!WARNING]
+   > Don't mount a new Docker named volume, such as
+   > `--volume nbpdns-data:/var/lib/nbpdns`, in its place. The image has no
+   > such directory for Docker to copy an owner from, so the volume belongs
+   > to root, and `serve` stops with an error that ends `permission denied;
+   > make /var/lib/nbpdns writable by user 65532`. Use a bind mount of a
+   > directory that user 65532 owns, as here.
+
+   If you'll store secrets in the database, such as the API key of a group
+   added with `nbpdns groups add`, or a secret setting, put the master key
+   in the secrets directory too, and name it in the config file, with
+   `database.master_key_file: /run/secrets/master-key`.
+   [Protect stored secrets with a master key](protect-stored-secrets-with-a-master-key.md)
+   makes one.
 
 4. Start the container:
 
@@ -257,6 +279,9 @@ lists the image's settings.
 
 ## Next steps
 
+- [How nbpdns stores its state](../explanation/how-nbpdns-stores-its-state.md)
+  explains the database on the volume, and
+  [Back up nbpdns's database](back-up-nbpdns-database.md) copies it.
 - [Monitor drift with Prometheus](monitor-drift-with-prometheus.md).
 - [Service endpoints](../reference/service-endpoints.md) describes what
   each endpoint answers.

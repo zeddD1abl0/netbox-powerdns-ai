@@ -147,6 +147,8 @@ left.
 
 ## Next steps
 
+- [How nbpdns stores its state](../explanation/how-nbpdns-stores-its-state.md#secrets-at-rest)
+  explains how secrets are sealed.
 - [Configuration](../reference/configuration.md#databasemaster_key)
   describes `database.master_key`.
 - [Check the audit trail](check-the-audit-trail.md) reads the events of

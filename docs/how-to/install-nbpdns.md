@@ -128,5 +128,8 @@ Container registry** in GitLab, which shows its name, such as
 
 ## Next steps
 
+- [How nbpdns stores its state](../explanation/how-nbpdns-stores-its-state.md)
+  explains the database that `serve` keeps, and
+  [Back up nbpdns's database](back-up-nbpdns-database.md) copies it.
 - [Configure nbpdns](configure-nbpdns.md).
 - [Run nbpdns in a container](run-nbpdns-in-a-container.md).

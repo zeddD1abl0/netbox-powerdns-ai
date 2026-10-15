@@ -6,9 +6,10 @@ weight: 20
 # Configuration sources and precedence
 
 nbpdns takes each setting from the first of these that sets it: a flag, an
-`NBPDNS_` environment variable, the YAML config file, or the setting's
-default. This page explains that order, why nbpdns rejects names it doesn't
-know, and how it handles secrets. The
+`NBPDNS_` environment variable, the YAML config file, the database (for a
+runtime key), or the setting's default. This page explains that order, which
+settings can be in the database, why nbpdns rejects names it doesn't know,
+and how it handles secrets. The
 [configuration reference](../reference/configuration.md) lists every setting.
 
 ## Why this order
@@ -16,6 +17,8 @@ know, and how it handles secrets. The
 The more specific a source is, the later it applies:
 
 - a **default** suits most installations;
+- the **database** holds the settings changed while nbpdns runs, with
+  `nbpdns settings set`;
 - the **config file** describes one installation, and changes when the
   installation does;
 - the **environment** describes one process or container, and is how
@@ -26,6 +29,31 @@ The more specific a source is, the later it applies:
 So a container can take most of its settings from a file baked into its
 image, override a few from its environment, and still be run once by hand with
 a flag. Most command-line tools use the same order.
+
+## Runtime and bootstrap keys
+
+Each setting's key is a runtime key or a bootstrap key, and the
+[configuration reference](../reference/configuration.md) shows which.
+
+- A **runtime** key, such as `drift.interval`, is one that `nbpdns serve`
+  can apply while it runs. `nbpdns settings set` stores its value in the
+  database, and a running `serve` uses it within seconds.
+- A **bootstrap** key, such as `database.url` or `netbox.url`, can't change
+  while `serve` runs, or shouldn't change from where settings are changed.
+  It comes only from a flag, the environment, or the config file, and takes
+  effect when `serve` starts.
+
+A runtime key that a flag, the environment, or the config file sets is
+**pinned**: that value wins, and the database's value is kept but not used,
+until the key is unset there and `serve` restarts. `nbpdns settings` says
+which keys are pinned. The database comes below the file because the file,
+the environment and the flags are how an installation is declared, often by
+a deployment tool, and a change made while nbpdns runs shouldn't override
+what was declared.
+[How nbpdns stores its state](how-nbpdns-stores-its-state.md#settings-in-the-database)
+explains why each key is the kind it is, and
+[Change nbpdns's settings while it runs](../how-to/change-nbpdns-settings-while-it-runs.md)
+changes one.
 
 ## Each setting is declared once
 
@@ -81,6 +109,11 @@ A secret, such as `netbox.token`, never appears in nbpdns's output or logs.
 It shows as `[redacted]` in `nbpdns config show`, and in any log line or JSON
 that would otherwise contain it.
 
+A secret that the database stores, such as a `netbox.token` that
+`nbpdns settings set` stored, is sealed with the master key,
+`database.master_key`, and shows as `[redacted]` too. [How nbpdns stores its
+state](how-nbpdns-stores-its-state.md#secrets-at-rest) explains how.
+
 Every secret can also be read from a file, named by its `_file` key,
 `_FILE` variable, or `-file` flag. That's how container platforms and systemd
 hand secrets to a service. It also keeps the secret out of the environment,
@@ -93,12 +126,8 @@ the same level is an error, since nbpdns couldn't know which one you meant.
 
 ## Where a value came from
 
-With four sources, it's not always clear which one won. `nbpdns config show`
+With five sources, it's not always clear which one won. `nbpdns config show`
 lists each setting's value and where it came from: the flag, the environment
-variable, the config file, or the default.
-
-## Settings that change at runtime
-
-Later releases add settings that can change while nbpdns runs, stored in its
-database. A setting that the environment or the config file sets stays fixed:
-the more specific source still wins.
+variable, the config file, the database, or the default. For a pinned key,
+it names the source that wins, and `nbpdns settings list` shows the value
+that the database keeps.

@@ -202,6 +202,8 @@ event in full: its fields before and after the change.
 
 ## Next steps
 
+- [How nbpdns stores its state](../explanation/how-nbpdns-stores-its-state.md#server-groups-and-their-owners)
+  explains the groups' owners.
 - [Command line](../reference/command-line.md#nbpdns-groups) describes
   `nbpdns groups`.
 - [Audit events](../reference/audit-events.md) describes the `group.*`

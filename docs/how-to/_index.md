@@ -26,3 +26,4 @@ its goal and prerequisites, then gives numbered steps.
 - [Monitor drift with Prometheus](monitor-drift-with-prometheus.md)
 - [Export traces to an OpenTelemetry collector](export-traces-to-an-opentelemetry-collector.md)
 - [Check the audit trail](check-the-audit-trail.md)
+- [Back up nbpdns's database](back-up-nbpdns-database.md)

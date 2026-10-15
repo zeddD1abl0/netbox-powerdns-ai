@@ -131,6 +131,8 @@ event in full: its values before and after the change.
 
 ## Next steps
 
+- [How nbpdns stores its state](../explanation/how-nbpdns-stores-its-state.md#settings-in-the-database)
+  explains how settings are stored and applied.
 - [Configuration](../reference/configuration.md) lists every key, and its
   kind.
 - [Command line](../reference/command-line.md#nbpdns-settings) describes

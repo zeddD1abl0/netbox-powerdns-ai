@@ -115,6 +115,8 @@ event in the audit trail, which `audit.retention_days` keeps: see
 
 ## Next steps
 
+- [How nbpdns stores its state](../explanation/how-nbpdns-stores-its-state.md#drift-history)
+  explains what the history holds.
 - [API](../reference/api.md) describes `listZoneHistory` and
   `listRefreshes`, and every field they return.
 - [Command line](../reference/command-line.md#nbpdns-drift-history)

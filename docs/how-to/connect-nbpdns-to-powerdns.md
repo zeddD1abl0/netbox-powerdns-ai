@@ -68,6 +68,11 @@ On each primary:
 
 ## Declare the server groups
 
+These steps declare the groups in the config file. You can also add them
+from the command line while `nbpdns serve` runs, as
+[Manage server groups from the command line](manage-server-groups-from-the-command-line.md)
+shows.
+
 1. On nbpdns's host, put each primary's key in a file that only nbpdns's user
    can read:
 
