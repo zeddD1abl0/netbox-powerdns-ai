@@ -2,12 +2,12 @@
 id: ITEM-0102
 title: Tidy every go.mod and go.sum, and fail make check when one isn't
 type: bug # feature | bug | debt | task
-status: open # open | in-progress | blocked | done | wontfix
+status: done # open | in-progress | blocked | done | wontfix
 milestone: M08
 requirements: [REQ-022]
 depends_on: []
 created: 2026-10-14
-closed:
+closed: 2026-10-15
 ---
 
 # ITEM-0102: Tidy every go.mod and go.sum, and fail make check when one isn't
@@ -25,11 +25,11 @@ happens.
 
 ## Acceptance criteria
 
-- [ ] `go mod tidy -diff` reports nothing for the main module or for any
+- [x] `go mod tidy -diff` reports nothing for the main module or for any
   `tools/*/go.mod`.
-- [ ] A make target fails, naming the module, when any of them isn't tidy,
+- [x] A make target fails, naming the module, when any of them isn't tidy,
   and `make check` and a CI job run it.
-- [ ] `make check` passes, and each tool still runs from its module.
+- [x] `make check` passes, and each tool still runs from its module.
 
 ## Notes
 
@@ -47,3 +47,27 @@ happens.
   the `/go.mod` hash for `klauspost/compress` v1.19.2. Of the tool
   modules, `tools/goimports` (2 lines) and `tools/govulncheck` (10 lines)
   aren't tidy; `hooktest`, `oapi-codegen` and `projctl` are.
+- 2026-10-15: Done. `make tidy` tidied the main module (goose and sqlite
+  moved to the direct `require` block; `go.sum` gained 29 lines and lost
+  the 4 stale ones), `tools/goimports` and `tools/govulncheck` (`go.sum`
+  only). No version changed. `make tidy-check` runs `go mod tidy -diff` in
+  `.` and every `tools/*/go.mod`, found by wildcard, so a new tool module,
+  such as ITEM-0103's, is checked without a change. It names each untidy
+  module and prints its diff. The command exits 1 both for a change and
+  for a failure, so an empty diff is reported as a failure, not as an
+  untidy module. `make check` runs it, and CI's `go-lint` job, on both
+  forges, runs `make vet lint generate-check tidy-check`.
+  The network: in the pinned CI image, with `GOTOOLCHAIN=local`, the module
+  cache is empty, and `tidy -diff` needs the network for every module that
+  has dependencies. It still does after loading what `vet` loads: the main
+  module wants test-only modules, such as go-jsoncommentstrip. Every job
+  has the network, and `go-lint` already holds most of what tidy reads
+  (`generate-check` builds oapi-codegen), so tidy adds about 190 MB and
+  11 s there, where a job of its own would fetch about 860 MB cold. The
+  user chose `go-lint`. Checked: before tidying, the target failed with
+  `not tidy: . tools/goimports tools/govulncheck`. With `GOPROXY=off` and
+  an empty module cache, it failed with `.: go mod tidy -diff failed`.
+  goimports ran from its module as the edit hook runs it, and govulncheck,
+  oapi-codegen, projctl and hooktest ran through `make check`. The
+  CHANGELOG gained a line under Added, as 0.7.0's make targets did, and
+  `CLAUDE.md`'s description of `make check` names tidiness.

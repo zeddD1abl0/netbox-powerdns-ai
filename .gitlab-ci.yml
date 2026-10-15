@@ -40,7 +40,7 @@ go-lint:
   extends: [.go, .heavy]
   stage: lint
   script:
-    - make vet lint generate-check
+    - make vet lint generate-check tidy-check
 
 docs-lint:
   extends: .go

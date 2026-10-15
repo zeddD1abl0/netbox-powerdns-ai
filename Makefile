@@ -69,7 +69,7 @@ shell: ## Open a shell in the CI image with the repository mounted (for macOS, W
 ##@ Pipeline
 
 .PHONY: check
-check: vet lint test vuln secrets docs-lint api-lint project-lint generate-check ## Everything CI checks (formatting is checked by lint)
+check: vet lint test vuln secrets docs-lint api-lint project-lint generate-check tidy-check ## Everything CI checks (formatting is checked by lint)
 
 .PHONY: ci
 ci: check build docs-links test-integration release-check ## Every CI job's targets, run locally in one go
@@ -77,6 +77,8 @@ ci: check build docs-links test-integration release-check ## Every CI job's targ
 # Go modules that fmt, vet, lint, test and vuln cover. A module with no
 # packages yet is skipped.
 GO_MODULES := . tools/projctl tools/hooktest
+# Every Go module, the source-built tools' too, which tidy and tidy-check cover.
+ALL_GO_MODULES := . $(patsubst %/go.mod,%,$(wildcard tools/*/go.mod))
 
 # $(call each_module,COMMAND) runs COMMAND inside every Go module with packages.
 define each_module
@@ -93,6 +95,24 @@ endef
 .PHONY: fmt
 fmt: $(GOLANGCI_LINT) ## Format Go code with the configured formatters (gofmt, goimports)
 	$(call each_module,$(GOLANGCI_LINT) fmt --config $(ROOT)/.golangci.yml ./...)
+
+.PHONY: tidy
+tidy: ## Tidy every Go module's go.mod and go.sum, the tools' too (needs network)
+	@for m in $(ALL_GO_MODULES); do echo "$$m: go mod tidy"; go -C $$m mod tidy; done
+
+# go mod tidy -diff prints what tidy would change, and exits 1 both when
+# there's a change and when it fails, as it does without the network. Only
+# a change prints a diff.
+.PHONY: tidy-check
+tidy-check: ## Fail if any Go module's go.mod or go.sum isn't tidy (needs network)
+	@untidy=; for m in $(ALL_GO_MODULES); do \
+		if changes=$$(go -C $$m mod tidy -diff); then continue; fi; \
+		test -n "$$changes" || { echo "$$m: go mod tidy -diff failed"; exit 1; }; \
+		echo "$$m: not tidy; go mod tidy would change:"; echo "$$changes"; \
+		untidy="$$untidy $$m"; \
+	done; \
+	test -z "$$untidy" || { echo "not tidy:$$untidy; run 'make tidy'"; exit 1; }; \
+	echo "go.mod and go.sum: tidy, in every module"
 
 # Integration tests carry the "integration" build tag, and the end-to-end
 # webhook test "webhooks" too. vet and lint check them as well; otherwise

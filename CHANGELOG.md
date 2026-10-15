@@ -72,6 +72,9 @@ All notable changes to this project are recorded here. The format follows
   `drift.history_retention_days` prunes it. Each change is a `group.*`
   audit event. The API's server groups gain `managed_by`. "Manage server
   groups from the command line" shows how.
+- `make tidy` tidies the `go.mod` and `go.sum` of every Go module, the
+  tools' too, and `make tidy-check`, which `make check` and CI run, fails,
+  naming each module that isn't tidy.
 
 ### Changed
 
