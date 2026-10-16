@@ -44,18 +44,34 @@ tool = go tool -modfile=$(ROOT)/tools/$(1)/go.mod $(1)
 tools: $(BINARIES) ## Fetch every pinned tool binary into .cache/tools
 
 .PHONY: tools-update
-tools-update: ## Move every tool to its latest release (binaries, source-built tools, projctl's dependencies)
+tools-update: ## Move every tool to its latest release (binaries, source-built tools, projctl's dependencies), and install the new gopls
 	tools/update.sh
-	@for t in govulncheck goimports oapi-codegen; do \
+	@for t in govulncheck goimports oapi-codegen gopls; do \
 		pkg=$$(awk '/^tool /{print $$2}' tools/$$t/go.mod); \
 		echo "$$t: $$pkg@latest"; \
 		go -C tools/$$t get -tool $$pkg@latest && go -C tools/$$t mod tidy; \
 	done
 	go -C tools/projctl get -u ./... && go -C tools/projctl mod tidy
+	@$(MAKE) gopls
 
 .PHONY: tools-audit
 tools-audit: ## Check every pinned hash against its release's published checksums file (changes nothing)
 	tools/update.sh --check
+
+# Claude Code's gopls-lsp plugin runs `gopls` from the PATH Claude Code
+# started with, which a settings file can't extend: its env values aren't
+# expanded. So the pinned gopls goes where `go install` puts binaries, GOBIN
+# or the first GOPATH's bin, which must be the first gopls on that PATH.
+.PHONY: gopls
+gopls: ## Install the pinned gopls, which Claude Code's gopls-lsp plugin runs, into Go's install directory
+	go -C tools/gopls install tool
+	@bin=$$(go env GOBIN); bin=$${bin:-$$(go env GOPATH | cut -d: -f1)/bin}; \
+	found=$$(command -v gopls || true); \
+	if [ ! "$$found" -ef "$$bin/gopls" ]; then \
+		echo "gopls: installed $$bin/gopls, but PATH runs '$${found:-no gopls}'; put $$bin ahead of any other gopls on the PATH Claude Code starts with"; \
+		exit 1; \
+	fi; \
+	echo "gopls: $$("$$bin/gopls" version | head -n 1), at $$bin/gopls"
 
 .PHONY: shell
 # The image's digest names a multi-arch index, and only linux-amd64 tools are

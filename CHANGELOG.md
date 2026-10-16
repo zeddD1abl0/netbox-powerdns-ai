@@ -75,6 +75,10 @@ All notable changes to this project are recorded here. The format follows
 - `make tidy` tidies the `go.mod` and `go.sum` of every Go module, the
   tools' too, and `make tidy-check`, which `make check` and CI run, fails,
   naming each module that isn't tidy.
+- `gopls` is pinned in `tools/gopls/go.mod`, and `make gopls` installs it
+  where `go install` puts binaries, for Claude Code's `gopls-lsp` plugin,
+  failing if it isn't the first `gopls` on `PATH`. `make tools-update`
+  moves it to its latest release, and installs it again.
 
 ### Changed
 

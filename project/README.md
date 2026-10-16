@@ -17,7 +17,7 @@
 | [M05](milestones/M05-packaging.md) | Packaging | done | 5 of 5 |
 | [M06](milestones/M06-rest-api.md) | REST API | done | 10 of 10 |
 | [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | done | 9 of 9 |
-| [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | in-progress | 15 of 18 |
+| [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | in-progress | 16 of 18 |
 | [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | planned | 1 of 1 |
 | [M10](milestones/M10-authentication.md) | Authentication | planned | 1 of 2 |
 | [M11](milestones/M11-roles-and-permissions.md) | Roles and permissions | planned | 1 of 1 |
@@ -36,7 +36,6 @@
 | Item | Title | Type | Status | Waiting on |
 |---|---|---|---|---|
 | [ITEM-0100](items/ITEM-0100-keep-concurrent-pipelines-from-running-the-runner.md) | Keep concurrent pipelines from running the runner out of memory | bug | in-progress | — |
-| [ITEM-0103](items/ITEM-0103-pin-gopls-with-the-other-go-tools.md) | Pin gopls with the other Go tools | debt | open | — |
 | [ITEM-0105](items/ITEM-0105-scan-staged-changes-for-secrets-too.md) | Scan staged changes for secrets too | bug | open | — |
 | [ITEM-0084](items/ITEM-0084-plan-milestones-ahead-with-gitlab-as-their-view.md) | Plan milestones ahead, with GitLab as their view | task | done 2026-10-10 | — |
 | [ITEM-0085](items/ITEM-0085-design-m08-sqlite-persistence.md) | Design M08: SQLite persistence | task | done 2026-10-09 | — |
@@ -51,6 +50,7 @@
 | [ITEM-0094](items/ITEM-0094-the-m08-docs-and-changelog.md) | The M08 docs and CHANGELOG | task | done 2026-10-15 | — |
 | [ITEM-0101](items/ITEM-0101-keep-sessions-to-one-item-and-send-read-only-searc.md) | Keep sessions to one item, and send read-only searches to a Haiku agent | task | done 2026-10-14 | — |
 | [ITEM-0102](items/ITEM-0102-tidy-every-go-mod-and-go-sum-and-fail-make-check-w.md) | Tidy every go.mod and go.sum, and fail make check when one isn't | bug | done 2026-10-15 | — |
+| [ITEM-0103](items/ITEM-0103-pin-gopls-with-the-other-go-tools.md) | Pin gopls with the other Go tools | debt | done 2026-10-16 | — |
 | [ITEM-0104](items/ITEM-0104-make-secrets-fails-on-a-test-fixture-that-item-009.md) | Make secrets fails on a test fixture that ITEM-0092 committed | bug | done 2026-10-15 | — |
 | [ITEM-0106](items/ITEM-0106-status-mixes-a-running-refresh-s-start-with-the-la.md) | Status mixes a running refresh's start with the last one's end | bug | done 2026-10-15 | — |
 

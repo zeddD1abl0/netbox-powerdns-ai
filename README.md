@@ -51,3 +51,10 @@ make build      # build bin/nbpdns
 make ci         # run exactly what CI runs
 make docs-serve # preview the documentation site
 ```
+
+Claude Code's `gopls-lsp` plugin runs the first `gopls` on the `PATH` that
+Claude Code started with. `make gopls` installs the one pinned in
+`tools/gopls/go.mod` where `go install` puts binaries, `GOBIN` or
+`~/go/bin`, and fails unless it's the first `gopls` on that `PATH`.
+`make tools-update` moves `gopls` to its latest release, and installs it
+again.
