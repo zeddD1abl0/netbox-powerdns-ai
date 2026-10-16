@@ -93,6 +93,10 @@ All notable changes to this project are recorded here. The format follows
   the image, mount a volume at `/var/lib/nbpdns`, writable by user 65532,
   and in Kubernetes, update the deployment with the `Recreate` strategy, as
   "Run nbpdns in a container" shows.
+- `make secrets`, and so `make check`, also scan what isn't committed yet:
+  changed and new files, whether they're staged or not. A secret then
+  fails the scan before its commit, while it can still be taken out, not
+  only after, when it can only be ignored.
 
 ### Fixed
 

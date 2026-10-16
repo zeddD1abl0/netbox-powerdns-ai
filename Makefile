@@ -305,9 +305,25 @@ lab-down: $(DOCKER_COMPOSE) ## Remove the NetBox lab and its data, in every prof
 vuln: ## Check dependencies for known vulnerabilities (needs network for the vuln DB)
 	$(call each_module,$(call tool,govulncheck) ./...)
 
+GITLEAKS_GIT = $(GITLEAKS) git --no-banner --redact
+
 .PHONY: secrets
-secrets: $(GITLEAKS) ## Scan the git history for committed secrets
-	$(GITLEAKS) git --no-banner --redact .
+# The history, and what isn't committed yet, while a secret can still be taken
+# out: the staged changes, which the next commit holds, and the working tree's
+# other changes. `git diff`, which --pre-commit scans, leaves out untracked
+# files, so a throwaway copy of the index marks each one intent-to-add; the
+# real index isn't touched. Every scan runs, so one failing hides no findings.
+secrets: $(GITLEAKS) ## Scan for secrets: the git history, the staged changes, and the unstaged and untracked ones
+	@failed=; tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' EXIT; \
+	echo "secrets: the git history"; \
+	$(GITLEAKS_GIT) . || failed="$$failed history"; \
+	echo "secrets: the staged changes"; \
+	$(GITLEAKS_GIT) --staged . || failed="$$failed staged"; \
+	echo "secrets: the unstaged and untracked changes"; \
+	cp "$$(git rev-parse --git-path index)" "$$tmp/index"; \
+	git ls-files -z --others --exclude-standard | GIT_INDEX_FILE="$$tmp/index" xargs -0 -r git add --intent-to-add --; \
+	GIT_INDEX_FILE="$$tmp/index" $(GITLEAKS_GIT) --pre-commit . || failed="$$failed unstaged"; \
+	test -z "$$failed" || { echo "secrets: failed:$$failed"; exit 1; }
 
 ##@ Linters
 
