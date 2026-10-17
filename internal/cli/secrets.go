@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
@@ -48,11 +47,11 @@ func newSecretsRotateCmd(a *app) *cobra.Command {
 		if *newKey == "" {
 			return usageError{errors.New("--new-key-file is required")}
 		}
-		b, err := os.ReadFile(*newKey)
+		text, err := config.ReadSecretFile(*newKey)
 		if err != nil {
-			return fmt.Errorf("reading the new master key: %w", err)
+			return fmt.Errorf("--new-key-file: %w", err)
 		}
-		next, err := secrets.ParseMasterKey(string(b))
+		next, err := secrets.ParseMasterKey(text)
 		if err != nil {
 			return fmt.Errorf("the new master key, in %s: %w", *newKey, err)
 		}

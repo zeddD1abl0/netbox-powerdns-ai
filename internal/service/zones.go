@@ -301,7 +301,7 @@ func (s *Service) recordZones(ctx context.Context, log *slog.Logger, r drift.Rep
 	}
 	if err != nil {
 		s.mu.Lock()
-		s.st.netboxUp, s.st.netboxError = false, err.Error()
+		s.st.netboxRead, s.st.netboxUp, s.st.netboxError = true, false, err.Error()
 		s.mu.Unlock()
 		m.NetBoxUp.WithLabelValues().Set(0)
 		log.WarnContext(ctx, "the zone refresh couldn't read NetBox; its zones wait for the next scheduled refresh", "err", err)
@@ -309,7 +309,11 @@ func (s *Service) recordZones(ctx context.Context, log *slog.Logger, r drift.Rep
 	}
 	s.mu.Lock()
 	st := &s.st
-	st.netboxUp, st.netboxError = true, ""
+	// With no group serving its zones, the zone refresh read nothing.
+	read := len(r.Groups) > 0
+	if read {
+		st.netboxRead, st.netboxUp, st.netboxError = true, true, ""
+	}
 	switch {
 	case r.NetBoxErr != nil:
 		log.WarnContext(ctx, "couldn't read the records of NetBox's zones that aren't compared, so the API keeps NetBox's last records",
@@ -319,7 +323,9 @@ func (s *Service) recordZones(ctx context.Context, log *slog.Logger, r drift.Rep
 	}
 	changes := s.apply(r.Groups, end, true)
 	s.mu.Unlock()
-	m.NetBoxUp.WithLabelValues().Set(1)
+	if read {
+		m.NetBoxUp.WithLabelValues().Set(1)
+	}
 	s.publish(ctx, log, changes, end)
 	return outcome, changes
 }

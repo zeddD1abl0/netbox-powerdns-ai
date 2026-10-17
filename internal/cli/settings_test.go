@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"database/sql"
 	"encoding/json"
 	"path/filepath"
 	"regexp"
@@ -100,6 +101,49 @@ func TestServeAppliesSettings(t *testing.T) {
 		events[2].Action != string(audit.SettingUnset) || events[2].Reason != "done" {
 		t.Errorf("events = %+v, want three, by %s", events, user)
 	}
+	if code := s.stop(); code != exitOK {
+		t.Errorf("exit %d:\n%s", code, s.stderr)
+	}
+}
+
+// TestServeRetriesAFailedReload stores a setting that serve can't apply, as
+// an edit of the database might, then mends it without moving the
+// settings' version on, and sees serve apply it at a later check.
+func TestServeRetriesAFailedReload(t *testing.T) {
+	env := configFile(t, twoGroups)
+	env["NBPDNS_NETBOX_URL"], env["NBPDNS_NETBOX_TOKEN"] = "http://127.0.0.1:1", "nbt_abc.def"
+	db := filepath.Join(t.TempDir(), "nbpdns.db")
+	env["NBPDNS_DATABASE_URL"] = "sqlite://" + db
+	s := startServe(t, env)
+	raw, err := sql.Open("sqlite", db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer raw.Close()
+	exec := func(query string) {
+		t.Helper()
+		if _, err := raw.ExecContext(t.Context(), query); err != nil {
+			t.Fatal(err)
+		}
+	}
+	exec(`INSERT INTO settings (key, value, sealed, updated_at, updated_by) VALUES ('drift.interval', 'soon', FALSE, '2026-10-17T00:00:00.000000Z', 'test')`)
+	exec(`UPDATE sequences SET value = value + 1 WHERE name = 'settings_version'`)
+	waitFor(t, s, "the failed reload", func() bool {
+		return strings.Contains(s.stderr.String(), "couldn't apply the changed settings")
+	})
+	exec(`UPDATE settings SET value = '15s' WHERE key = 'drift.interval'`)
+	waitFor(t, s, "the reload tried again", func() bool {
+		_, page := s.get("/status?json=1")
+		var st struct {
+			Schedule struct {
+				IntervalSeconds float64 `json:"interval_seconds"`
+			} `json:"schedule"`
+		}
+		if err := json.Unmarshal([]byte(page), &st); err != nil {
+			t.Fatal(err)
+		}
+		return st.Schedule.IntervalSeconds == 15
+	})
 	if code := s.stop(); code != exitOK {
 		t.Errorf("exit %d:\n%s", code, s.stderr)
 	}

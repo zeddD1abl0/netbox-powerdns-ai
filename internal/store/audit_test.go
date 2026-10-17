@@ -282,6 +282,28 @@ func TestPruneAudit(t *testing.T) {
 	}
 }
 
+// TestPruneAuditKeepsAYoungerEvent prunes a trail in which an event follows
+// one with a later time, as a refresh's events, which carry its end's time,
+// follow a change that the command line recorded while the refresh was
+// written. The prune stops at the first event that's young enough to keep.
+func TestPruneAuditKeepsAYoungerEvent(t *testing.T) {
+	s := migrated(t)
+	cutoff := time.Now().UTC().AddDate(0, 0, -7)
+	appended := appendAll(t, s, started(cutoff.Add(-time.Hour), "a"), started(cutoff.Add(time.Second), "a"),
+		started(cutoff.Add(-time.Second), "a"))
+	deleted, _, err := s.PruneAudit(t.Context(), cutoff, 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum, err := s.VerifyAudit(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deleted != 1 || sum.First.Seq != 2 || sum.Anchor == nil || *sum.Anchor != (audit.Anchor{Seq: 1, Hash: appended[0].Hash}) {
+		t.Errorf("PruneAudit() deleted %d, leaving %+v; want the first alone deleted, since the second is younger than the cutoff", deleted, sum)
+	}
+}
+
 // TestAuditAfterAnEmptyingPrune appends to a trail whose events were all
 // deleted, but for its anchor, and sees the new event link to the anchor.
 func TestAuditAfterAnEmptyingPrune(t *testing.T) {

@@ -50,7 +50,8 @@ func (s *Service) Restore(ctx context.Context) {
 	if len(restored) > 0 {
 		st.ready, st.restored = true, true
 		if r.Last != nil {
-			st.restoredAsOf = r.Last.Finished
+			// The refresh that kept the reports read NetBox.
+			st.restoredAsOf, st.netboxRead = r.Last.Finished, true
 		}
 	}
 	groups := make(map[string]groupState, len(st.groups))
@@ -66,8 +67,8 @@ func (s *Service) Restore(ctx context.Context) {
 	if !ready {
 		return
 	}
-	m.NetBoxUp.WithLabelValues().Set(gauge(r.Last == nil || r.Last.Outcome != metrics.OutcomeFailed))
 	if r.Last != nil {
+		m.NetBoxUp.WithLabelValues().Set(gauge(r.Last.Outcome != metrics.OutcomeFailed))
 		m.LastRefresh.WithLabelValues().Set(unix(r.Last.Finished))
 	}
 	if !r.LastComplete.IsZero() {

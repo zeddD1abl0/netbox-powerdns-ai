@@ -237,7 +237,7 @@ type watcher struct {
 // run checks the settings' and the groups' versions every settingsPoll,
 // until ctx is done, and when one has moved on, reads them again and
 // applies them. Settings or groups that can't be applied are logged, and
-// serve keeps those it has.
+// serve keeps those it has, and tries again at the next check.
 func (w *watcher) run(ctx context.Context) {
 	t := time.NewTicker(settingsPoll)
 	defer t.Stop()
@@ -247,13 +247,11 @@ func (w *watcher) run(ctx context.Context) {
 			return
 		case <-t.C:
 		}
-		if v, ok := w.version(ctx, "settings", w.st.SettingsVersion); ok && v != w.settingsVersion {
+		if v, ok := w.version(ctx, "settings", w.st.SettingsVersion); ok && v != w.settingsVersion && w.reloadSettings(ctx) {
 			w.settingsVersion = v
-			w.reloadSettings(ctx)
 		}
-		if v, ok := w.version(ctx, "server groups", w.st.GroupsVersion); ok && v != w.groupsVersion {
+		if v, ok := w.version(ctx, "server groups", w.st.GroupsVersion); ok && v != w.groupsVersion && w.reloadGroups(ctx) {
 			w.groupsVersion = v
-			w.reloadGroups(ctx)
 		}
 	}
 }
@@ -273,18 +271,21 @@ func (w *watcher) version(ctx context.Context, what string, read func(context.Co
 
 // reloadSettings reads the settings that the database stores, and applies
 // them: the log's level and the refreshes' timing at once, and the rest,
-// through live, at the next refresh, or the next prune. Each reload is its
-// own trace.
-func (w *watcher) reloadSettings(ctx context.Context) {
+// through live, at the next refresh, or the next prune. It reports whether
+// it applied them. Each reload is its own trace.
+func (w *watcher) reloadSettings(ctx context.Context) bool {
 	s := w.s
 	ctx, span := s.tracer.Start(logging.WithRequestID(ctx, rand.Text()), "settings reload", trace.WithNewRoot())
 	defer span.End()
 	cfg, settings, _, err := s.storedConfig(ctx, w.st)
 	if err != nil {
+		if ctx.Err() != nil {
+			return false
+		}
 		span.RecordError(err)
 		s.metrics.SettingsReload(metrics.ReloadFailed)
-		s.log.ErrorContext(ctx, "couldn't apply the changed settings, so serve keeps those it has", "err", err)
-		return
+		s.log.ErrorContext(ctx, "couldn't apply the changed settings, so serve keeps those it has, and tries again soon", "err", err)
+		return false
 	}
 	if err := s.level.UnmarshalText([]byte(cfg.Log.Level)); err != nil {
 		// The loader has checked log.level.
@@ -297,22 +298,26 @@ func (w *watcher) reloadSettings(ctx context.Context) {
 	s.metrics.SettingsReload(metrics.ReloadApplied)
 	s.log.InfoContext(ctx, "applied the changed settings", "keys", changedKeys(w.settings, settings))
 	w.settings = settings
+	return true
 }
 
 // reloadGroups reads the groups that the database stores, and applies them:
 // the service shows them at once, and compares a new or changed one at
-// once, and the next refresh makes their clients. Each reload is its own
-// trace.
-func (w *watcher) reloadGroups(ctx context.Context) {
+// once, and the next refresh makes their clients. It reports whether it
+// applied them. Each reload is its own trace.
+func (w *watcher) reloadGroups(ctx context.Context) bool {
 	s := w.s
 	ctx, span := s.tracer.Start(logging.WithRequestID(ctx, rand.Text()), "server groups reload", trace.WithNewRoot())
 	defer span.End()
 	groups, _, err := s.servedGroups(ctx, w.st, w.file)
 	if err != nil {
+		if ctx.Err() != nil {
+			return false
+		}
 		span.RecordError(err)
 		s.metrics.SettingsReload(metrics.ReloadFailed)
-		s.log.ErrorContext(ctx, "couldn't apply the changed server groups, so serve keeps those it has", "err", err)
-		return
+		s.log.ErrorContext(ctx, "couldn't apply the changed server groups, so serve keeps those it has, and tries again soon", "err", err)
+		return false
 	}
 	d := diffGroups(w.groups, groups)
 	// The next refresh reads live, so it's stored before the service asks
@@ -326,6 +331,7 @@ func (w *watcher) reloadGroups(ctx context.Context) {
 	s.metrics.SettingsReload(metrics.ReloadApplied)
 	s.log.InfoContext(ctx, "applied the changed server groups",
 		"added", nonNil(d.Added), "changed", nonNil(d.Changed), "removed", nonNil(d.Removed), "renamed", nonNil(d.Renamed))
+	return true
 }
 
 // nonNil returns s, or an empty slice if it's nil, so that a log shows [].

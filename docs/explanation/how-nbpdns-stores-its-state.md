@@ -186,7 +186,11 @@ elsewhere can, and M17 sends the events to a SIEM.
 `audit.retention_days` sets how long events are kept, by default 2557 days,
 seven years. `serve` deletes older events once a day, records that as an
 `audit.pruned` event, and keeps the hash of the last event it deleted as the
-chain's anchor, so `audit verify` checks the trail from there.
+chain's anchor, so `audit verify` checks the trail from there. It deletes
+from the trail's start, and stops at the first event that's young enough
+to keep, so an older event that follows it waits for a later prune. The
+events of a refresh carry the time it ended, and a change that the command
+line made while the refresh was written can come before them.
 
 Each start of `serve` is a `service.started` event, with the version, and a
 fingerprint of the configuration: a SHA-384 of its settings, with their

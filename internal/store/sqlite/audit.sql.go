@@ -164,7 +164,11 @@ func (q *Queries) LastAuditEvent(ctx context.Context) (LastAuditEventRow, error)
 }
 
 const lastAuditEventBefore = `-- name: LastAuditEventBefore :one
-SELECT seq, hash FROM audit_events WHERE at < ?1 ORDER BY seq DESC LIMIT 1
+SELECT e.seq, e.hash FROM audit_events e
+WHERE e.at < ?1
+  AND NOT EXISTS (SELECT 1 FROM audit_events n WHERE n.seq < e.seq AND n.at >= ?1)
+ORDER BY e.seq DESC
+LIMIT 1
 `
 
 type LastAuditEventBeforeRow struct {
@@ -172,6 +176,9 @@ type LastAuditEventBeforeRow struct {
 	Hash string
 }
 
+// The last event of those before the first one at or after cutoff, by seq:
+// a prune deletes the trail from its start, and an event can follow one
+// with a later time, as a refresh's do, which carry its end's time.
 func (q *Queries) LastAuditEventBefore(ctx context.Context, cutoff string) (LastAuditEventBeforeRow, error) {
 	row := q.db.QueryRowContext(ctx, lastAuditEventBefore, cutoff)
 	var i LastAuditEventBeforeRow

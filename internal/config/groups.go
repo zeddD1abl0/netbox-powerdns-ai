@@ -475,7 +475,7 @@ func decodeGroup(raw any) (Group, map[string]bool, []error) {
 	case set["primary.api_key"] && set["primary.api_key_file"]:
 		errs = append(errs, errors.New("both primary.api_key and primary.api_key_file are set; set one"))
 	case set["primary.api_key_file"]:
-		s, err := readSecretFile(g.Primary.APIKeyFile)
+		s, err := ReadSecretFile(g.Primary.APIKeyFile)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("primary.api_key_file: %w", err))
 		}

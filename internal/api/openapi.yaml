@@ -1042,7 +1042,7 @@ components:
           examples: [https://netbox.example.com/]
         up:
           type: [boolean, "null"]
-          description: Whether the last refresh could read NetBox, or null before the first.
+          description: Whether the last refresh that read NetBox could, or null until one has. A refresh with no server groups to compare doesn't read NetBox.
           examples: [true]
         error:
           type: [string, "null"]

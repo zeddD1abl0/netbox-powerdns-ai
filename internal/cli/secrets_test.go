@@ -128,7 +128,7 @@ func TestSettingValueFromStdin(t *testing.T) {
 	}{
 		{"v", "f", "not both"},
 		{"", "", "give the value as an argument, or, for a secret, with --from-file"},
-		{"", filepath.Join(t.TempDir(), "missing"), "reading the value"},
+		{"", filepath.Join(t.TempDir(), "missing"), "reading the secret file"},
 	} {
 		if _, err := settingValue(cmd, tt.arg, tt.from); err == nil || !strings.Contains(err.Error(), tt.want) {
 			t.Errorf("settingValue(%q, %q) = %v, want %q", tt.arg, tt.from, err, tt.want)

@@ -187,13 +187,10 @@ func settingValue(cmd *cobra.Command, arg, from string) (string, error) {
 // readValue returns what the file from holds, or standard input if from is
 // -, without a final newline. It fails if that's empty.
 func readValue(cmd *cobra.Command, from string) (string, error) {
-	var b []byte
-	var err error
-	if from == "-" {
-		b, err = io.ReadAll(io.LimitReader(cmd.InOrStdin(), 64<<10))
-	} else {
-		b, err = os.ReadFile(from)
+	if from != "-" {
+		return config.ReadSecretFile(from)
 	}
+	b, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), 64<<10))
 	if err != nil {
 		return "", fmt.Errorf("reading the value: %w", err)
 	}

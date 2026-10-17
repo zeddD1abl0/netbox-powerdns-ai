@@ -317,7 +317,7 @@ NetBox's state, as of the last refresh.
 | Field | Type | Description |
 |---|---|---|
 | `url` | `string` (`uri`) | NetBox's URL, `netbox.url`. |
-| `up` | `boolean`, or null | Whether the last refresh could read NetBox, or null before the first. |
+| `up` | `boolean`, or null | Whether the last refresh that read NetBox could, or null until one has. A refresh with no server groups to compare doesn't read NetBox. |
 | `error` | `string`, or null | Why NetBox couldn't be read, or null. |
 
 ### `Tracing`

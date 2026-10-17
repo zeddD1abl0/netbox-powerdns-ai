@@ -82,6 +82,17 @@ func TestSetGroups(t *testing.T) {
 	if status := s.Status(); len(status.Groups) != 3 || status.Groups[0].Name != "site-z" {
 		t.Errorf("status groups = %+v", status.Groups)
 	}
+
+	// A new group that reuses a removed one's name, with another ID, starts
+	// with nothing known, and the removed one's series go.
+	reused := Group{ID: 5, Name: "site-b", Views: []string{"w"}, ManagedBy: "cli"}
+	s.SetGroups([]Group{renamed, reused, d})
+	if g, _ := s.Group("site-b"); g.Info.Status != statusUnknown || g.Report != nil {
+		t.Errorf("the new site-b = %+v, want nothing known, not the removed site-b's state", g)
+	}
+	if strings.Contains(gathered(t, m), `group="site-b"`) {
+		t.Errorf("the removed site-b's series are left:\n%s", gathered(t, m))
+	}
 }
 
 // TestRefreshNow brings the next refresh forward, an hour early.

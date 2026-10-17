@@ -32,7 +32,14 @@ LIMIT sqlc.arg(max_events);
 SELECT * FROM audit_events WHERE seq > sqlc.arg(after) ORDER BY seq LIMIT sqlc.arg(max_events);
 
 -- name: LastAuditEventBefore :one
-SELECT seq, hash FROM audit_events WHERE at < sqlc.arg(cutoff) ORDER BY seq DESC LIMIT 1;
+-- The last event of those before the first one at or after cutoff, by seq:
+-- a prune deletes the trail from its start, and an event can follow one
+-- with a later time, as a refresh's do, which carry its end's time.
+SELECT e.seq, e.hash FROM audit_events e
+WHERE e.at < sqlc.arg(cutoff)
+  AND NOT EXISTS (SELECT 1 FROM audit_events n WHERE n.seq < e.seq AND n.at >= sqlc.arg(cutoff))
+ORDER BY e.seq DESC
+LIMIT 1;
 
 -- name: DeleteAuditEventsThrough :execrows
 DELETE FROM audit_events WHERE seq <= sqlc.arg(seq);

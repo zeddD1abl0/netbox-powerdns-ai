@@ -203,6 +203,8 @@ func (s *Service) Status() Status {
 			Started: st.lastEndStart.UTC(), Finished: st.lastEnd.UTC(),
 			DurationSeconds: st.lastEnd.Sub(st.lastEndStart).Seconds(), Outcome: st.lastOutcome, Error: st.lastError,
 		}
+	}
+	if st.ready && st.netboxRead {
 		up := st.netboxUp
 		out.NetBox.Up = &up
 	}

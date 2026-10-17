@@ -196,7 +196,7 @@ be read:
 | `schedule.refreshes.incomplete` | integer | Refreshes that finished incomplete. |
 | `schedule.refreshes.failed` | integer | Refreshes that failed. |
 | `netbox.url` | string | NetBox's URL, `netbox.url`. |
-| `netbox.up` | Boolean or null | Whether the last refresh could read NetBox, or `null` before the first. |
+| `netbox.up` | Boolean or null | Whether the last refresh that read NetBox could, or `null` until one has. A refresh with no server groups to compare doesn't read NetBox. |
 | `netbox.error` | string | Why NetBox couldn't be read, or empty. |
 | `groups[].name` | string | The server group's name. Groups are in the config file's order. |
 | `groups[].url` | string | The group's primary's URL. |

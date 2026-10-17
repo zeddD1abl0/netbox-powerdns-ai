@@ -105,6 +105,10 @@ All notable changes to this project are recorded here. The format follows
   end of the last one, and so a negative duration, which the contract of
   `/api/status` refuses; since the restore, the first refresh after every
   restart did.
+- `nbpdns_netbox_up`, and `netbox.up` on `/status` and `/api/status`, no
+  longer say that NetBox is up after a refresh that didn't read it: a zone
+  refresh of zones that no server group serves, or, now that `nbpdns
+  serve` starts without groups, a refresh with none to compare.
 
 ## [0.7.0] - 2026-10-09
 

@@ -450,7 +450,7 @@ type NetBoxState struct {
 	// Examples: null
 	Error *string `json:"error"`
 
-	// Up Whether the last refresh could read NetBox, or null before the first.
+	// Up Whether the last refresh that read NetBox could, or null until one has. A refresh with no server groups to compare doesn't read NetBox.
 	//
 	// Examples: true
 	Up *bool `json:"up"`

@@ -205,9 +205,10 @@ func (s *Store) VerifyAudit(ctx context.Context) (AuditSummary, error) {
 	}
 }
 
-// PruneAudit deletes the events recorded before cutoff, keeps the last one
-// it deletes as the trail's anchor, and records the prune as an event, all
-// in one transaction. It returns how many it deleted, and the prune's event,
+// PruneAudit deletes the events before cutoff, from the trail's start up to
+// the first one at or after it, so that none younger than cutoff goes,
+// keeps the last one it deletes as the trail's anchor, and records the
+// prune as an event, all in one transaction. It returns how many it deleted, and the prune's event,
 // if it deleted any.
 func (s *Store) PruneAudit(ctx context.Context, cutoff time.Time, retentionDays int) (int64, []audit.Event, error) {
 	var deleted int64

@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -115,12 +116,23 @@ func newServeCmd(a *app) *cobra.Command {
 			// The last reports are served at once (ADR-0042), and the first
 			// refresh starts as serve listens.
 			svc.Restore(ctx)
+			// The prune and the watcher use the database, so they stop before
+			// closeStore records serve's stop and closes it.
 			bgCtx, stopBackground := context.WithCancel(ctx)
-			defer stopBackground()
-			go s.prune(bgCtx, st, &live)
-			w := &watcher{s: s, st: st, svc: svc, live: &live, file: file, settings: s.settings, groups: groups,
+			var background sync.WaitGroup
+			defer func() {
+				stopBackground()
+				background.Wait()
+			}()
+			background.Go(func() { s.prune(bgCtx, st, &live) })
+			// The watcher runs beside the refreshes, which change the
+			// session's configuration, so it has its own copy of the session.
+			// It reads only database.master_key from its configuration, a
+			// bootstrap key, which doesn't change while serve runs.
+			ws := *s
+			w := &watcher{s: &ws, st: st, svc: svc, live: &live, file: file, settings: s.settings, groups: groups,
 				settingsVersion: settingsVersion, groupsVersion: groupsVersion}
-			go w.run(bgCtx)
+			background.Go(func() { w.run(bgCtx) })
 			return serve(ctx, s, svc, st, func() config.Secret { return live.Load().NetBox.WebhookSecret })
 		})
 	}

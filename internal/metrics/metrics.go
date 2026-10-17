@@ -141,7 +141,7 @@ var (
 	defWarnings = def{name: "nbpdns_drift_warnings", kind: gauge, labels: []string{"group"},
 		help: "Warnings about the configuration or NetBox's zones, for the server group."}
 	defNetBoxUp = def{name: "nbpdns_netbox_up", kind: gauge,
-		help: "1 if the last drift refresh could read NetBox, else 0. It has no value before the first refresh, nor after one stopped by drift.timeout, which keeps the value before it."}
+		help: "1 if the last drift refresh that read NetBox could, else 0. It has no value until a refresh reads NetBox, which one with no server groups to compare doesn't, and one stopped by drift.timeout keeps the value before it."}
 	defGroupUp = def{name: "nbpdns_server_group_up", kind: gauge, labels: []string{"group"},
 		help: "1 if the server group's primary could be read the last time a refresh tried, else 0. A refresh that can't read NetBox doesn't try the primaries."}
 	defGroupLastSuccess = def{name: "nbpdns_server_group_last_success_timestamp_seconds", kind: gauge, labels: []string{"group"},

@@ -158,9 +158,13 @@ type state struct {
 	lastComplete time.Time
 	next         time.Time
 	refreshes    map[string]int
-	netboxUp     bool
-	netboxError  string
-	groups       map[string]*groupState
+	// netboxRead reports whether a refresh has read NetBox, or tried to, or
+	// the restore found one that had, so that netboxUp says something. A
+	// refresh that compares no group doesn't read it.
+	netboxRead  bool
+	netboxUp    bool
+	netboxError string
+	groups      map[string]*groupState
 	// netbox is NetBox's zones as of its last successful read.
 	netbox NetBoxView
 	// pending is what NetBox's webhooks asked to refresh, waiting.
@@ -215,23 +219,26 @@ func viewsOf(groups []Group) map[string]bool {
 // the API show them at once, and webhooks' zones are matched with their
 // views. A removed group's state goes, with every metric series of its
 // name. A renamed group, matched by its ID, keeps its state under its new
-// name, and its series move there (ADR-0045). Their clients are the
-// caller's, and a refresh's results for a group that's gone are dropped.
+// name, and its series move there (ADR-0045). A new group that reuses a
+// removed one's name, with another ID, starts with no state. Their clients
+// are the caller's, and a refresh's results for a group that's gone are
+// dropped.
 func (s *Service) SetGroups(groups []Group) {
 	s.mu.Lock()
-	oldName := map[int64]string{}
+	oldName, oldID := map[int64]string{}, map[string]int64{}
 	for _, g := range s.groups {
 		if g.ID != 0 {
 			oldName[g.ID] = g.Name
 		}
+		oldID[g.Name] = g.ID
 	}
 	// renamed maps an old name to its new one; kept are the names that
-	// stay.
+	// stay, with the same group.
 	renamed, kept := map[string]string{}, map[string]bool{}
 	for _, g := range groups {
 		if old, ok := oldName[g.ID]; g.ID != 0 && ok && old != g.Name {
 			renamed[old] = g.Name
-		} else {
+		} else if id, ok := oldID[g.Name]; ok && id == g.ID {
 			kept[g.Name] = true
 		}
 	}
@@ -532,13 +539,19 @@ func (s *Service) record(ctx context.Context, log *slog.Logger, r drift.Report, 
 	}
 	if err != nil {
 		st.lastError = err.Error()
-		st.netboxUp, st.netboxError = false, err.Error()
+		st.netboxRead, st.netboxUp, st.netboxError = true, false, err.Error()
 		s.mu.Unlock()
 		m.NetBoxUp.WithLabelValues().Set(0)
 		log.WarnContext(ctx, "the drift refresh couldn't read NetBox, so every server group keeps its last report", "err", err)
 		return outcome, nil
 	}
-	st.netboxUp, st.netboxError = true, ""
+	// With no groups to compare, as when every group is yet to be added
+	// (ADR-0040), the refresh read nothing, so NetBox's state stays as it
+	// was.
+	read := len(r.Groups) > 0
+	if read {
+		st.netboxRead, st.netboxUp, st.netboxError = true, true, ""
+	}
 	if r.NetBox != nil {
 		st.netbox = netboxView(r.NetBox, end)
 	}
@@ -549,7 +562,9 @@ func (s *Service) record(ctx context.Context, log *slog.Logger, r drift.Report, 
 	changes := s.apply(r.Groups, end, false)
 	s.mu.Unlock()
 
-	m.NetBoxUp.WithLabelValues().Set(1)
+	if read {
+		m.NetBoxUp.WithLabelValues().Set(1)
+	}
 	s.publish(ctx, log, changes, end)
 	return outcome, changes
 }

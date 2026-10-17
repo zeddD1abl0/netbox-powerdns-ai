@@ -252,7 +252,7 @@ func (l *Loader) resolve(k Key, v *viper.Viper, path string) (any, Source, error
 			return nil, ly.src, fmt.Errorf("both %s and %s are set; set one", ly.src.Name, ly.fileSrc.Name)
 		case ly.fileSet:
 			// No higher layer sets either form, so Viper's value is this one.
-			s, err := readSecretFile(v.GetString(k.FileName()))
+			s, err := ReadSecretFile(v.GetString(k.FileName()))
 			return s, ly.fileSrc, err
 		case ly.plainSet:
 			return v.Get(k.Name), ly.src, nil
@@ -269,8 +269,9 @@ func (l *Loader) changed(flag string) bool {
 	return f != nil && f.Changed
 }
 
-// readSecretFile returns a secret file's content, without a final newline.
-func readSecretFile(path string) (string, error) {
+// ReadSecretFile returns a secret file's content, without a final newline.
+// It fails if that's empty.
+func ReadSecretFile(path string) (string, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return "", fmt.Errorf("reading the secret file: %w", err)
