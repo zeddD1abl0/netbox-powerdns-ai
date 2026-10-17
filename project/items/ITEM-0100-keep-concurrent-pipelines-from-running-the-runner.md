@@ -51,3 +51,17 @@ tag no longer fails main.
   hold an item in progress (`make project-lint`). It closes, on M09's
   branch, once those two pipelines have passed without a retry; if one
   fails for memory again, this item takes the fix.
+- 2026-10-17: M08's merge and tag don't meet the last criterion. The
+  merge request's pipeline, 819, and the tag's, 824, each passed only
+  after a retry of `release-check`, whose first attempt was killed for
+  memory (exit 137) while goreleaser built linux/amd64 and linux/arm64 at
+  once; `main`'s, 822, passed with every job first time. The two kills, and
+  795's, all ran on the Kubernetes node `talos-control-temp`; every heavy
+  job on `talos-control-1` and `talos-control-3` passed, the retries
+  included, and 822 and 824 didn't overlap. So the cause looks like that
+  node's memory, not two pipelines at once, which the resource group
+  covers. GitHub's runners passed every job first time. The fix is the
+  user's to choose: keep CI's pods off that node, or give the heavy jobs
+  memory requests (`KUBERNETES_MEMORY_REQUEST`, if the runner allows the
+  overwrite) so that Kubernetes places them where they fit, and halve
+  `release-check`'s peak with goreleaser's `--parallelism 1`.
