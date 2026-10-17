@@ -3,7 +3,7 @@ id: ITEM-0100
 title: Keep concurrent pipelines from running the runner out of memory
 type: bug # feature | bug | debt | task
 status: in-progress # open | in-progress | blocked | done | wontfix
-milestone: M08
+milestone: M09
 requirements: []
 depends_on: []
 created: 2026-10-10
@@ -45,3 +45,9 @@ tag no longer fails main.
   different stages, so a pipeline on its own takes as long as before; a
   second pipeline's heavy jobs wait for the first's. Checking it needs the
   next merge and tag, at M08's close.
+- 2026-10-17: Moved from M08 to M09, as the user chose at M08's close:
+  the first two criteria hold since df0a4a5, but the last can only be
+  checked on M08's merge and the v0.8.0 tag, and a done milestone can't
+  hold an item in progress (`make project-lint`). It closes, on M09's
+  branch, once those two pipelines have passed without a retry; if one
+  fails for memory again, this item takes the fix.
