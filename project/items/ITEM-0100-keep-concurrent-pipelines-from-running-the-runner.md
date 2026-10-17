@@ -65,3 +65,9 @@ tag no longer fails main.
   memory requests (`KUBERNETES_MEMORY_REQUEST`, if the runner allows the
   overwrite) so that Kubernetes places them where they fit, and halve
   `release-check`'s peak with goreleaser's `--parallelism 1`.
+- 2026-10-18: The user chose both fixes. They keep CI's pods off
+  `talos-control-temp`, or give it more memory, in the cluster or the
+  runner's configuration. The repository gives the heavy jobs memory
+  requests, so that Kubernetes places them only where they fit, and runs
+  goreleaser with `--parallelism 1` where CI builds the release. The item
+  closes once a merge's and its tag's pipelines pass without a retry.
