@@ -92,7 +92,7 @@ func TestSecretSettings(t *testing.T) {
 	// Rotate to the other key: the old one no longer opens the secret, and
 	// the new one does.
 	code, stdout, stderr = run(t, withKey, "secrets", "rotate-master-key", "--new-key-file", otherPath, "--reason", "yearly")
-	if code != exitOK || !strings.HasPrefix(stdout, "Re-wrapped 1 secrets with master key ") {
+	if code != exitOK || !strings.HasPrefix(stdout, "Re-wrapped 1 secret with master key ") {
 		t.Fatalf("rotate-master-key: exit %d: %q\n%s", code, stdout, stderr)
 	}
 	if code, _, stderr := run(t, withKey, "settings", "list"); code != exitError || !strings.Contains(stderr, "but database.master_key is master key "+key.ID()) {

@@ -83,7 +83,11 @@ func newSecretsRotateCmd(a *app) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(a.stdout, "Re-wrapped %d secrets with %s.\n", n, next)
+			what := "secrets"
+			if n == 1 {
+				what = "secret"
+			}
+			fmt.Fprintf(a.stdout, "Re-wrapped %d %s with %s.\n", n, what, next)
 			fmt.Fprintln(a.stdout, "Set database.master_key to the new key before nbpdns serve starts again.")
 			return nil
 		})

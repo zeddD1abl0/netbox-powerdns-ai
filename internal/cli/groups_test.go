@@ -180,7 +180,7 @@ func TestGroupsCommands(t *testing.T) {
 	// The master key's rotation re-wraps the groups' keys.
 	_, otherPath := keyFile(t)
 	if code, stdout, stderr := run(t, env, "secrets", "rotate-master-key", "--new-key-file", otherPath); code != exitOK ||
-		!strings.HasPrefix(stdout, "Re-wrapped 1 secrets with master key ") {
+		!strings.HasPrefix(stdout, "Re-wrapped 1 secret with master key ") {
 		t.Errorf("rotate-master-key: exit %d: %q\n%s", code, stdout, stderr)
 	}
 	rotated := with(env, "NBPDNS_DATABASE_MASTER_KEY_FILE", otherPath)

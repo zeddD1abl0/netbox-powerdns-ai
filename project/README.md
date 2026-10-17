@@ -17,7 +17,7 @@
 | [M05](milestones/M05-packaging.md) | Packaging | done | 5 of 5 |
 | [M06](milestones/M06-rest-api.md) | REST API | done | 10 of 10 |
 | [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | done | 9 of 9 |
-| [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | in-progress | 18 of 19 |
+| [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | in-progress | 19 of 20 |
 | [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | planned | 1 of 1 |
 | [M10](milestones/M10-authentication.md) | Authentication | planned | 1 of 2 |
 | [M11](milestones/M11-roles-and-permissions.md) | Roles and permissions | planned | 1 of 1 |
@@ -54,6 +54,7 @@
 | [ITEM-0105](items/ITEM-0105-scan-staged-changes-for-secrets-too.md) | Scan staged changes for secrets too | bug | done 2026-10-16 | — |
 | [ITEM-0106](items/ITEM-0106-status-mixes-a-running-refresh-s-start-with-the-la.md) | Status mixes a running refresh's start with the last one's end | bug | done 2026-10-15 | — |
 | [ITEM-0107](items/ITEM-0107-fix-the-findings-of-m08-s-code-review.md) | Fix the findings of M08's code review | bug | done 2026-10-17 | — |
+| [ITEM-0108](items/ITEM-0108-say-one-secret-not-1-secrets-after-a-master-key-s.md) | Say one secret, not 1 secrets, after a master key's rotation | bug | done 2026-10-17 | — |
 
 ## Open items in other milestones
 

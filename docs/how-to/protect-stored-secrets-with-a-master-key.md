@@ -107,7 +107,7 @@ themselves don't change.
    ```
 
    ```text
-   Re-wrapped 1 secrets with master key 3f0a9c41e8b27d65.
+   Re-wrapped 1 secret with master key 3f0a9c41e8b27d65.
    Set database.master_key to the new key before nbpdns serve starts again.
    ```
 
