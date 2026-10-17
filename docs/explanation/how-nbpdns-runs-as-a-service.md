@@ -30,12 +30,16 @@ them ([How nbpdns finds drift](how-nbpdns-finds-drift.md)).
   then counts as failed, whatever it was reading when it was stopped.
 - Each refresh is its own trace, with its own `request_id` in the logs, so
   the requests and log lines of one refresh can be followed together.
-- `serve` makes its clients for NetBox and each primary once, when it
-  starts, and reuses them. It checks each server's release once, until a
-  check succeeds, not every refresh. A group whose client can't be made,
-  such as when its certificate file isn't readable yet, gets another try
-  each refresh. Any other change to the config file, or to a key file,
-  takes a restart.
+- `serve` makes its clients for NetBox and each primary when it starts, and
+  reuses them. It checks each server's release once, until a check
+  succeeds, not every refresh. A group whose client can't be made, such as
+  when its certificate file isn't readable yet, gets another try each
+  refresh. It makes new clients, at the start of a refresh, only when
+  something changed that they use: settings changed with `nbpdns settings`,
+  such as a new `netbox.token` or `netbox.timeout`, and server groups changed
+  with `nbpdns groups`, which `serve` sees within seconds
+  ([How nbpdns stores its state](how-nbpdns-stores-its-state.md)). A change
+  to the config file, or to a key file, takes a restart.
 
 ## Webhooks from NetBox
 
@@ -107,16 +111,21 @@ should still be firing. Keeping it, with `up` at 0 and the time of the last
 success beside it, says both things at once: here's the last known drift,
 and it's getting old.
 
-The state lives in memory. A restart forgets it, and the first refresh
-after the restart finds it again. Keeping history across restarts arrives
-with the database, in M08.
+nbpdns keeps this state in its database too, with each refresh, and each
+zone's history ([ADR-0042](../adr/0042-drift-history.md)), as
+[How nbpdns stores its state](how-nbpdns-stores-its-state.md) explains. When
+it starts, it restores each group's last report from there, and serves it
+until its first refresh replaces it, so a restart hides nothing that nbpdns
+knew. Each group's last success still says
+how old its report is.
 
 ## Ready and live
 
 Two endpoints tell an orchestrator, such as Kubernetes, how nbpdns is.
 
-- **`/readyz`** answers 200 once the first refresh has finished, whatever
-  its outcome. Before that, nbpdns has nothing to report.
+- **`/readyz`** answers 200 once nbpdns has restored the reports it kept
+  before it restarted, or, with none to restore, once its first refresh has
+  finished, whatever its outcome. Before that, nbpdns has nothing to report.
 - **`/livez`** answers 200 unless no refresh has started for
   `drift.interval` + `drift.timeout` + 1 minute. Since every refresh is
   bounded by its timeout, that only happens if the refresh loop itself is
@@ -182,5 +191,4 @@ the host scrapes it, or restrict it with a firewall or a network policy.
 ## What it doesn't do yet
 
 - **Correct drift.** Nothing is written to PowerDNS until M14.
-- **Remember across restarts.** That comes with the database, in M08.
 - **Run more than one instance.** High availability comes in M09.

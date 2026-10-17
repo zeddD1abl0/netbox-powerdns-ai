@@ -13,6 +13,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/audit"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/drift"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/version"
 )
@@ -47,6 +48,29 @@ const (
 // WebhookResults are the values of the result label.
 var WebhookResults = []string{WebhookAccepted, WebhookIgnored, WebhookBadSignature, WebhookInvalid}
 
+// The writes to the database that serve counts the failures of.
+const (
+	// WriteHistory is a refresh, written to the drift history (ADR-0042).
+	WriteHistory = "history"
+	// WriteAudit is one of serve's own audit events, such as its stop.
+	WriteAudit = "audit"
+	// WritePrune is the daily prune of the audit trail and the drift
+	// history.
+	WritePrune = "prune"
+)
+
+// WriteOps are the values of the op label.
+var WriteOps = []string{WriteHistory, WriteAudit, WritePrune}
+
+// The outcomes of a reload of the runtime settings (ADR-0040).
+const (
+	ReloadApplied = "applied"
+	ReloadFailed  = "failed"
+)
+
+// ReloadOutcomes are the values of the reloads' outcome label.
+var ReloadOutcomes = []string{ReloadApplied, ReloadFailed}
+
 // The kinds of metric.
 const (
 	counter   = "counter"
@@ -65,6 +89,10 @@ type def struct {
 	buckets []float64
 }
 
+// ServicePowerDNS is the service label of the requests to the groups'
+// primaries, whose target label is the group's name.
+const ServicePowerDNS = "PowerDNS"
+
 // The zone states and RRset changes, as the drift report names them.
 var (
 	zoneStates    = drift.States
@@ -72,7 +100,7 @@ var (
 	changeKinds   = drift.ChangeKinds
 	// The services nbpdns sends requests to, as internal/httpclient names
 	// them, and the methods it sends.
-	services = []string{"NetBox", "PowerDNS"}
+	services = []string{"NetBox", ServicePowerDNS}
 	methods  = []string{"GET"}
 )
 
@@ -113,7 +141,7 @@ var (
 	defWarnings = def{name: "nbpdns_drift_warnings", kind: gauge, labels: []string{"group"},
 		help: "Warnings about the configuration or NetBox's zones, for the server group."}
 	defNetBoxUp = def{name: "nbpdns_netbox_up", kind: gauge,
-		help: "1 if the last drift refresh could read NetBox, else 0. It has no value before the first refresh, nor after one stopped by drift.timeout, which keeps the value before it."}
+		help: "1 if the last drift refresh that read NetBox could, else 0. It has no value until a refresh reads NetBox, which one with no server groups to compare doesn't, and one stopped by drift.timeout keeps the value before it."}
 	defGroupUp = def{name: "nbpdns_server_group_up", kind: gauge, labels: []string{"group"},
 		help: "1 if the server group's primary could be read the last time a refresh tried, else 0. A refresh that can't read NetBox doesn't try the primaries."}
 	defGroupLastSuccess = def{name: "nbpdns_server_group_last_success_timestamp_seconds", kind: gauge, labels: []string{"group"},
@@ -141,6 +169,19 @@ var (
 		help: "Requests to `/api/netbox-events`, NetBox's webhooks, by result: `accepted` if the event queued a refresh, " +
 			"`ignored` if it named nothing that a server group serves, `bad_signature` if its signature didn't verify, " +
 			"and `invalid` if it wasn't an event that NetBox sends, or was over 1 MiB. Requests while webhooks are off aren't counted."}
+	defAuditEvents = def{name: "nbpdns_audit_events_total", kind: counter, labels: []string{"action"},
+		values: map[string][]string{"action": auditActions()},
+		help: "Audit events that `nbpdns serve` recorded, by action. Those that the command line records, " +
+			"in its own process, are in the trail, but not here."}
+	defDBWriteFailures = def{name: "nbpdns_db_write_failures_total", kind: counter, labels: []string{"op"},
+		values: map[string][]string{"op": WriteOps},
+		help: "Writes to the database that failed, by what they wrote: `history`, a refresh, to the drift history; " +
+			"`audit`, an audit event of serve's own, such as its stop; and `prune`, the daily prune of the audit trail and the drift history. " +
+			"A refresh whose history couldn't be written is still served."}
+	defSettingsReloads = def{name: "nbpdns_settings_reloads_total", kind: counter, labels: []string{"outcome"},
+		values: map[string][]string{"outcome": ReloadOutcomes},
+		help: "Reloads of the runtime settings or the server groups, after `nbpdns settings` or `nbpdns groups` changed them, by outcome: " +
+			"`applied`, or `failed` if a stored value wasn't valid, or a group's API key didn't open, and serve kept what it had."}
 	defBuildInfo = def{name: "nbpdns_build_info", kind: gauge, labels: []string{"version", "revision", "goversion"},
 		help: "1, with the running build's version, VCS revision, and Go version."}
 
@@ -150,7 +191,7 @@ var (
 		defZones, defRRsetChanges, defZoneDrifted, defProblems, defWarnings,
 		defNetBoxUp, defGroupUp, defGroupLastSuccess,
 		defRequests, defRequestDuration, defRetries, defAPIRequests, defAPIRequestDuration,
-		defWebhooks, defBuildInfo,
+		defWebhooks, defAuditEvents, defDBWriteFailures, defSettingsReloads, defBuildInfo,
 	}
 )
 
@@ -183,6 +224,9 @@ type Metrics struct {
 	apiRequests        *prometheus.CounterVec
 	apiRequestDuration *prometheus.HistogramVec
 	webhooks           *prometheus.CounterVec
+	auditEvents        *prometheus.CounterVec
+	dbWriteFailures    *prometheus.CounterVec
+	settingsReloads    *prometheus.CounterVec
 }
 
 // New returns nbpdns's metrics for the build info, registered in a new
@@ -213,6 +257,9 @@ func New(info version.Info) *Metrics {
 		apiRequests:         register(reg, prometheus.NewCounterVec(counterOpts(defAPIRequests), defAPIRequests.labels)),
 		apiRequestDuration:  register(reg, prometheus.NewHistogramVec(histogramOpts(defAPIRequestDuration), defAPIRequestDuration.labels)),
 		webhooks:            register(reg, prometheus.NewCounterVec(counterOpts(defWebhooks), defWebhooks.labels)),
+		auditEvents:         register(reg, prometheus.NewCounterVec(counterOpts(defAuditEvents), defAuditEvents.labels)),
+		dbWriteFailures:     register(reg, prometheus.NewCounterVec(counterOpts(defDBWriteFailures), defDBWriteFailures.labels)),
+		settingsReloads:     register(reg, prometheus.NewCounterVec(counterOpts(defSettingsReloads), defSettingsReloads.labels)),
 	}
 	build := register(reg, prometheus.NewGaugeVec(gaugeOpts(defBuildInfo), defBuildInfo.labels))
 	build.WithLabelValues(info.Version, info.Commit, info.GoVersion).Set(1)
@@ -225,7 +272,57 @@ func New(info version.Info) *Metrics {
 	for _, r := range WebhookResults {
 		m.webhooks.WithLabelValues(r)
 	}
+	for _, a := range auditActions() {
+		m.auditEvents.WithLabelValues(a)
+	}
+	for _, op := range WriteOps {
+		m.dbWriteFailures.WithLabelValues(op)
+	}
+	for _, o := range ReloadOutcomes {
+		m.settingsReloads.WithLabelValues(o)
+	}
 	return m
+}
+
+// auditActions returns the audit trail's actions, the values of the action
+// label.
+func auditActions() []string {
+	var as []string
+	for _, d := range audit.Defs() {
+		as = append(as, string(d.Action))
+	}
+	return as
+}
+
+// DropGroup deletes every series of the server group named name, its drift
+// metrics and its primary's requests, for a group removed or renamed while
+// serve runs (ADR-0040).
+func (m *Metrics) DropGroup(name string) {
+	group := prometheus.Labels{"group": name}
+	for _, v := range []interface {
+		DeletePartialMatch(prometheus.Labels) int
+	}{m.Zones, m.RRsetChanges, m.ZoneDrifted, m.Problems, m.Warnings, m.GroupUp, m.GroupLastSuccess} {
+		v.DeletePartialMatch(group)
+	}
+	target := prometheus.Labels{"service": ServicePowerDNS, "target": name}
+	m.requests.DeletePartialMatch(target)
+	m.requestDuration.DeletePartialMatch(target)
+	m.retries.DeletePartialMatch(target)
+}
+
+// SettingsReload counts a reload of the runtime settings or the server
+// groups, with one of ReloadOutcomes.
+func (m *Metrics) SettingsReload(outcome string) { m.settingsReloads.WithLabelValues(outcome).Inc() }
+
+// DBWriteFailure counts a write to the database that failed, with one of
+// WriteOps.
+func (m *Metrics) DBWriteFailure(op string) { m.dbWriteFailures.WithLabelValues(op).Inc() }
+
+// AuditEvents counts the events that serve recorded.
+func (m *Metrics) AuditEvents(events []audit.Event) {
+	for _, e := range events {
+		m.auditEvents.WithLabelValues(string(e.Action)).Inc()
+	}
 }
 
 // Handler serves the metrics in Prometheus's text or OpenMetrics format.

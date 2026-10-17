@@ -361,7 +361,7 @@ func TestRecordZones(t *testing.T) {
 		NetBox: []dns.Zone{{Name: "b.example.", View: "v", Active: true, SOASerial: 2}},
 		Scope:  &drift.Scope{Views: []string{"v"}, Names: []string{"b.example.", "c.example."}},
 	}
-	if got := s.recordZones(t.Context(), s.o.Log, zr, nil, t1, t1); got != metrics.OutcomeIncomplete {
+	if got, _ := s.recordZones(t.Context(), s.o.Log, zr, nil, t1, t1); got != metrics.OutcomeIncomplete {
 		t.Errorf("outcome %s", got)
 	}
 	a, _ := s.Group("site-a")

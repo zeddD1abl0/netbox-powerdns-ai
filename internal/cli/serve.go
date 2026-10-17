@@ -2,20 +2,31 @@ package cli
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha512"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/spf13/cobra"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/api"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/audit"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/config"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/drift"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/logging"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/metrics"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/service"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/store"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/version"
 )
 
@@ -31,9 +42,18 @@ func newServeCmd(a *app) *cobra.Command {
 			"would make it, and keep each server group's last-known state when its primary,\n" +
 			"or NetBox, can't be read. Serve, at server.listen:\n\n" +
 			"  /livez    200 unless no refresh has started for longer than one can take\n" +
-			"  /readyz   200 once the first refresh has finished\n" +
+			"  /readyz   200 once it has restored its last reports, or, with none, once\n" +
+			"            the first refresh has finished\n" +
 			"  /status   the service's state, as text, or as JSON with ?json=1\n" +
 			"  /metrics  the drift, refresh and request metrics, for Prometheus\n\n" +
+			"It keeps its state in the database at database.url, which it creates, and\n" +
+			"migrates, when it starts: the audit trail, each refresh, and each zone's\n" +
+			"drift history. It restores its last reports from it at start, and serves\n" +
+			"them until its first refresh replaces them. Only one serve may use a\n" +
+			"database at a time.\n\n" +
+			"It compares the config file's server groups, which it mirrors into the\n" +
+			"database at start, and those that nbpdns groups added, whose changes it\n" +
+			"applies within seconds, as it applies the runtime settings.\n\n" +
 			"With netbox.webhook_secret set, NetBox's signed webhooks at /api/netbox-events\n" +
 			"refresh the zones they name, once they stop coming for drift.webhook_delay.\n\n" +
 			"Each refresh is its own trace, exported if otlp.endpoint is set. nbpdns only\n" +
@@ -41,53 +61,224 @@ func newServeCmd(a *app) *cobra.Command {
 		Args: usageArgs(cobra.NoArgs),
 	}
 	cmd.RunE = func(cmd *cobra.Command, _ []string) error {
-		return a.run(cmd, func(ctx context.Context, s *session) error {
-			groups, err := s.groups("")
-			if err != nil {
-				return err
-			}
+		return a.run(cmd, func(ctx context.Context, s *session) (err error) {
 			s.metrics = metrics.New(version.Get())
-			nb, err := s.netbox(ctx)
+			st, settingsVersion, closeStore, err := s.openServeStore(ctx)
 			if err != nil {
 				return err
 			}
-			defer nb.Close()
-			clients := s.groupClients(ctx, groups)
-			defer closeClients(clients)
-			for _, c := range clients {
-				if c.err != nil {
-					s.log.WarnContext(ctx, "a server group has no client; each refresh tries again, and reports it failed until one works",
-						"group", c.cfg.Name, "err", c.err)
-				}
+			defer func() { closeStore(err) }()
+			// The config file's groups, which openServeStore mirrored, and the
+			// CLI's, which follow them (ADR-0040).
+			file := s.cfg.PowerDNS.Groups
+			groups, groupsVersion, err := s.servedGroups(ctx, st, file)
+			if err != nil {
+				return err
 			}
-			nbc := &netboxConn{c: nb}
-			primaries := make([]service.Group, len(groups))
-			for i, g := range groups {
-				primaries[i] = service.Group{Name: g.Name, URL: g.Primary.URL, Views: g.Views, DriftPolicy: g.DriftPolicy}
+			if len(groups) == 0 {
+				s.log.WarnContext(ctx, "there are no server groups to compare; declare them in the config file, or add them with nbpdns groups add")
 			}
+			s.cfg = withGroups(s.cfg, groups)
+			c, err := s.newClients(ctx)
+			if err != nil {
+				return err
+			}
+			defer c.close()
+			// live is the configuration as the settings and the groups change
+			// it: serve's background loops read it, and each refresh applies
+			// it.
+			var live atomic.Pointer[config.Config]
+			live.Store(s.cfg)
 			svc := service.New(service.Options{
 				Refresh: func(ctx context.Context, zones []drift.ZoneRef) (drift.Report, error) {
-					s.retryClients(ctx, clients)
+					// Refreshes never overlap, so this is the one place that
+					// changes the session's configuration and clients.
+					c.reconfigure(ctx, live.Load())
+					s.retryClients(ctx, c.groups)
 					// The API serves NetBox's records too (ADR-0033), and a
 					// webhook's refresh compares only its zones (ADR-0036).
-					return s.compare(ctx, nbc, clients, drift.Options{ReadNetBox: true, Zones: zones})
+					return s.compare(ctx, c.netbox, c.groups, drift.Options{ReadNetBox: true, Zones: zones})
 				},
 				Interval:     s.cfg.Drift.Interval,
 				Timeout:      s.cfg.Drift.Timeout,
 				WebhookDelay: s.cfg.Drift.WebhookDelay,
 				Webhooks:     s.cfg.NetBox.WebhookSecret.IsSet(),
+				History:      st,
+				DatabasePath: st.Path(),
 				Log:          s.log,
 				Tracer:       s.tracer,
 				Metrics:      s.metrics,
 				Version:      version.Get(),
 				NetBoxURL:    s.cfg.NetBox.URL,
-				Groups:       primaries,
+				Groups:       serviceGroups(groups),
 				OTLP:         service.OTLP{Endpoint: s.cfg.OTLP.Endpoint, Protocol: s.cfg.OTLP.Protocol},
 			})
-			return serve(ctx, s, svc)
+			// The last reports are served at once (ADR-0042), and the first
+			// refresh starts as serve listens.
+			svc.Restore(ctx)
+			// The prune and the watcher use the database, so they stop before
+			// closeStore records serve's stop and closes it.
+			bgCtx, stopBackground := context.WithCancel(ctx)
+			var background sync.WaitGroup
+			defer func() {
+				stopBackground()
+				background.Wait()
+			}()
+			background.Go(func() { s.prune(bgCtx, st, &live) })
+			// The watcher runs beside the refreshes, which change the
+			// session's configuration, so it has its own copy of the session.
+			// It reads only database.master_key from its configuration, a
+			// bootstrap key, which doesn't change while serve runs.
+			ws := *s
+			w := &watcher{s: &ws, st: st, svc: svc, live: &live, file: file, settings: s.settings, groups: groups,
+				settingsVersion: settingsVersion, groupsVersion: groupsVersion}
+			background.Go(func() { w.run(bgCtx) })
+			return serve(ctx, s, svc, st, func() config.Secret { return live.Load().NetBox.WebhookSecret })
 		})
 	}
 	return cmd
+}
+
+// pruneInterval is how often serve prunes the audit trail and the drift
+// history.
+const pruneInterval = 24 * time.Hour
+
+// openServeStore takes the database's lock, so that one serve uses it
+// (ADR-0038), opens and migrates the database, applies its settings,
+// mirrors the config file's groups into it (ADR-0040), and records serve's
+// start in the audit trail (ADR-0039). Its close function records serve's stop,
+// with err, the error it stopped with, if any, then closes the database and
+// releases the lock.
+func (s *session) openServeStore(ctx context.Context) (*store.Store, int64, func(err error), error) {
+	// The lock comes first, so that a second serve changes nothing.
+	lock, err := store.Acquire(s.cfg.Database.SQLitePath())
+	if err != nil {
+		return nil, 0, nil, err
+	}
+	st, err := s.openStore(ctx, true)
+	if err != nil {
+		_ = lock.Close()
+		return nil, 0, nil, err
+	}
+	fail := func(err error) (*store.Store, int64, func(error), error) {
+		_ = st.Close()
+		_ = lock.Close()
+		return nil, 0, nil, err
+	}
+	if _, err := s.migrate(ctx, st); err != nil {
+		return fail(err)
+	}
+	info, err := st.Info(ctx)
+	if err != nil {
+		return fail(err)
+	}
+	s.log.InfoContext(ctx, "opened the database", "path", st.Path(), "database_id", info.ID)
+	// The runtime settings that the database stores (ADR-0040), which the
+	// configuration's fingerprint covers.
+	settingsVersion, err := s.applyStored(ctx, st)
+	if err != nil {
+		return fail(err)
+	}
+	// The config file's groups, mirrored as managed_by file; a name that the
+	// CLI holds stops serve.
+	events, err := st.MirrorFileGroups(ctx, s.cfg.PowerDNS.Groups, audit.File(s.loader.ConfigFile()))
+	if err != nil {
+		return fail(err)
+	}
+	s.metrics.AuditEvents(events)
+	if len(events) > 0 {
+		s.log.InfoContext(ctx, "mirrored the config file's changed server groups into the database", "changes", len(events))
+	}
+	host, _ := os.Hostname()
+	target := audit.Target{Type: "service", ID: host}
+	after, err := audit.Value(map[string]string{"version": version.Get().Version, "config_fingerprint": s.configFingerprint()})
+	if err != nil {
+		return fail(err)
+	}
+	e, err := st.Audit(ctx, audit.Event{Actor: audit.System(), Action: audit.ServiceStarted, Target: target, After: after}.WithContext(ctx))
+	if err != nil {
+		return fail(err)
+	}
+	s.metrics.AuditEvents([]audit.Event{e})
+	start := time.Now()
+	return st, settingsVersion, func(serveErr error) {
+		// The signal that stopped serve canceled ctx, but its stop is still
+		// recorded.
+		sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownTimeout)
+		defer cancel()
+		v := map[string]any{"uptime_seconds": int64(time.Since(start).Seconds())}
+		if serveErr != nil {
+			v["error"] = serveErr.Error()
+		}
+		after, err := audit.Value(v)
+		var e audit.Event
+		if err == nil {
+			e, err = st.Audit(sctx, audit.Event{Actor: audit.System(), Action: audit.ServiceStopped, Target: target, After: after}.WithContext(sctx))
+		}
+		if err != nil {
+			s.metrics.DBWriteFailure(metrics.WriteAudit)
+			s.log.ErrorContext(sctx, "couldn't record serve's stop in the audit trail", "err", err)
+		} else {
+			s.metrics.AuditEvents([]audit.Event{e})
+		}
+		_ = st.Close()
+		_ = lock.Close()
+	}, nil
+}
+
+// configFingerprint returns the SHA-384 of the configuration's settings,
+// with their sources, and its server groups, each secret only as set or not,
+// so that the audit trail shows when the configuration changed between two
+// starts.
+func (s *session) configFingerprint() string {
+	// Settings and groups always encode.
+	b, _ := json.Marshal(struct {
+		Settings []config.Setting
+		Groups   []config.Group
+	}{s.settings, s.cfg.PowerDNS.Groups})
+	sum := sha512.Sum384(b)
+	return "sha384:" + hex.EncodeToString(sum[:])
+}
+
+// prune deletes the audit events older than audit.retention_days, and the
+// drift history older than drift.history_retention_days, as live has them,
+// at once and then daily, until ctx is done. Each prune is its own trace.
+func (s *session) prune(ctx context.Context, st *store.Store, live *atomic.Pointer[config.Config]) {
+	for {
+		cfg := live.Load()
+		pctx, span := s.tracer.Start(logging.WithRequestID(ctx, rand.Text()), "database prune", trace.WithNewRoot())
+		fail := func(err error) {
+			if ctx.Err() != nil {
+				return
+			}
+			span.RecordError(err)
+			s.metrics.DBWriteFailure(metrics.WritePrune)
+			s.log.ErrorContext(pctx, "couldn't prune the database; serve tries again in a day", "err", err)
+		}
+		days := cfg.Audit.RetentionDays
+		n, events, err := st.PruneAudit(pctx, time.Now().AddDate(0, 0, -days), days)
+		switch {
+		case err != nil:
+			fail(err)
+		case n > 0:
+			s.metrics.AuditEvents(events)
+			s.log.InfoContext(pctx, "pruned the audit trail", "deleted", n, "retention_days", days)
+		}
+		days = cfg.Drift.HistoryRetentionDays
+		refreshes, rows, err := st.PruneDriftHistory(pctx, time.Now().AddDate(0, 0, -days))
+		switch {
+		case err != nil:
+			fail(err)
+		case refreshes > 0 || rows > 0:
+			s.log.InfoContext(pctx, "pruned the drift history", "refreshes", refreshes, "zone_rows", rows, "retention_days", days)
+		}
+		span.End()
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(pruneInterval):
+		}
+	}
 }
 
 // retryClients tries again to make a client for each group that has none,
@@ -107,8 +298,9 @@ func (s *session) retryClients(ctx context.Context, clients []groupClient) {
 }
 
 // serve listens at server.listen, and runs svc until ctx is canceled or the
-// listener fails. Then it lets the requests in flight finish.
-func serve(ctx context.Context, s *session, svc *service.Service) error {
+// listener fails, with the API serving history's drift history. Then it lets
+// the requests in flight finish.
+func serve(ctx context.Context, s *session, svc *service.Service, history api.History, webhookSecret func() config.Secret) error {
 	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", s.cfg.Server.Listen)
 	if err != nil {
 		return fmt.Errorf("server.listen: %w", err)
@@ -118,7 +310,7 @@ func serve(ctx context.Context, s *session, svc *service.Service) error {
 	// NetBox's webhooks queue the service's zone refreshes (ADR-0036).
 	mux.Handle("/api/", api.New(api.Options{
 		Source: svc, Log: s.log, Tracer: s.tracer, Metrics: s.metrics, PublicURL: s.cfg.Server.PublicURL,
-		WebhookSecret: s.cfg.NetBox.WebhookSecret, Events: svc,
+		LiveWebhookSecret: webhookSecret, Events: svc, History: history,
 	}))
 	mux.Handle("/", svc.Handler())
 	srv := &http.Server{

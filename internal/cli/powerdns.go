@@ -14,6 +14,7 @@ import (
 
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/config"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/dns"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/metrics"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/powerdns"
 )
 
@@ -62,7 +63,7 @@ func (s *session) groups(name string) ([]config.Group, error) {
 func (s *session) powerdns(ctx context.Context, g config.Group) (*powerdns.Client, error) {
 	o := powerdns.OptionsFrom(g, s.cfg.PowerDNS, s.log, s.tracer)
 	if s.metrics != nil {
-		o.Observer = s.metrics.Observer("PowerDNS", g.Name)
+		o.Observer = s.metrics.Observer(metrics.ServicePowerDNS, g.Name)
 	}
 	return powerdns.New(ctx, o)
 }

@@ -2,12 +2,12 @@
 id: ITEM-0084
 title: Plan milestones ahead, with GitLab as their view
 type: task # feature | bug | debt | task
-status: in-progress # open | in-progress | blocked | done | wontfix
+status: done # open | in-progress | blocked | done | wontfix
 milestone: M08
 requirements: [REQ-025, REQ-026]
 depends_on: []
 created: 2026-10-09
-closed:
+closed: 2026-10-10
 ---
 
 # ITEM-0084: Plan milestones ahead, with GitLab as their view
@@ -27,7 +27,7 @@ Each milestone that the branch designs has an item of its own.
 - [x] ADR-0037 is accepted, and CLAUDE.md, the `close-milestone` skill and "Make a release" follow it.
 - [x] The CHANGELOG's M06 and M07 entries are under `[0.7.0]`, which `releasenotes -tag v0.7.0` prints.
 - [x] Each milestone file has a GitLab milestone, titled `Mnn: Title`, and M00 to M07 are closed.
-- [ ] The branch is merged, and the user tags its merge commit `v0.7.0`; the `[0.7.0]` section's date is the merge's.
+- [x] The branch is merged, and the user tags its merge commit `v0.7.0`; the `[0.7.0]` section's date is the merge's.
 
 ## Notes
 
@@ -53,3 +53,11 @@ Each milestone that the branch designs has an item of its own.
   high`, since its code changes are one string and comments. This item's
   last criterion waits for the merge and the `v0.7.0` tag; the `[0.7.0]`
   section is dated 2026-10-09, the day it's meant to merge.
+- 2026-10-10: Done. The user merged `plan-m08-m12` through merge request
+  !9, merge commit 55a06c9, on 2026-10-09, the date of the `[0.7.0]`
+  section, and tagged it `v0.7.0`. The tag's pipeline, 796, passed every
+  job, `release` included, and published release v0.7.0, with its three
+  links and the CHANGELOG's section as its notes. Main's pipeline on the
+  same commit, 795, failed: the runner killed its unit-test job for
+  memory (exit 137) while the tag's pipeline ran beside it; ITEM-0100
+  records it. No GitLab issues are open.

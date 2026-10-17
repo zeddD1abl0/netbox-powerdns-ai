@@ -44,8 +44,9 @@ curl -s "$NBPDNS/api/status" | jq '{ready, last_refresh: .schedule.last_refresh.
 }
 ```
 
-Until `ready` is `true`, the first refresh hasn't finished, and no group has
-any zones yet.
+Until `ready` is `true`, nbpdns has neither restored the reports it kept
+before a restart nor finished its first refresh, and no group has any zones
+yet.
 
 ## List the server groups
 

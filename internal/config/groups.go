@@ -31,6 +31,20 @@ const (
 	PolicyIgnore = "ignore"
 )
 
+// The owners of a server group, its managed_by (ADR-0040).
+const (
+	// ManagedByFile is a group that the config file declares, which serve
+	// mirrors into the database at its start.
+	ManagedByFile = "file"
+	// ManagedByCLI is a group that `nbpdns groups add` added.
+	ManagedByCLI = "cli"
+)
+
+// GroupAPIKeyEnv is the environment variable that `nbpdns groups add` and
+// `nbpdns groups set` read a group's API key from, without
+// --api-key-file. It isn't a configuration key.
+const GroupAPIKeyEnv = EnvPrefix + "GROUP_API_KEY"
+
 // Policies are the drift policies, in the order the reference lists them.
 var Policies = []string{PolicyEnforce, PolicyReport, PolicyIgnore}
 
@@ -49,6 +63,8 @@ type Group struct {
 	// policies.
 	ZonePolicies map[string]string
 	Primary      Primary
+	// ManagedBy is what manages the group: ManagedByFile, or ManagedByCLI.
+	ManagedBy string
 }
 
 // Policy returns the drift policy of zone, an absolute name, in g.
@@ -142,13 +158,8 @@ func GroupFields() []Field {
 		{
 			Name: "name", Type: "string: lowercase letters, digits and `-`", Required: true,
 			Summary: "The group's name, unique among the groups. Commands take it as `--group`.",
-			parse: str(func(g *Group) *string { return &g.Name }, func(s string) error {
-				if !groupName.MatchString(s) {
-					return fmt.Errorf("%q isn't lowercase letters, digits and hyphens, starting and ending with a letter or digit", s)
-				}
-				return nil
-			}),
-			show: func(g *Group) string { return g.Name },
+			parse:   str(func(g *Group) *string { return &g.Name }, CheckGroupName),
+			show:    func(g *Group) string { return g.Name },
 		},
 		{
 			Name: "views", Type: "list of strings", Required: true,
@@ -307,6 +318,7 @@ func loadGroups(v *viper.Viper, path string) ([]Group, []Setting, []error) {
 		if len(gerrs) > 0 {
 			continue
 		}
+		g.ManagedBy = ManagedByFile
 		groups = append(groups, g)
 		for _, f := range GroupFields() {
 			s := Setting{Key: GroupsKey + "." + g.Name + "." + f.Name, Value: f.show(&g), Source: Source{Kind: "default"}}
@@ -368,6 +380,52 @@ func lookup(v any, keys ...string) any {
 	return v
 }
 
+// CheckGroupName checks a server group's name, as the config file's are
+// checked.
+func CheckGroupName(name string) error {
+	if !groupName.MatchString(name) {
+		return fmt.Errorf("%q isn't lowercase letters, digits and hyphens, starting and ending with a letter or digit", name)
+	}
+	return nil
+}
+
+// DecodeGroup decodes and checks a server group's entry, as the config file
+// would hold it, such as GroupEntry returns, and returns the group, without
+// its ManagedBy. Its error lists every problem, and never holds the API
+// key.
+func DecodeGroup(entry map[string]any) (Group, error) {
+	g, _, errs := decodeGroup(entry)
+	return g, errors.Join(errs...)
+}
+
+// GroupEntry returns g as an entry of the config file's groups list would
+// hold it, with its API key, which DecodeGroup decodes again.
+func GroupEntry(g Group) map[string]any {
+	views := make([]any, len(g.Views))
+	for i, v := range g.Views {
+		views[i] = v
+	}
+	p := g.Primary
+	primary := map[string]any{"url": p.URL, "server_id": p.ServerID}
+	if p.APIKey.IsSet() {
+		primary["api_key"] = p.APIKey.Reveal()
+	}
+	for k, v := range map[string]string{"ca_file": p.CAFile, "cert_file": p.CertFile, "key_file": p.KeyFile} {
+		if v != "" {
+			primary[k] = v
+		}
+	}
+	entry := map[string]any{"name": g.Name, "views": views, "drift_policy": g.DriftPolicy, "primary": primary}
+	if len(g.ZonePolicies) > 0 {
+		policies := map[string]any{}
+		for zone, p := range g.ZonePolicies {
+			policies[zone] = p
+		}
+		entry["zone_policies"] = policies
+	}
+	return entry
+}
+
 // decodeGroup decodes one entry of the groups list, and returns the group,
 // the fields the entry set, and every problem with it.
 func decodeGroup(raw any) (Group, map[string]bool, []error) {
@@ -417,7 +475,7 @@ func decodeGroup(raw any) (Group, map[string]bool, []error) {
 	case set["primary.api_key"] && set["primary.api_key_file"]:
 		errs = append(errs, errors.New("both primary.api_key and primary.api_key_file are set; set one"))
 	case set["primary.api_key_file"]:
-		s, err := readSecretFile(g.Primary.APIKeyFile)
+		s, err := ReadSecretFile(g.Primary.APIKeyFile)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("primary.api_key_file: %w", err))
 		}

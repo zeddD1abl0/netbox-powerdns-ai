@@ -33,3 +33,7 @@ coverage.*
 .vscode/
 *.swp
 .DS_Store
+
+
+# Initial Prompt
+initial-prompt.txt

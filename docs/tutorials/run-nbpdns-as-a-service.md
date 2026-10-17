@@ -107,11 +107,15 @@ explains what nbpdns compares. You don't need to do it first.
            api_key_file: pdns-lab.key
    server:
      listen: 127.0.0.1:8080
+   database:
+     url: sqlite:nbpdns.db
    drift:
      interval: 10s
    ```
 
    `server.listen` is where the service answers, here on this host only.
+   `database.url` is where it keeps its state: here `nbpdns.db`, in this
+   directory.
    `drift.interval` is how often it refreshes the drift report: here every
    10 seconds, the shortest interval nbpdns allows, so that you don't wait.
    The default is 5 minutes.
@@ -124,14 +128,23 @@ explains what nbpdns compares. You don't need to do it first.
    ```
 
    ```text
+   time=2026-10-07T11:49:23.391+10:00 level=INFO msg="applied a database migration" version=1 name=database duration_seconds=0.000146813 trace_id=73f9… span_id=c713… request_id=Q4A7…
+   time=2026-10-07T11:49:23.391+10:00 level=INFO msg="applied a database migration" version=2 name=audit duration_seconds=0.00032878 trace_id=73f9… span_id=c713… request_id=Q4A7…
+   time=2026-10-07T11:49:23.391+10:00 level=INFO msg="applied a database migration" version=3 name=drift_history duration_seconds=0.000505809 trace_id=73f9… span_id=c713… request_id=Q4A7…
+   time=2026-10-07T11:49:23.391+10:00 level=INFO msg="applied a database migration" version=4 name=settings duration_seconds=0.00013479 trace_id=73f9… span_id=c713… request_id=Q4A7…
+   time=2026-10-07T11:49:23.391+10:00 level=INFO msg="applied a database migration" version=5 name=server_groups duration_seconds=0.000146362 trace_id=73f9… span_id=c713… request_id=Q4A7…
+   time=2026-10-07T11:49:23.392+10:00 level=INFO msg="opened the database" path=/home/you/netbox-powerdns-ai/nbpdns.db database_id=6PZQ… trace_id=73f9… span_id=c713… request_id=Q4A7…
+   time=2026-10-07T11:49:23.393+10:00 level=INFO msg="mirrored the config file's changed server groups into the database" changes=1 trace_id=73f9… span_id=c713… request_id=Q4A7…
    time=2026-10-07T11:49:23.417+10:00 level=WARN msg="the NetBox URL uses http://, so the token crosses the network unencrypted; use https:// if NetBox offers it" url=http://localhost:8047/ trace_id=73f9… span_id=c713… request_id=Q4A7…
    time=2026-10-07T11:49:23.417+10:00 level=WARN msg="a PowerDNS API URL uses http://, so its API key, which can change every zone, crosses the network unencrypted; put the API behind TLS" group=lab-a url=http://localhost:8151/ trace_id=73f9… span_id=c713… request_id=Q4A7…
    time=2026-10-07T11:49:23.417+10:00 level=INFO msg=serving address=127.0.0.1:8080 interval_seconds=10 groups=1 trace_id=73f9… span_id=c713… request_id=Q4A7…
    time=2026-10-07T11:49:23.543+10:00 level=INFO msg="drift refreshed" group=lab-a in_sync=1 drift=0 missing=0 inactive_in_netbox=0 ignored=0 unmanaged=0 trace_id=5d68… span_id=839b… request_id=7SMH…
    ```
 
-   The lab has no TLS, so nbpdns warns that the token and the API key cross
-   the network unencrypted. Then it starts serving, and refreshes at once:
+   nbpdns creates its database, applies its migrations, and records the
+   config file's server group, lab-a, in it. The lab has no TLS, so
+   nbpdns warns that the token and the API key cross the network
+   unencrypted. Then it starts serving, and refreshes at once:
    lab-a has one zone, in sync. A new `drift refreshed` line follows every
    10 seconds. Each refresh has its own `trace_id` and `request_id`.
 
@@ -164,6 +177,7 @@ when to send traffic, and when to restart nbpdns.
    ```text
    nbpdns v0.0.0-20261007012857-1cc9b657f1ed+dirty, up 3s, since 2026-10-07T01:49:23Z
    Ready: yes. Live: yes.
+   Database: /home/you/netbox-powerdns-ai/nbpdns.db
 
    Drift refreshes, every 10s, each for up to 10m0s:
      last:          2026-10-07T01:49:23Z, complete, in 100ms
@@ -172,6 +186,8 @@ when to send traffic, and when to restart nbpdns.
      finished:      1 complete, 0 incomplete, 0 failed
 
    NetBox at http://localhost:8047: read by the last refresh
+
+   NetBox's webhooks are off; set netbox.webhook_secret to have them refresh the zones they name.
 
    GROUP  STATUS  LAST SUCCESS          IN SYNC  DRIFT  MISSING  INACTIVE  IGNORED  UNMANAGED  PROBLEMS  WARNINGS  PRIMARY
    lab-a  ok      2026-10-07T01:49:23Z  1        0      0        0         0        0          0         0         http://localhost:8151
@@ -316,7 +332,7 @@ Remove the lab, with its data, and the files you made:
 
 ```shell
 make lab-down
-rm nbpdns.yaml pdns-lab.key
+rm nbpdns.yaml pdns-lab.key nbpdns.db*
 ```
 
 ## Next steps

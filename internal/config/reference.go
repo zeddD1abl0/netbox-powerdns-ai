@@ -22,27 +22,39 @@ func WriteReference(w io.Writer) error {
 	p("1. a flag, such as `--netbox-url`;\n")
 	p("2. an environment variable, such as `NBPDNS_NETBOX_URL`;\n")
 	p("3. the YAML config file named by `--config` or `%s`;\n", ConfigEnv)
-	p("4. the default.\n\n")
+	p("4. for a runtime key, the database, where `nbpdns settings set` stores it;\n")
+	p("5. the default.\n\n")
 	p("An empty environment variable counts as unset. An unknown key in the config\n")
 	p("file, or an unknown `%s` variable, is an error. nbpdns reports every problem\n", EnvPrefix)
 	p("it finds before it stops. To see each key's value and where it came from, run\n")
 	p("`nbpdns config show`.\n\n")
+	p("`%s` isn't a key: `nbpdns groups add` and `nbpdns groups set` read a server\n", GroupAPIKeyEnv)
+	p("group's PowerDNS API key from it, without `--api-key-file`.\n\n")
+	p("A **runtime** key, such as `drift.interval`, is one that `nbpdns serve` applies\n")
+	p("while it runs: `nbpdns settings set` stores it in the database, and serve uses\n")
+	p("it within seconds. If a flag, the environment or the config file sets the key\n")
+	p("too, it's **pinned**: that value wins, and the stored one is kept, but not\n")
+	p("used, until it's unset there. A **bootstrap** key, such as `database.url`,\n")
+	p("comes only from a flag, the environment or the config file, and takes effect\n")
+	p("when serve starts. Only `nbpdns serve`, `nbpdns config show` and `nbpdns\n")
+	p("settings` read the database; the other commands use the rest.\n\n")
 	p("A **secret**, such as `netbox.token`, can also be read from a file. Name the\n")
 	p("file with the key's `_FILE` environment variable, its `-file` flag, or its\n")
 	p("`_file` key in the config file. The file counts at the same level as the key\n")
 	p("itself, and setting both at one level is an error. nbpdns never prints or logs\n")
 	p("a secret's value.\n\n")
 
-	p("| Key | Type | Default |\n|---|---|---|\n")
+	p("| Key | Kind | Type | Default |\n|---|---|---|---|\n")
 	for _, k := range ks {
-		p("| [`%s`](#%s) | %s | %s |\n", k.Name, anchor(k.Name), k.typ, code(k.Default))
+		p("| [`%s`](#%s) | %s | %s | %s |\n", k.Name, anchor(k.Name), kind(k), k.typ, code(k.Default))
 	}
-	p("| [`%s`](#%s) | list of server groups, config file only | none |\n", GroupsKey, anchor(GroupsKey))
+	p("| [`%s`](#%s) | resources | list of server groups, config file only | none |\n", GroupsKey, anchor(GroupsKey))
 
 	for _, k := range ks {
 		p("\n## `%s`\n\n", k.Name)
 		p("%s\n", wrap(strings.TrimSpace(k.Summary+" "+k.Details), 79))
-		p("\n- **Type:** %s\n", k.typ)
+		p("\n- **Kind:** %s\n", kind(k))
+		p("- **Type:** %s\n", k.typ)
 		p("- **Default:** %s\n", code(k.Default))
 		p("- **Environment variable:** `%s`\n", k.Env())
 		p("- **Flag:** `--%s`\n", k.Flag())
@@ -64,6 +76,14 @@ func WriteReference(w io.Writer) error {
 	return err
 }
 
+// kind names k's kind.
+func kind(k Key) string {
+	if k.Runtime {
+		return "runtime"
+	}
+	return "bootstrap"
+}
+
 // writeGroupsReference writes the section on powerdns.groups, from its
 // fields.
 func writeGroupsReference(p func(string, ...any)) {
@@ -71,9 +91,12 @@ func writeGroupsReference(p func(string, ...any)) {
 	p("%s\n\n", wrap("The PowerDNS server groups. Each entry is one group: the NetBox views whose "+
 		"zones it serves, and its primary, the server nbpdns reads through the PowerDNS API. "+
 		"A view may be served by more than one group, as independent sites can serve the same zones.", 79))
-	p("%s\n\n", wrap("Groups are resources, not settings, so only the config file declares them: "+
+	p("%s\n\n", wrap("Groups are resources, not settings, so the config file declares them: "+
 		"there's no environment variable or flag. `nbpdns config show` lists each field of each group, "+
 		"such as `powerdns.groups.site-a.primary.url`. An unknown field is an error.", 79))
+	p("%s\n\n", wrap("`nbpdns serve` mirrors these groups into its database at each start, as managed by the file, "+
+		"and also compares the groups that `nbpdns groups add` added, which take the same fields as flags. "+
+		"A name that both claim stops serve.", 79))
 	p("| Field | Type | Default | Description |\n|---|---|---|---|\n")
 	for _, f := range GroupFields() {
 		def := code(f.Default)

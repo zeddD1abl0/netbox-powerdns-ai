@@ -17,14 +17,17 @@ func newConfigCmd(a *app) *cobra.Command {
 		Use:   "show",
 		Short: "Show each configuration key's value and where it came from",
 		Long: "Show each configuration key's effective value, and the flag, environment\n" +
-			"variable, config file, or default it came from. Secrets show as [redacted].\n\n" +
+			"variable, config file, database, or default it came from. Secrets show as\n" +
+			"[redacted]. The database, at database.url, counts if it exists: it stores the\n" +
+			"runtime settings that nbpdns settings set, which nbpdns serve applies.\n\n" +
 			"If any setting is invalid, nbpdns lists every problem and exits with status 1.",
 		Args:        usageArgs(cobra.NoArgs),
 		Annotations: map[string]string{annotationNoExport: "true"},
 	}
 	output := addOutputFlag(show)
 	show.RunE = func(cmd *cobra.Command, _ []string) error {
-		return a.run(cmd, func(_ context.Context, s *session) error {
+		return a.run(cmd, func(ctx context.Context, s *session) error {
+			s.applyStoredIfAny(ctx)
 			if *output == outputJSON {
 				return writeJSON(a.stdout, s.settings)
 			}

@@ -5,12 +5,13 @@
 openapi: 3.1.0
 info:
   title: nbpdns API
-  version: 1.1.0
+  version: 1.2.0
   description: >-
     The API of nbpdns, which compares the DNS data in NetBox's DNS plugin
     with what each PowerDNS server group's primary serves. It serves the
     service's status, each server group's drift, its zones and their
-    changes, and each zone's DNS records as NetBox defines them. Everything
+    changes, each zone's DNS records as NetBox defines them, and the drift
+    history: each refresh, and each zone's changes over time. Everything
     is last-known state, as of the last successful read of each side. It
     changes nothing, and it receives NetBox's webhooks, which refresh the
     zones they name. Apart from those, which NetBox signs, the API has no
@@ -119,6 +120,13 @@ paths:
                     requests:
                       - id: 3bd63b08-a526-45f3-a819-aa7c507dd31f
                         user: admin
+                database:
+                  path: /var/lib/nbpdns/nbpdns.db
+                  restored: true
+                  restored_as_of: "2026-10-08T00:55:40Z"
+                  history_write_failures: 0
+                  last_write_failure: null
+                  last_write_error: null
         default:
           $ref: "#/components/responses/Problem"
   /server-groups:
@@ -151,6 +159,7 @@ paths:
                     primary_url: https://pdns-a.example.com:8443
                     views: [_default_, internal]
                     drift_policy: report
+                    managed_by: file
                     status: ok
                     error: null
                     last_success: "2026-10-08T01:10:02Z"
@@ -191,6 +200,7 @@ paths:
                 primary_url: https://pdns-a.example.com:8443
                 views: [_default_, internal]
                 drift_policy: report
+                managed_by: file
                 status: ok
                 error: null
                 last_success: "2026-10-08T01:10:02Z"
@@ -345,6 +355,147 @@ paths:
                     powerdns:
                       ttl: 3600
                       values: [www.example.com.]
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        default:
+          $ref: "#/components/responses/Problem"
+  /server-groups/{group}/zones/{zone}/history:
+    get:
+      operationId: listZoneHistory
+      summary: List a zone's drift history
+      description: >-
+        Returns a page of a zone's drift history in a server group, newest
+        first: a row for each refresh that found the zone in another state,
+        or with other changes, than its row before, and a `removed` row once
+        it left the group's report. A refresh that changes nothing writes
+        no row, so each row holds from its time until the next. A zone with
+        no history has an empty page: it may not have been compared yet, or
+        its rows may be older than `drift.history_retention_days`.
+      tags: [server-groups]
+      parameters:
+        - $ref: "#/components/parameters/FlowID"
+        - $ref: "#/components/parameters/Group"
+        - $ref: "#/components/parameters/ZoneName"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of the zone's drift history.
+          headers:
+            X-Flow-ID:
+              $ref: "#/components/headers/FlowID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ZoneHistoryPage"
+              example:
+                self: https://nbpdns.example.com/api/server-groups/site-a/zones/example.com./history?limit=2
+                next: https://nbpdns.example.com/api/server-groups/site-a/zones/example.com./history?cursor=eyJhIjoiNDEifQ&limit=2
+                items:
+                  - time: "2026-10-08T01:10:02Z"
+                    refresh_id: 1207
+                    state: in_sync
+                    view: _default_
+                    drift_policy: report
+                    netbox_serial: 2026100803
+                    powerdns_serial: 2026100803
+                    change_count: 0
+                    changes: []
+                  - time: "2026-10-08T00:45:01Z"
+                    refresh_id: 1202
+                    state: drift
+                    view: _default_
+                    drift_policy: report
+                    netbox_serial: 2026100802
+                    powerdns_serial: 2026100801
+                    change_count: 1
+                    changes:
+                      - name: www.example.com.
+                        type: A
+                        kind: changed
+                        netbox:
+                          ttl: 300
+                          values: [192.0.2.10]
+                        powerdns:
+                          ttl: 300
+                          values: [192.0.2.99]
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        default:
+          $ref: "#/components/responses/Problem"
+  /server-groups/{group}/refreshes:
+    get:
+      operationId: listRefreshes
+      summary: List the refreshes, with a server group's result in each
+      description: >-
+        Returns a page of the refreshes, newest first, full and of zones,
+        each with the server group's result in it, or null if the refresh
+        didn't try the group, as one that couldn't read NetBox doesn't.
+        Refreshes older than `drift.history_retention_days` are gone.
+      tags: [server-groups]
+      parameters:
+        - $ref: "#/components/parameters/FlowID"
+        - $ref: "#/components/parameters/Group"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of the refreshes.
+          headers:
+            X-Flow-ID:
+              $ref: "#/components/headers/FlowID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefreshPage"
+              example:
+                self: https://nbpdns.example.com/api/server-groups/site-a/refreshes?limit=2
+                next: https://nbpdns.example.com/api/server-groups/site-a/refreshes?cursor=eyJhIjoiMTIwNiJ9&limit=2
+                items:
+                  - id: 1207
+                    kind: full
+                    cause: schedule
+                    started: "2026-10-08T01:10:00Z"
+                    finished: "2026-10-08T01:10:02Z"
+                    outcome: complete
+                    error: null
+                    zones: null
+                    netbox_request_ids: []
+                    trace_id: 4bf92f3577b34da6a3ce929d0e0e4736
+                    group:
+                      status: ok
+                      error: null
+                      counts:
+                        in_sync: 980
+                        drift: 15
+                        missing: 5
+                        inactive_in_netbox: 0
+                        ignored: 1
+                        unmanaged: 2
+                  - id: 1206
+                    kind: zones
+                    cause: webhook
+                    started: "2026-10-08T01:07:13Z"
+                    finished: "2026-10-08T01:07:13.4Z"
+                    outcome: complete
+                    error: null
+                    zones: [_default_/example.com.]
+                    netbox_request_ids: [3bd63b08-a526-45f3-a819-aa7c507dd31f]
+                    trace_id: 0af7651916cd43dd8448eb211c80319c
+                    group:
+                      status: ok
+                      error: null
+                      counts:
+                        in_sync: 979
+                        drift: 16
+                        missing: 5
+                        inactive_in_netbox: 0
+                        ignored: 1
+                        unmanaged: 2
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -705,7 +856,7 @@ components:
     Status:
       type: object
       description: The nbpdns service's state.
-      required: [version, revision, started, uptime_seconds, ready, live, schedule, netbox, tracing, webhooks]
+      required: [version, revision, started, uptime_seconds, ready, live, schedule, netbox, tracing, webhooks, database]
       properties:
         version:
           type: string
@@ -729,8 +880,9 @@ components:
         ready:
           type: boolean
           description: >-
-            Whether the first refresh has finished, whatever its outcome, as
-            `/readyz` reports.
+            Whether the service has restored the reports it kept before it
+            restarted, or, with none to restore, whether its first refresh has
+            finished, whatever its outcome, as `/readyz` reports.
           examples: [true]
         live:
           type: boolean
@@ -746,6 +898,45 @@ components:
           $ref: "#/components/schemas/Tracing"
         webhooks:
           $ref: "#/components/schemas/Webhooks"
+        database:
+          $ref: "#/components/schemas/Database"
+    Database:
+      type: object
+      description: The database that the service keeps its state in.
+      required: [path, restored, restored_as_of, history_write_failures, last_write_failure, last_write_error]
+      properties:
+        path:
+          type: string
+          description: The database's file, from `database.url`.
+          examples: [/var/lib/nbpdns/nbpdns.db]
+        restored:
+          type: boolean
+          description: >-
+            Whether the service started from the reports it kept before it
+            restarted, which it serves until its first refresh replaces them.
+          examples: [true]
+        restored_as_of:
+          type: [string, "null"]
+          format: date-time
+          description: When the refresh before the restart finished, or null if nothing was restored.
+          examples: ["2026-10-08T00:55:40Z"]
+        history_write_failures:
+          type: integer
+          format: int64
+          minimum: 0
+          description: >-
+            The refreshes that couldn't be written to the drift history since
+            the service started. Each is still served.
+          examples: [0]
+        last_write_failure:
+          type: [string, "null"]
+          format: date-time
+          description: When the last of them was, or null.
+          examples: [null]
+        last_write_error:
+          type: [string, "null"]
+          description: Its error, or null.
+          examples: [null]
     Schedule:
       type: object
       description: The refreshes' schedule, and how they went.
@@ -850,7 +1041,7 @@ components:
           examples: [https://netbox.example.com/]
         up:
           type: [boolean, "null"]
-          description: Whether the last refresh could read NetBox, or null before the first.
+          description: Whether the last refresh that read NetBox could, or null until one has. A refresh with no server groups to compare doesn't read NetBox.
           examples: [true]
         error:
           type: [string, "null"]
@@ -1046,11 +1237,14 @@ components:
       description: >-
         A PowerDNS server group, with its last-known state. The counts are
         as of `last_success`.
-      required: [name, primary_url, views, drift_policy, status, error, last_success, counts, problem_count, warning_count]
+      required: [name, primary_url, views, drift_policy, managed_by, status, error, last_success, counts, problem_count, warning_count]
       properties:
         name:
           type: string
-          description: The group's name, its stable ID.
+          description: >-
+            The group's name, which identifies it in the API's paths. A
+            rename with `nbpdns groups rename` changes it, and its drift
+            history moves with it.
           examples: [site-a]
         primary_url:
           type: string
@@ -1065,6 +1259,14 @@ components:
           examples: [[_default_, internal]]
         drift_policy:
           $ref: "#/components/schemas/DriftPolicy"
+        managed_by:
+          type: string
+          x-extensible-enum: [file, cli]
+          description: >-
+            What manages the group: `file`, the config file, or `cli`,
+            `nbpdns groups`, which changes it while nbpdns runs. Later
+            releases add other managers, so take an unknown value as one.
+          examples: [file]
         status:
           type: string
           enum: [ok, failed, unknown]
@@ -1183,6 +1385,7 @@ components:
                     primary_url: https://pdns-a.example.com:8443
                     views: [_default_]
                     drift_policy: report
+                    managed_by: file
                     status: unknown
                     error: null
                     last_success: null
@@ -1373,6 +1576,186 @@ components:
                     kind: missing
                     netbox: {ttl: 300, values: [192.0.2.10]}
                     powerdns: null
+    HistoryState:
+      type: string
+      description: >-
+        A zone's state in its drift history: as for `ZoneState`, but never
+        `unmanaged`, which has no history; or `removed`, once the zone left
+        the group's report, in neither its NetBox views nor its primary.
+      enum: [in_sync, drift, missing, inactive_in_netbox, ignored, removed]
+      examples: [drift]
+    ZoneHistoryEntry:
+      type: object
+      description: A row of a zone's drift history, which holds from its time until the next row's.
+      required: [time, refresh_id, state, view, drift_policy, netbox_serial, powerdns_serial, change_count, changes]
+      properties:
+        time:
+          type: string
+          format: date-time
+          description: When the refresh that wrote the row finished.
+          examples: ["2026-10-08T00:45:01Z"]
+        refresh_id:
+          type: integer
+          format: int64
+          minimum: 1
+          description: The ID of that refresh, as `listRefreshes` lists it.
+          examples: [1202]
+        state:
+          $ref: "#/components/schemas/HistoryState"
+        view:
+          type: string
+          description: The zone's NetBox view.
+          examples: [_default_]
+        drift_policy:
+          $ref: "#/components/schemas/DriftPolicy"
+        netbox_serial:
+          type: [integer, "null"]
+          format: int64
+          description: NetBox's SOA serial for the zone, or null if NetBox had none.
+          examples: [2026100802]
+        powerdns_serial:
+          type: [integer, "null"]
+          format: int64
+          description: The primary's SOA serial for the zone, or null if it had none.
+          examples: [2026100801]
+        change_count:
+          type: integer
+          format: int64
+          minimum: 0
+          description: How many of the zone's RRsets differed.
+          examples: [1]
+        changes:
+          type: array
+          items:
+            $ref: "#/components/schemas/Change"
+          description: The RRsets that differed, in canonical order.
+          examples: [[]]
+    ZoneHistoryPage:
+      description: One page of a zone's drift history, newest first, with its links.
+      allOf:
+        - $ref: "#/components/schemas/PageLinks"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/ZoneHistoryEntry"
+              description: The page's rows.
+              examples:
+                - - time: "2026-10-08T01:10:02Z"
+                    refresh_id: 1207
+                    state: in_sync
+                    view: _default_
+                    drift_policy: report
+                    netbox_serial: 2026100803
+                    powerdns_serial: 2026100803
+                    change_count: 0
+                    changes: []
+    GroupResult:
+      type: object
+      description: How a refresh went for a server group.
+      required: [status, error, counts]
+      properties:
+        status:
+          type: string
+          enum: [ok, failed]
+          description: "`ok` if the group's primary was read and compared, `failed` if it couldn't be read."
+          examples: [ok]
+        error:
+          type: [string, "null"]
+          description: Why the group's primary couldn't be read in that refresh, or null.
+          examples: [null]
+        counts:
+          description: The group's zones, by state, after the refresh, or null if it failed.
+          oneOf:
+            - $ref: "#/components/schemas/ZoneCounts"
+            - type: "null"
+    RefreshEntry:
+      type: object
+      description: A refresh, as the drift history keeps it, with a server group's result in it.
+      required: [id, kind, cause, started, finished, outcome, error, zones, netbox_request_ids, trace_id, group]
+      properties:
+        id:
+          type: integer
+          format: int64
+          minimum: 1
+          description: The ID of the refresh.
+          examples: [1207]
+        kind:
+          type: string
+          enum: [full, zones]
+          description: "`full` if it compared every zone, `zones` if only those that NetBox's webhooks named."
+          examples: [full]
+        cause:
+          type: string
+          enum: [schedule, webhook]
+          description: "`schedule` if `drift.interval` started it, `webhook` if NetBox's webhooks did."
+          examples: [schedule]
+        started:
+          type: string
+          format: date-time
+          description: When this refresh started.
+          examples: ["2026-10-08T01:10:00Z"]
+        finished:
+          type: string
+          format: date-time
+          description: When this refresh finished.
+          examples: ["2026-10-08T01:10:02Z"]
+        outcome:
+          type: string
+          enum: [complete, incomplete, failed]
+          description: As for the status's last refresh.
+          examples: [complete]
+        error:
+          type: [string, "null"]
+          description: Why this refresh failed, or null if it didn't.
+          examples: [null]
+        zones:
+          type: [array, "null"]
+          items:
+            type: string
+          description: The zones that a refresh of zones compared, each as `view/name`, or null for a full refresh.
+          examples: [null]
+        netbox_request_ids:
+          type: array
+          items:
+            type: string
+          description: The IDs of the NetBox requests whose webhooks asked for it, if any did.
+          examples: [[]]
+        trace_id:
+          type: string
+          description: Its trace's ID, as its log lines carry it.
+          examples: [4bf92f3577b34da6a3ce929d0e0e4736]
+        group:
+          description: The group's result in it, or null if it didn't try the group.
+          oneOf:
+            - $ref: "#/components/schemas/GroupResult"
+            - type: "null"
+    RefreshPage:
+      description: One page of the refreshes, newest first, with its links.
+      allOf:
+        - $ref: "#/components/schemas/PageLinks"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/RefreshEntry"
+              description: The page's refreshes.
+              examples:
+                - - id: 1207
+                    kind: full
+                    cause: schedule
+                    started: "2026-10-08T01:10:00Z"
+                    finished: "2026-10-08T01:10:02Z"
+                    outcome: failed
+                    error: "couldn't read NetBox: dial tcp: i/o timeout"
+                    zones: null
+                    netbox_request_ids: []
+                    trace_id: 4bf92f3577b34da6a3ce929d0e0e4736
+                    group: null
     Record:
       type: object
       description: A record of an RRset.

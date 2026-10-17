@@ -15,7 +15,7 @@ import (
 // API's type.
 func serverGroup(g service.GroupView) gen.ServerGroup {
 	out := gen.ServerGroup{
-		Name: g.Name, PrimaryUrl: g.URL, Views: g.Views, DriftPolicy: gen.DriftPolicy(g.DriftPolicy),
+		Name: g.Name, PrimaryUrl: g.URL, Views: g.Views, DriftPolicy: gen.DriftPolicy(g.DriftPolicy), ManagedBy: g.ManagedBy,
 		Status: gen.ServerGroupStatus(g.Info.Status), Error: optional(g.Info.Error), LastSuccess: g.Info.LastSuccess,
 	}
 	if out.Views == nil {

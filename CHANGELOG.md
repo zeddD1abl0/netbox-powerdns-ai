@@ -6,6 +6,112 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-17
+
+### Added
+
+- `nbpdns serve` keeps its state in a database, embedded SQLite, at
+  `database.url`, by default `sqlite:///var/lib/nbpdns/nbpdns.db`. It
+  creates the database, readable only by its owner, and applies its
+  migrations, when it starts. Only one `serve` may use a database at a
+  time: a second one refuses to start, and names the first one's host and
+  PID.
+- `nbpdns db status` shows the database and its migrations, and `nbpdns db
+  migrate` creates it, or applies the migrations it lacks.
+- An audit trail, in the database: every change of nbpdns's state is an
+  event, with its actor, action, target, values before and after, reason,
+  and trace and request IDs, in the same transaction as the change. Each
+  event holds the SHA-384 of its contents and of the event before it.
+  `nbpdns audit verify` checks the chain, and `nbpdns audit list` reads
+  the events. `nbpdns serve` records its start, with its configuration's
+  fingerprint, and its stop, and deletes events older than
+  `audit.retention_days`, by default seven years, daily.
+  "Audit events" lists every event, and `nbpdns_audit_events_total` counts
+  them.
+- A drift history, in the database: each refresh, with each group's
+  result, and each zone's row whenever its state or its RRset changes
+  differ from its last, kept for `drift.history_retention_days`, by default
+  400. A zone's change of state, and a new zone that drifted, are also
+  `zone.drift_changed` audit events.
+- `nbpdns serve` restores each group's last report from the database when
+  it starts, and is ready at once, serving it until its first refresh
+  replaces it. `/status` gains `database`, which says whether it restored,
+  and counts the refreshes that it couldn't write to the history, as
+  `nbpdns_db_write_failures_total` does.
+- The API, now version 1.2.0, serves the drift history:
+  `/api/server-groups/{group}/zones/{zone}/history`, a zone's rows, and
+  `/api/server-groups/{group}/refreshes`, the refreshes, each with the
+  group's result. Both list the newest first, in pages with cursors.
+  `/api/status` gains `database`. `nbpdns drift history` shows a group's
+  refreshes, or, with `--zone`, a zone's history, in a table, or in JSON
+  with `--output json`. "Read a zone's drift history" shows how.
+- Runtime settings: each key is a runtime or a bootstrap key, as the
+  configuration reference shows. `nbpdns settings list|get|set|unset`
+  shows and changes the runtime ones, which the database stores, between
+  the defaults and the config file, and a running `nbpdns serve` applies
+  within seconds, without a restart. A runtime key that the config file,
+  the environment or a flag sets is pinned. Each change is a `setting.set`
+  or `setting.unset` audit event, and `nbpdns_settings_reloads_total`
+  counts serve's reloads. "Change nbpdns's settings while it runs" shows
+  how.
+- Secret runtime settings, such as `netbox.token`, are stored sealed with
+  `database.master_key` (and its `_FILE` form), by envelope encryption with
+  AES-256-GCM, each bound to its key. `nbpdns settings set` takes a secret
+  only from `--from-file`, or standard input, and `nbpdns serve` refuses to
+  start with a secret that it can't open. `nbpdns secrets
+  rotate-master-key` re-wraps them with a new master key, in one audited
+  transaction, after which a secret sealed with the old key is refused.
+  "Protect stored secrets with a master key" shows how.
+- Server groups in the database, each with its owner, `managed_by`:
+  `nbpdns serve` mirrors the config file's groups into it at each start,
+  and `nbpdns groups list|add|set|remove|rename` manages more, which a
+  running `serve` compares, changes, or stops comparing within seconds. A
+  group's API key comes from `--api-key-file` or `NBPDNS_GROUP_API_KEY`,
+  and is stored sealed with the master key, which `rotate-master-key`
+  covers. `add`, and a `set` that changes how nbpdns reaches the primary,
+  check that it answers, unless `--no-check` is given. A rename keeps the
+  group's drift history, and a removed group's history is kept until
+  `drift.history_retention_days` prunes it. Each change is a `group.*`
+  audit event. The API's server groups gain `managed_by`. "Manage server
+  groups from the command line" shows how.
+- `make tidy` tidies the `go.mod` and `go.sum` of every Go module, the
+  tools' too, and `make tidy-check`, which `make check` and CI run, fails,
+  naming each module that isn't tidy.
+- `gopls` is pinned in `tools/gopls/go.mod`, and `make gopls` installs it
+  where `go install` puts binaries, for Claude Code's `gopls-lsp` plugin,
+  failing if it isn't the first `gopls` on `PATH`. `make tools-update`
+  moves it to its latest release, and installs it again.
+
+### Changed
+
+- `/readyz` is ready once `nbpdns serve` has restored its last reports, or,
+  with none to restore, once its first refresh has finished.
+- `nbpdns config show` takes the runtime settings that the database stores
+  into account, if the database exists, and names it as their source.
+- `nbpdns serve` starts with no server groups, since `nbpdns groups add`
+  can add them while it runs, where it used to refuse to start. The API
+  no longer calls a group's name its stable ID: a rename changes it.
+- `nbpdns serve` needs a directory that it can write its database to. In
+  the image, mount a volume at `/var/lib/nbpdns`, writable by user 65532,
+  and in Kubernetes, update the deployment with the `Recreate` strategy, as
+  "Run nbpdns in a container" shows.
+- `make secrets`, and so `make check`, also scan what isn't committed yet:
+  changed and new files, whether they're staged or not. A secret then
+  fails the scan before its commit, while it can still be taken out, not
+  only after, when it can only be ignored.
+
+### Fixed
+
+- While a refresh runs, `/status` and `/api/status` show the last refresh
+  with its own start. They showed the start of the one running with the
+  end of the last one, and so a negative duration, which the contract of
+  `/api/status` refuses; since the restore, the first refresh after every
+  restart did.
+- `nbpdns_netbox_up`, and `netbox.up` on `/status` and `/api/status`, no
+  longer say that NetBox is up after a refresh that didn't read it: a zone
+  refresh of zones that no server group serves, or, now that `nbpdns
+  serve` starts without groups, a refresh with none to compare.
+
 ## [0.7.0] - 2026-10-09
 
 The first release since 0.1.0, with the REST API of M06 and the

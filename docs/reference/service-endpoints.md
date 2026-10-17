@@ -22,7 +22,7 @@ the request's own, if it sent a valid one, or a new one. It's the request's
 | Path | Answers |
 |---|---|
 | `/livez` | `200 ok` unless no drift refresh has started for `drift.interval` + `drift.timeout` + 1 minute; then `503`, with when the last one started. |
-| `/readyz` | `503` until the first drift refresh has finished, whatever its outcome; then `200 ready`. |
+| `/readyz` | `200 ready` once the service has restored the reports it kept before it restarted; with none to restore, `503` until the first drift refresh has finished, whatever its outcome, then `200 ready`. |
 | `/status` | The service's state, as text for a person, or as JSON with `?json=1`. |
 | `/metrics` | The metrics, in Prometheus's text format, or in OpenMetrics if the scraper asks for it. The [metrics reference](metrics.md) lists them. |
 | `/api/…` | The API, as JSON: the service's status, at `/api/status`; the server groups, at `/api/server-groups`; each group's zones, filtered by state; each zone's changes; and each zone's records as NetBox defines them, at `…/rrsets`. Everything is last-known state. Lists are paged with `limit` and `cursor`. The [API reference](api.md) lists every operation. |
@@ -162,6 +162,14 @@ be read:
         }
       ]
     }
+  },
+  "database": {
+    "path": "/var/lib/nbpdns/nbpdns.db",
+    "restored": true,
+    "restored_as_of": "2026-10-07T00:55:40.1Z",
+    "history_write_failures": 0,
+    "last_write_failure": null,
+    "last_write_error": ""
   }
 }
 ```
@@ -188,7 +196,7 @@ be read:
 | `schedule.refreshes.incomplete` | integer | Refreshes that finished incomplete. |
 | `schedule.refreshes.failed` | integer | Refreshes that failed. |
 | `netbox.url` | string | NetBox's URL, `netbox.url`. |
-| `netbox.up` | Boolean or null | Whether the last refresh could read NetBox, or `null` before the first. |
+| `netbox.up` | Boolean or null | Whether the last refresh that read NetBox could, or `null` until one has. A refresh with no server groups to compare doesn't read NetBox. |
 | `netbox.error` | string | Why NetBox couldn't be read, or empty. |
 | `groups[].name` | string | The server group's name. Groups are in the config file's order. |
 | `groups[].url` | string | The group's primary's URL. |
@@ -233,3 +241,9 @@ be read:
 | `webhooks.last_refresh.events` | integer | The webhooks it served. |
 | `webhooks.last_refresh.requests[].id` | string | The ID of each NetBox request whose changes it refreshed, up to 128. |
 | `webhooks.last_refresh.requests[].user` | string | The user who made the request. |
+| `database.path` | string | The database's file, from `database.url`. |
+| `database.restored` | Boolean | Whether the service started from the reports it kept before it restarted, which it serves until its first refresh replaces them. The groups' `last_success` say how old each one is. |
+| `database.restored_as_of` | time or null | When the refresh before the restart finished, or `null` if nothing was restored. |
+| `database.history_write_failures` | integer | The refreshes that couldn't be written to the drift history since the service started. Each is still served, and the next refresh writes the zones' changes since their last rows. |
+| `database.last_write_failure` | time or null | When the last of them was, or `null`. |
+| `database.last_write_error` | string | Its error, or empty. |

@@ -216,7 +216,7 @@ func TestHealth(t *testing.T) {
 		defer mu.Unlock()
 		clock = clock.Add(d)
 	}
-	s, _, _ := testService(t, Options{now: now, Interval: 5 * time.Minute, Timeout: 10 * time.Minute,
+	s, _, _ := testService(t, Options{now: now, Interval: 5 * time.Minute, Timeout: 10 * time.Minute, Groups: []Group{{Name: "a"}},
 		Refresh: func(context.Context, []drift.ZoneRef) (drift.Report, error) {
 			return report(group("a", drift.StateInSync)), nil
 		}})
@@ -255,7 +255,7 @@ func TestHealth(t *testing.T) {
 }
 
 func TestLastKnownState(t *testing.T) {
-	s, logs, _ := testService(t, Options{})
+	s, logs, _ := testService(t, Options{Groups: twoGroups})
 	m := s.o.Metrics
 	zones := func(g, state string) float64 { return testutil.ToFloat64(m.Zones.WithLabelValues(g, state)) }
 	up := func(g string) float64 { return testutil.ToFloat64(m.GroupUp.WithLabelValues(g)) }
@@ -313,7 +313,7 @@ func gathered(t *testing.T, m *metrics.Metrics) string {
 }
 
 func TestEachRefreshIsATrace(t *testing.T) {
-	s, logs, spans := testService(t, Options{Refresh: func(context.Context, []drift.ZoneRef) (drift.Report, error) {
+	s, logs, spans := testService(t, Options{Groups: []Group{{Name: "a"}}, Refresh: func(context.Context, []drift.ZoneRef) (drift.Report, error) {
 		return report(group("a", drift.StateInSync)), nil
 	}})
 	// The service's context has a span of its own, as `nbpdns serve`'s
@@ -419,5 +419,33 @@ func TestNetBoxZones(t *testing.T) {
 	s.record(t.Context(), s.o.Log, r, nil, t1, t1)
 	if nb := s.NetBox(); !nb.AsOf.Equal(t1) || len(nb.Zones) != 0 {
 		t.Errorf("after an empty read: %+v", nb)
+	}
+}
+
+// TestRefreshWithNoGroups refreshes a service that has no groups yet. The
+// refresh reads nothing, so it says nothing about NetBox, until one that
+// compares a group does.
+func TestRefreshWithNoGroups(t *testing.T) {
+	var r atomic.Pointer[drift.Report]
+	r.Store(new(report()))
+	s, _, _ := testService(t, Options{Refresh: func(context.Context, []drift.ZoneRef) (drift.Report, error) {
+		return *r.Load(), nil
+	}})
+	m := s.o.Metrics
+	s.refresh(t.Context(), time.Now(), batch{})
+	if st := s.Status(); !st.Ready || st.NetBox.Up != nil {
+		t.Errorf("after a refresh with no groups: ready %t, NetBox up %v; want ready, and NetBox not read", st.Ready, st.NetBox.Up)
+	}
+	if n := testutil.CollectAndCount(m.NetBoxUp); n != 0 {
+		t.Errorf("nbpdns_netbox_up has %d series, want none:\n%s", n, gathered(t, m))
+	}
+	if _, body := get(t, s, http.MethodGet, "/status"); !strings.Contains(body, ": not read yet\n") {
+		t.Errorf("the page after a refresh with no groups doesn't say NetBox isn't read:\n%s", body)
+	}
+
+	r.Store(new(report(group("a", drift.StateInSync))))
+	s.refresh(t.Context(), time.Now(), batch{})
+	if st := s.Status(); st.NetBox.Up == nil || !*st.NetBox.Up || testutil.ToFloat64(m.NetBoxUp.WithLabelValues()) != 1 {
+		t.Errorf("after a refresh with a group, NetBox up = %v, want true:\n%s", st.NetBox.Up, gathered(t, m))
 	}
 }

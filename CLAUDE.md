@@ -9,7 +9,7 @@ lives in `project/`, and decisions live in `docs/adr/`.
 1. Read [`project/README.md`](project/README.md), the board. It shows the
    current milestone, the open items and the open questions.
 2. Read the current milestone's file in [`project/milestones/`](project/milestones/).
-3. Read only the items, ADRs and docs the task needs, not whole directories.
+3. Read only the items, ADRs, docs and lines the task needs, not whole directories or files.
 4. Make an item for each open GitLab issue that no item tracks yet ([ADR-0037](docs/adr/0037-plan-milestones-ahead-with-gitlab-milestones-and-i.md)).
 
 ## Where things live
@@ -42,6 +42,10 @@ lives in `project/`, and decisions live in `docs/adr/`.
   - Never commit to `main`, merge into it, or push; a hook blocks commits on
     `main`. The user pushes the branch and merges it through a GitLab merge
     request with a merge commit, never a squash ([ADR-0018](docs/adr/0018-merge-milestones-through-gitlab-merge-requests.md)).
+- **Sessions and models** ([ADR-0044](docs/adr/0044-one-item-per-session-and-a-haiku-agent-for-read-on.md)):
+  one item per session; once it's committed, suggest `/clear`. Opus does the work.
+  A search that reads far more than it returns, among files you won't edit, goes to
+  the `scout` agent (Haiku); check the lines a finding rests on before relying on it.
 - Don't implement milestone N until milestone N-1 is **complete** (every item
   done, `make check` green) **and merged** (its branch is in `main`). If asked
   to start early, warn and list what's outstanding. The user may override.
@@ -107,8 +111,6 @@ The rationale lives in ADRs. Where no ADR exists yet, these are the defaults.
   before and after values, reason, `trace_id`, source IP and outcome.
 - **Tests:** table-driven, always run with `-race`. Integration tests run
   against real PowerDNS and NetBox in containers, never mocks of their APIs.
-- **Commits:** Conventional Commits. User-facing changes get a line in
-  `CHANGELOG.md` under `Unreleased`.
 
 ## Documentation rules
 
@@ -123,12 +125,10 @@ The rationale lives in ADRs. Where no ADR exists yet, these are the defaults.
 
 | Command | Does |
 |---|---|
-| `make check` | Everything CI checks: vet, lint (including formatting), tests with `-race`, vulnerability and secrets scans, docs lint, API lint, project lint |
+| `make check` | Everything CI checks: vet, lint (including formatting), tests with `-race`, vulnerability and secrets scans, docs lint, API lint, project lint, `go.mod` and `go.sum` tidiness |
 | `make ci` | Every CI job's targets, in one go (CI runs them as staged jobs) |
 | `make fmt` | Format Go code |
 | `make docs`, `make docs-serve` | Build or preview the documentation site |
-| `make project` | Regenerate the board and the ADR index |
-| `make item TITLE="…"`, `make adr TITLE="…"` | Create the next work item or ADR |
 
 ## Definition of Done
 
@@ -137,7 +137,7 @@ The rationale lives in ADRs. Where no ADR exists yet, these are the defaults.
 - `make check` is green;
 - generated references are regenerated and committed;
 - the relevant docs page is updated;
-- `CHANGELOG.md` has a line, if it's user-facing;
+- `CHANGELOG.md` has a line under `Unreleased`, if it's user-facing;
 - its status is `done` with a `closed:` date;
 - the board is updated;
 - it's committed on the milestone branch with its `Refs` trailer.

@@ -56,9 +56,15 @@ type Options struct {
 	// WebhookSecret, netbox.webhook_secret, keys the signatures of NetBox's
 	// webhooks. If it's unset, /api/netbox-events is off.
 	WebhookSecret config.Secret
+	// LiveWebhookSecret, if set, gives the secret at each request instead,
+	// as `nbpdns serve` does, whose secret can change while it runs
+	// (ADR-0040).
+	LiveWebhookSecret func() config.Secret
 	// Events queues the refreshes that webhooks ask for. It must be set if
 	// WebhookSecret is.
 	Events Notifier
+	// History is the drift history. If it's nil, there's none.
+	History History
 }
 
 // base is the API's path, where the spec's server is.
@@ -76,7 +82,7 @@ func New(o Options) http.Handler {
 		// The spec is embedded, and the tests parse it.
 		panic("the embedded OpenAPI document: " + err.Error())
 	}
-	if o.WebhookSecret.IsSet() && o.Events == nil {
+	if (o.WebhookSecret.IsSet() || o.LiveWebhookSecret != nil) && o.Events == nil {
 		panic("api.Options has a WebhookSecret, but no Events to queue them")
 	}
 	mux := http.NewServeMux()
@@ -94,6 +100,14 @@ func New(o Options) http.Handler {
 		ErrorHandlerFunc: badRequest,
 	})
 	return &handler{o: o, mux: mux, ops: ops}
+}
+
+// webhookSecret returns netbox.webhook_secret, as it is now.
+func (o Options) webhookSecret() config.Secret {
+	if o.LiveWebhookSecret != nil {
+		return o.LiveWebhookSecret()
+	}
+	return o.WebhookSecret
 }
 
 // server implements the generated interface.
@@ -189,6 +203,9 @@ func (s *server) GetStatus(_ context.Context, _ gen.GetStatusRequestObject) (gen
 		out.Tracing.Endpoint, out.Tracing.Protocol = optional(st.Tracing.Endpoint), &p
 	}
 	out.Webhooks = webhooks(st.Webhooks)
+	d := st.Database
+	out.Database = gen.Database{Path: d.Path, Restored: d.Restored, RestoredAsOf: d.RestoredAsOf,
+		HistoryWriteFailures: int64(d.HistoryWriteFailures), LastWriteFailure: d.LastWriteFailure, LastWriteError: optional(d.LastWriteError)}
 	return gen.GetStatus200JSONResponse{Body: out}, nil
 }
 

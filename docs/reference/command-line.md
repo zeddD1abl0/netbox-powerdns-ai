@@ -26,8 +26,13 @@ in the [configuration reference](configuration.md).
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--audit-retention-days` | `integer` | `2557` | How many days the audit trail keeps an event. |
 | `--config` | `string` | none | The YAML config file to read, instead of `$NBPDNS_CONFIG`. |
+| `--database-master-key` | `string` | none | The master key that seals the secrets the database stores, such as a `netbox.token` that `nbpdns settings set` stores: 32 random bytes, in base64. |
+| `--database-master-key-file` | `path` | none | Read `database.master_key` from this file. |
+| `--database-url` | `url` | `sqlite:///var/lib/nbpdns/nbpdns.db` | Where `nbpdns serve` keeps its state, such as `sqlite:///var/lib/nbpdns/nbpdns.db`. |
 | `--drift-group-concurrency` | `integer` | `4` | How many server groups are read and compared at once. |
+| `--drift-history-retention-days` | `integer` | `400` | How many days the drift history keeps each refresh, and each zone's changes. |
 | `--drift-interval` | `duration` | `5m` | How often `nbpdns serve` refreshes the drift report, from the start of one refresh to the start of the next. |
 | `--drift-timeout` | `duration` | `10m` | How long one refresh of `nbpdns serve` may take before it's stopped. |
 | `--drift-webhook-delay` | `duration` | `3s` | How long `nbpdns serve` waits for NetBox's webhooks to stop coming before it refreshes the zones they named. |
@@ -54,6 +59,49 @@ in the [configuration reference](configuration.md).
 | `--server-public-url` | `url` | none | The URL that clients reach `nbpdns serve` at, such as `https://nbpdns.example.com`, for the API's absolute links. |
 
 ## Commands
+
+### `nbpdns audit`
+
+Read and verify the audit trail in the database at database.url: an event for
+every change of nbpdns's state, each holding the SHA-384 of its contents and
+of the event before it, so that a changed, removed, or inserted event shows.
+
+```text
+nbpdns audit [command]
+```
+
+Subcommands: [`list`](#nbpdns-audit-list) and [`verify`](#nbpdns-audit-verify).
+
+### `nbpdns audit list`
+
+List the latest audit events, oldest first, that the flags select: by default,
+the last 100. The table leaves out each event's before and after values,
+and its hashes, which the JSON output includes.
+
+```text
+nbpdns audit list [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--action` | `string` | none | List the events of this action, such as `service.started`. |
+| `--actor` | `string` | none | List the events of this actor, such as `os-user:jordan` or `system`. |
+| `--limit` | `int` | `100` | List at most this many events, the latest. |
+| `-o`, `--output` | `format` | `table` | The output format: `table` or `json`. |
+| `--since` | `string` | none | List events from this time, in RFC 3339 such as `2026-10-01T00:00:00Z`, or this long ago, such as `24h`. |
+| `--target` | `string` | none | List the events about this target, as `type:id`, or about every target of a type, such as `setting`. |
+| `--until` | `string` | none | List events before this time, in RFC 3339, or this long ago. |
+
+### `nbpdns audit verify`
+
+Walk the whole audit trail, in order, and check each event's hash, and its
+link to the event before it. It fails, with exit status 1, at the first event
+where the chain breaks. The chain can't show that the latest events were
+removed, or that the whole trail was rewritten: a copy kept elsewhere can.
+
+```text
+nbpdns audit verify
+```
 
 ### `nbpdns completion`
 
@@ -127,12 +175,50 @@ Subcommands: [`show`](#nbpdns-config-show).
 ### `nbpdns config show`
 
 Show each configuration key's effective value, and the flag, environment
-variable, config file, or default it came from. Secrets show as [redacted].
+variable, config file, database, or default it came from. Secrets show as
+[redacted]. The database, at database.url, counts if it exists: it stores the
+runtime settings that nbpdns settings set, which nbpdns serve applies.
 
 If any setting is invalid, nbpdns lists every problem and exits with status 1.
 
 ```text
 nbpdns config show [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `-o`, `--output` | `format` | `table` | The output format: `table` or `json`. |
+
+### `nbpdns db`
+
+Show and migrate the database at database.url, where nbpdns serve keeps its
+state. nbpdns serve creates it, and applies its migrations, when it starts.
+Migrations only move forward: take a copy of the database before an upgrade.
+
+```text
+nbpdns db [command]
+```
+
+Subcommands: [`migrate`](#nbpdns-db-migrate) and [`status`](#nbpdns-db-status).
+
+### `nbpdns db migrate`
+
+Create the database at database.url if it doesn't exist, and apply the
+migrations it lacks, each in its own transaction. It refuses while nbpdns
+serve runs on the database, since serve applies them itself when it starts,
+and on a database that a newer nbpdns has migrated.
+
+```text
+nbpdns db migrate
+```
+
+### `nbpdns db status`
+
+Show the database at database.url: its file, its identity, and each migration
+that this nbpdns knows, with when it was applied, or that it's pending.
+
+```text
+nbpdns db status [flags]
 ```
 
 | Flag | Type | Default | Description |
@@ -156,7 +242,7 @@ primary. If a primary can't be read, its group is marked failed, and the
 other groups are still reported.
 
 ```text
-nbpdns drift [flags]
+nbpdns drift [command]
 ```
 
 | Flag | Type | Default | Description |
@@ -164,6 +250,153 @@ nbpdns drift [flags]
 | `--group` | `string` | none | Only compare this server group. |
 | `-o`, `--output` | `format` | `table` | The output format: `table` or `json`. |
 | `--zone` | `string` | none | Only compare this zone, such as `example.com`. |
+
+Subcommands: [`history`](#nbpdns-drift-history).
+
+### `nbpdns drift history`
+
+Show the drift history that nbpdns serve keeps in the database at
+database.url, oldest first. Without --zone, it lists the latest refreshes,
+each with the group's result. With --zone, it lists the zone's history: a row
+for each refresh that found it in another state, or with other changes, than
+the row before, which holds until the next row. The table counts each row's
+changes, which the JSON output lists.
+
+```text
+nbpdns drift history [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--group` | `string` | none | The server group, such as `site-a`. Required. |
+| `--limit` | `int` | `20` | Show at most this many, the latest. |
+| `-o`, `--output` | `format` | `table` | The output format: `table` or `json`. |
+| `--zone` | `string` | none | Show this zone's history, such as `example.com`. |
+
+### `nbpdns groups`
+
+Show and change the server groups that the database at database.url stores, and
+that nbpdns serve compares (ADR-0040). Each group is managed by the config file,
+whose groups serve mirrors into the database at each start, or by these
+commands, which change only their own groups. A running nbpdns serve applies
+their changes within seconds. Each change is an audit event, with the operating
+system's user as its actor.
+
+```text
+nbpdns groups [command]
+```
+
+Subcommands: [`add`](#nbpdns-groups-add), [`list`](#nbpdns-groups-list), [`remove`](#nbpdns-groups-remove), [`rename`](#nbpdns-groups-rename), and [`set`](#nbpdns-groups-set).
+
+### `nbpdns groups add`
+
+Add a server group, managed by the command line, after checking its fields as
+the config file's are, and checking that its primary's API answers and accepts
+the key, unless --no-check is given. The primary's URL and the group's views
+are required.
+
+The PowerDNS API key is read from the file that --api-key-file names, or from
+standard input with --api-key-file -, or, without it, from NBPDNS_GROUP_API_KEY;
+never from the command line, where other users can see it. It's sealed with
+database.master_key before it's stored. The change is an audit event, with
+--reason, if given. A name that the config file declares is refused, since it
+would stop nbpdns serve.
+
+```text
+nbpdns groups add NAME [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--api-key-file` | `string` | none | Read the PowerDNS API key from this file, or from standard input if it's `-`. Without it, the key comes from `NBPDNS_GROUP_API_KEY`, if it's set. |
+| `--ca-file` | `string` | none | A PEM file of CA certificates to trust for the primary, as well as the system's; empty for none. |
+| `--cert-file` | `string` | none | A PEM client certificate to present, with `--key-file`; empty for none. |
+| `--drift-policy` | `string` | none | The drift policy of the group's zones: `enforce`, `report` or `ignore`. By default, `report`. |
+| `--key-file` | `string` | none | The client certificate's PEM private key; empty for none. |
+| `--no-check` | `bool` | none | Don't check that the primary answers, such as for a server that isn't up yet. |
+| `--reason` | `string` | none | Why, for the change's audit event. |
+| `--server-id` | `string` | none | The server's ID in the PowerDNS API's paths. By default, `localhost`. |
+| `--url` | `string` | none | The primary's PowerDNS API, such as `https://pdns-a.example.com:8443`. |
+| `--views` | `stringSlice` | `[]` | The NetBox views whose zones the group serves, separated by commas. |
+| `--zone-policies` | `string` | none | Drift policies for single zones, as `zone=policy` separated by commas, such as `legacy.example.com=ignore`; empty for none. |
+
+### `nbpdns groups list`
+
+List the server groups that the database stores: the config file's, as nbpdns
+serve last mirrored them at its start, and those that nbpdns groups added. The
+JSON output has each one's fields, with a stored API key as [redacted].
+
+```text
+nbpdns groups list [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `-o`, `--output` | `format` | `table` | The output format: `table` or `json`. |
+
+### `nbpdns groups remove`
+
+Remove a server group that nbpdns groups added. A running nbpdns serve drops
+its state and metrics within seconds. Its drift history is kept until
+drift.history_retention_days prunes it, and nbpdns drift history still reads it.
+The change is an audit event, with --reason, if given.
+
+```text
+nbpdns groups remove NAME [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--reason` | `string` | none | Why, for the change's audit event. |
+
+### `nbpdns groups rename`
+
+Rename a server group that nbpdns groups added. Its drift history and its last
+report carry on under its new name (ADR-0045). A running nbpdns serve applies it
+within seconds, and moves the group's metrics to the new name. The audit trail
+keeps the events before the rename under the old name, and the event of the
+rename links the two. The change is an audit event, with --reason, if given.
+
+A new name that another group has, that the config file declares, or that a
+removed group's drift history still uses, is refused.
+
+```text
+nbpdns groups rename NAME NEW-NAME [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--reason` | `string` | none | Why, for the change's audit event. |
+
+### `nbpdns groups set`
+
+Change the fields of a server group that nbpdns groups added: each flag given
+replaces its field, and an empty value returns it to its default, or removes
+it. The group is checked as the config file's are. If the change touches how
+nbpdns reaches the primary, such as its URL or API key, the primary's API is
+checked too, as nbpdns groups add checks it, unless --no-check is given.
+
+A new API key is read as nbpdns groups add reads it: from --api-key-file, or
+NBPDNS_GROUP_API_KEY. Opening the stored key needs database.master_key. The
+change is an audit event, with --reason, if given.
+
+```text
+nbpdns groups set NAME [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--api-key-file` | `string` | none | Read the PowerDNS API key from this file, or from standard input if it's `-`. Without it, the key comes from `NBPDNS_GROUP_API_KEY`, if it's set. |
+| `--ca-file` | `string` | none | A PEM file of CA certificates to trust for the primary, as well as the system's; empty for none. |
+| `--cert-file` | `string` | none | A PEM client certificate to present, with `--key-file`; empty for none. |
+| `--drift-policy` | `string` | none | The drift policy of the group's zones: `enforce`, `report` or `ignore`. By default, `report`. |
+| `--key-file` | `string` | none | The client certificate's PEM private key; empty for none. |
+| `--no-check` | `bool` | none | Don't check that the primary answers, such as for a server that isn't up yet. |
+| `--reason` | `string` | none | Why, for the change's audit event. |
+| `--server-id` | `string` | none | The server's ID in the PowerDNS API's paths. By default, `localhost`. |
+| `--url` | `string` | none | The primary's PowerDNS API, such as `https://pdns-a.example.com:8443`. |
+| `--views` | `stringSlice` | `[]` | The NetBox views whose zones the group serves, separated by commas. |
+| `--zone-policies` | `string` | none | Drift policies for single zones, as `zone=policy` separated by commas, such as `legacy.example.com=ignore`; empty for none. |
 
 ### `nbpdns netbox`
 
@@ -310,6 +543,36 @@ nbpdns powerdns zones [flags]
 | `--group` | `string` | none | Only list this server group's zones. |
 | `-o`, `--output` | `format` | `table` | The output format: `table` or `json`. |
 
+### `nbpdns secrets`
+
+Manage database.master_key, which seals the secrets that the database stores,
+such as a netbox.token that nbpdns settings set stored (ADR-0041). Each secret
+is sealed with its own data key, which the master key wraps.
+
+```text
+nbpdns secrets [command]
+```
+
+Subcommands: [`rotate-master-key`](#nbpdns-secrets-rotate-master-key).
+
+### `nbpdns secrets rotate-master-key`
+
+Re-wrap every secret that the database stores with the new master key in the
+file that --new-key-file names, opening them with database.master_key, all in
+one transaction, which is an audit event. The secrets themselves don't change.
+It refuses while nbpdns serve runs on the database: stop serve, rotate, then
+start serve with database.master_key set to the new key. Keep the old key until
+serve has started with the new one.
+
+```text
+nbpdns secrets rotate-master-key [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--new-key-file` | `string` | none | The file that holds the new master key, in base64, such as `openssl rand -base64 32` prints. Required. |
+| `--reason` | `string` | none | Why, for the change's audit event. |
+
 ### `nbpdns serve`
 
 Refresh the drift report on a schedule, every drift.interval, as nbpdns drift
@@ -317,9 +580,20 @@ would make it, and keep each server group's last-known state when its primary,
 or NetBox, can't be read. Serve, at server.listen:
 
   /livez    200 unless no refresh has started for longer than one can take
-  /readyz   200 once the first refresh has finished
+  /readyz   200 once it has restored its last reports, or, with none, once
+            the first refresh has finished
   /status   the service's state, as text, or as JSON with ?json=1
   /metrics  the drift, refresh and request metrics, for Prometheus
+
+It keeps its state in the database at database.url, which it creates, and
+migrates, when it starts: the audit trail, each refresh, and each zone's
+drift history. It restores its last reports from it at start, and serves
+them until its first refresh replaces them. Only one serve may use a
+database at a time.
+
+It compares the config file's server groups, which it mirrors into the
+database at start, and those that nbpdns groups added, whose changes it
+applies within seconds, as it applies the runtime settings.
 
 With netbox.webhook_secret set, NetBox's signed webhooks at /api/netbox-events
 refresh the zones they name, once they stop coming for drift.webhook_delay.
@@ -330,6 +604,82 @@ reads, and changes nothing. It stops on SIGINT or SIGTERM, and exits 0.
 ```text
 nbpdns serve
 ```
+
+### `nbpdns settings`
+
+Show and change the runtime settings, such as drift.interval, that the database
+at database.url stores, and that nbpdns serve applies within seconds, without a
+restart (ADR-0040). Each change is an audit event, with the operating system's
+user as its actor. A runtime key that a flag, the environment, or the config
+file sets is pinned: that value wins, and the stored one isn't used until it's
+unset there. Bootstrap keys, such as database.url, aren't settings.
+
+```text
+nbpdns settings [command]
+```
+
+Subcommands: [`get`](#nbpdns-settings-get), [`list`](#nbpdns-settings-list), [`set`](#nbpdns-settings-set), and [`unset`](#nbpdns-settings-unset).
+
+### `nbpdns settings get`
+
+Print a runtime key's effective value, from whichever source sets it, alone
+on a line. The JSON output adds its source, and its stored value.
+
+```text
+nbpdns settings get KEY [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `-o`, `--output` | `format` | `table` | The output format: `table` or `json`. |
+
+### `nbpdns settings list`
+
+List each runtime key's effective value, and where it comes from, with the
+value that the database stores for it, if any. A stored value that a flag, the
+environment or the config file overrides is marked pinned.
+
+```text
+nbpdns settings list [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `-o`, `--output` | `format` | `table` | The output format: `table` or `json`. |
+
+### `nbpdns settings set`
+
+Store a runtime key's value in the database, after checking it as the config
+file's would be. A running nbpdns serve applies it within seconds, unless the
+key is pinned. The change is an audit event, with --reason, if given.
+
+A secret, such as netbox.token, is read from the file that --from-file names,
+or from standard input with --from-file -, never from the command line, where
+other users can see it. It's sealed with database.master_key before it's
+stored, and its audit event shows it as [redacted].
+
+```text
+nbpdns settings set KEY [VALUE] [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--from-file` | `string` | none | Read the value from this file, or from standard input if it's `-`. |
+| `--reason` | `string` | none | Why, for the change's audit event. |
+
+### `nbpdns settings unset`
+
+Remove a runtime key's stored value from the database, so that the key takes
+its default, unless it's pinned. A running nbpdns serve applies it within
+seconds. The change is an audit event, with --reason, if given.
+
+```text
+nbpdns settings unset KEY [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--reason` | `string` | none | Why, for the change's audit event. |
 
 ### `nbpdns version`
 

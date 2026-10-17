@@ -1,0 +1,12 @@
+# Findings of `make secrets` that are known not to be secrets, by their
+# fingerprints: commit:file:rule:line. Each names one finding, never a value.
+#
+# A finding that isn't committed yet, in the staged, unstaged or untracked
+# changes, can still be fixed: change the value so that gitleaks doesn't
+# report it, or, if it must stay, end its line with a `gitleaks:allow`
+# comment, which covers that line only. Its fingerprint, file:rule:line, has
+# no commit, and here would match that line in every commit too: use it only
+# as a last resort.
+
+# A test's fake netbox.webhook_secret (ITEM-0104).
+6544d0e6e6d3d05f37404011ae99b5ebdbcd12a8:internal/store/settings_test.go:generic-api-key:98

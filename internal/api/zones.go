@@ -258,10 +258,7 @@ func (s *server) ListZoneChanges(ctx context.Context, req gen.ListZoneChangesReq
 	}
 	start := startAfter(changes, p.after, func(c drift.Change, key string) int { return compareRRset(c.Name, c.Type, key) })
 	page, more := take(changes, start, p.limit)
-	out := gen.ChangePage{Items: make([]gen.Change, len(page)), AsOf: asOf(g)}
-	for i, c := range page {
-		out.Items[i] = gen.Change{Name: c.Name, Type: c.Type, Kind: gen.ChangeKind(c.Kind), Netbox: side(c.NetBox), Powerdns: side(c.PowerDNS)}
-	}
+	out := gen.ChangePage{Items: apiChanges(page), AsOf: asOf(g)}
 	last := ""
 	if len(page) > 0 {
 		last = rrsetKey(page[len(page)-1].Name, page[len(page)-1].Type)

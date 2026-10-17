@@ -28,8 +28,12 @@ const annotationNoExport = "nbpdns/no-otlp-export"
 type session struct {
 	cfg      *config.Config
 	settings []config.Setting
-	log      *slog.Logger
-	tracer   trace.Tracer
+	// loader loaded cfg, and adds the database's settings to it.
+	loader *config.Loader
+	// level is the log's level, which serve changes when log.level does.
+	level  *slog.LevelVar
+	log    *slog.Logger
+	tracer trace.Tracer
 	// metrics, if set, count the clients' requests. Only `nbpdns serve`
 	// has them.
 	metrics *metrics.Metrics
@@ -44,13 +48,17 @@ func (a *app) run(cmd *cobra.Command, fn func(ctx context.Context, s *session) e
 	if err != nil {
 		return err
 	}
-	log, err := logging.New(a.stderr, cfg.Log.Format, cfg.Log.Level)
+	level := &slog.LevelVar{}
+	if err := level.UnmarshalText([]byte(cfg.Log.Level)); err != nil {
+		return err
+	}
+	log, err := logging.NewLeveled(a.stderr, cfg.Log.Format, level)
 	if err != nil {
 		return err
 	}
 	info := version.Get()
 	tp := tracing.NewProvider(info.Version)
-	s := &session{cfg: cfg, settings: settings, log: log, tracer: tracing.Tracer(tp)}
+	s := &session{cfg: cfg, settings: settings, loader: a.loader, level: level, log: log, tracer: tracing.Tracer(tp)}
 	ctx := logging.WithRequestID(cmd.Context(), rand.Text())
 	ctx, span := s.tracer.Start(ctx, cmd.CommandPath())
 	// The root span ends before the provider shuts down, so that it's among

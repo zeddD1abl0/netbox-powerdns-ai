@@ -26,6 +26,8 @@ OpenBao
 Mermaid
 GitLab
 GitHub
+Anthropic
+[Ss]ubagents?
 Kubernetes
 Helm
 distroless

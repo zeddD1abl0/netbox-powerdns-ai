@@ -8,7 +8,10 @@ weight: 30
 nbpdns takes its settings from a YAML config file, `NBPDNS_` environment
 variables, and command-line flags. This guide sets up a config file, keeps
 the secrets in files, overrides a setting for one run, and confirms the
-result.
+result. The settings that can change while `nbpdns serve` runs can also be
+stored in its database, as
+[Change nbpdns's settings while it runs](change-nbpdns-settings-while-it-runs.md)
+shows.
 
 Every setting, with its variable, flag, and default, is in the
 [configuration reference](../reference/configuration.md).

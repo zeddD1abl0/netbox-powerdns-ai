@@ -20,6 +20,7 @@ import (
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/drift"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/logging"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/metrics"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/store"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/webhook"
 )
 
@@ -123,6 +124,13 @@ func minTime(a, b time.Time) time.Time {
 	return a
 }
 
+func maxTime(a, b time.Time) time.Time {
+	if b.After(a) {
+		return b
+	}
+	return a
+}
+
 // refs returns b's zones, sorted by view and name.
 func (b *batch) refs() []drift.ZoneRef {
 	return slices.SortedFunc(maps.Keys(b.zones), func(x, y drift.ZoneRef) int {
@@ -178,21 +186,22 @@ func (b *batch) attributes() []attribute.KeyValue {
 // api.Notifier. ctx carries the webhook's span, which the refresh links
 // to.
 func (s *Service) Notify(ctx context.Context, e webhook.Event, r webhook.Refresh) bool {
+	now := s.o.now()
+	s.mu.Lock()
+	views := s.views
+	s.st.lastEvent = &Event{Received: now.UTC(), Event: e.Event, ObjectType: e.ObjectType, Request: Request{ID: e.RequestID(), User: e.User()}}
+	s.mu.Unlock()
 	var zones []drift.ZoneRef
 	for _, z := range r.Zones {
-		if s.views[z.View] {
+		if views[z.View] {
 			zones = append(zones, drift.ZoneRef{View: z.View, Name: z.Name})
 		}
 	}
-	now := s.o.now()
-	s.mu.Lock()
-	s.st.lastEvent = &Event{Received: now.UTC(), Event: e.Event, ObjectType: e.ObjectType, Request: Request{ID: e.RequestID(), User: e.User()}}
-	s.mu.Unlock()
 	if !r.Full && len(zones) == 0 {
 		return false
 	}
 	// A view that no group serves changes nothing that nbpdns compares.
-	if r.Views != nil && !slices.ContainsFunc(r.Views, func(v string) bool { return s.views[v] }) {
+	if r.Views != nil && !slices.ContainsFunc(r.Views, func(v string) bool { return views[v] }) {
 		return false
 	}
 	s.mu.Lock()
@@ -251,7 +260,8 @@ func (s *Service) refreshZones(ctx context.Context, start time.Time, b batch) {
 	rctx, span := s.o.Tracer.Start(rctx, "drift zone refresh", trace.WithNewRoot(),
 		trace.WithLinks(b.links...), trace.WithAttributes(b.attributes()...))
 	defer span.End()
-	rctx, cancel := context.WithTimeout(rctx, s.o.Timeout)
+	timeout := s.Timing().Timeout
+	rctx, cancel := context.WithTimeout(rctx, timeout)
 	defer cancel()
 	log.InfoContext(rctx, "refreshing the zones that NetBox's webhooks named", "zones", b.names(),
 		"events", b.events, "netbox_users", b.users())
@@ -260,23 +270,25 @@ func (s *Service) refreshZones(ctx context.Context, start time.Time, b batch) {
 		return
 	}
 	if errors.Is(rctx.Err(), context.DeadlineExceeded) && (err != nil || !r.Complete) {
-		err = &TimeoutError{Timeout: s.o.Timeout}
+		err = &TimeoutError{Timeout: timeout}
 	}
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 	}
 	end := s.o.now()
-	outcome := s.recordZones(rctx, log, r, err, start, end)
+	outcome, changes := s.recordZones(rctx, log, r, err, start, end)
 	s.noteWebhookRefresh(b, false, start, end, outcome, err)
+	s.keep(rctx, log, store.RefreshRecord{Kind: store.RefreshZones, Cause: store.CauseWebhook, Started: start, Finished: end,
+		Outcome: outcome, Error: errText(err), Zones: b.names(), NetBoxRequestIDs: b.requestIDs()}, changes)
 }
 
 // recordZones keeps what a zone refresh found, merged into the last-known
 // state, sets the metrics, and logs it, as record does for a full refresh,
-// and returns its outcome. A zone refresh merges only into what a full
+// and returns its outcome, and what it kept. A zone refresh merges only into what a full
 // refresh has kept: a group with no report, or NetBox's records before
 // NetBox was first read, wait for the next full refresh.
-func (s *Service) recordZones(ctx context.Context, log *slog.Logger, r drift.Report, err error, start, end time.Time) string {
+func (s *Service) recordZones(ctx context.Context, log *slog.Logger, r drift.Report, err error, start, end time.Time) (string, []change) {
 	m := s.o.Metrics
 	outcome := outcomeOf(r, err)
 	m.ZoneRefreshes.WithLabelValues(outcome).Inc()
@@ -285,19 +297,23 @@ func (s *Service) recordZones(ctx context.Context, log *slog.Logger, r drift.Rep
 	if errors.As(err, &te) {
 		log.WarnContext(ctx, "the zone refresh took longer than drift.timeout, so it was stopped; its zones wait for the next scheduled refresh",
 			"timeout_seconds", te.Timeout.Seconds())
-		return outcome
+		return outcome, nil
 	}
 	if err != nil {
 		s.mu.Lock()
-		s.st.netboxUp, s.st.netboxError = false, err.Error()
+		s.st.netboxRead, s.st.netboxUp, s.st.netboxError = true, false, err.Error()
 		s.mu.Unlock()
 		m.NetBoxUp.WithLabelValues().Set(0)
 		log.WarnContext(ctx, "the zone refresh couldn't read NetBox; its zones wait for the next scheduled refresh", "err", err)
-		return outcome
+		return outcome, nil
 	}
 	s.mu.Lock()
 	st := &s.st
-	st.netboxUp, st.netboxError = true, ""
+	// With no group serving its zones, the zone refresh read nothing.
+	read := len(r.Groups) > 0
+	if read {
+		st.netboxRead, st.netboxUp, st.netboxError = true, true, ""
+	}
 	switch {
 	case r.NetBoxErr != nil:
 		log.WarnContext(ctx, "couldn't read the records of NetBox's zones that aren't compared, so the API keeps NetBox's last records",
@@ -307,9 +323,11 @@ func (s *Service) recordZones(ctx context.Context, log *slog.Logger, r drift.Rep
 	}
 	changes := s.apply(r.Groups, end, true)
 	s.mu.Unlock()
-	m.NetBoxUp.WithLabelValues().Set(1)
+	if read {
+		m.NetBoxUp.WithLabelValues().Set(1)
+	}
 	s.publish(ctx, log, changes, end)
-	return outcome
+	return outcome, changes
 }
 
 // outcomeOf returns a refresh's outcome, one of metrics.Outcomes.

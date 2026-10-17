@@ -17,11 +17,18 @@ type Setting struct {
 	Key    string `json:"key"`
 	Value  string `json:"value"`
 	Source Source `json:"source"`
+	// Stored is the value that the database stores for a runtime key,
+	// redacted if it's a secret, or nil if it stores none. Unless Source is
+	// the database, the stored value is pinned: kept, but not used.
+	Stored *string `json:"stored,omitempty"`
 }
+
+// SourceDatabase is the Kind of a value that the database stores.
+const SourceDatabase = "database"
 
 // Source says where a setting's value came from.
 type Source struct {
-	// Kind is default, file, env or flag.
+	// Kind is default, database, file, env or flag.
 	Kind string `json:"kind"`
 	// Name is the config file's path, the environment variable or the flag.
 	// It's empty for a default.
@@ -36,12 +43,30 @@ func (s Source) String() string {
 }
 
 // A Loader reads the configuration from its sources, in increasing order of
-// precedence: the defaults, the config file, the environment and the flags.
-// Add its flags to a command with AddFlags, and call Load once they're
-// parsed.
+// precedence: the defaults, the database, for a runtime key, the config
+// file, the environment and the flags. Add its flags to a command with
+// AddFlags, and call Load once they're parsed, which reads every source but
+// the database; then WithStored adds the database's values.
 type Loader struct {
 	flags      *pflag.FlagSet
 	configPath string
+	// base is each key's raw value and source, from every source but the
+	// database, as the last Load read them, and groups its groups.
+	base          map[string]resolved
+	groups        []Group
+	groupSettings []Setting
+	// path is the config file that the last Load read, if any.
+	path string
+}
+
+// ConfigFile returns the config file that the last Load read, or empty if it
+// read none.
+func (l *Loader) ConfigFile() string { return l.path }
+
+// resolved is a key's raw value and where it came from.
+type resolved struct {
+	raw any
+	src Source
 }
 
 // NewLoader returns a Loader.
@@ -96,6 +121,7 @@ func (l *Loader) Load() (*Config, []Setting, error) {
 	if path == "" {
 		path = os.Getenv(ConfigEnv)
 	}
+	l.path = path
 	if path != "" {
 		v.SetConfigFile(path)
 		v.SetConfigType("yaml")
@@ -107,9 +133,11 @@ func (l *Loader) Load() (*Config, []Setting, error) {
 	errs = append(errs, unknownEnv(ks)...)
 	errs = append(errs, unknownFileKeys(ks, v, path)...)
 
+	l.base = map[string]resolved{}
 	settings := make([]Setting, 0, len(ks)+1)
 	for _, k := range ks {
 		raw, src, err := l.resolve(k, v, path)
+		l.base[k.Name] = resolved{raw: raw, src: src}
 		if err == nil {
 			err = k.parse(raw)
 		}
@@ -119,11 +147,86 @@ func (l *Loader) Load() (*Config, []Setting, error) {
 		settings = append(settings, Setting{Key: k.Name, Value: k.show(), Source: src})
 	}
 	groups, groupSettings, groupErrs := loadGroups(v, path)
+	l.groups, l.groupSettings = groups, groupSettings
 	cfg.PowerDNS.Groups = groups
 	settings = append(settings, groupSettings...)
 	errs = append(errs, groupErrs...)
 	slices.SortStableFunc(settings, func(a, b Setting) int { return strings.Compare(a.Key, b.Key) })
 	return cfg, settings, errors.Join(errs...)
+}
+
+// WithStored returns the configuration of the last Load, which must have
+// succeeded, with stored, the runtime settings that the database stores, by
+// key, between the defaults and the config file (ADR-0040). A runtime key
+// that the file, the environment or a flag sets is pinned: its stored
+// value is kept, but not used. It fails on a stored value that isn't valid,
+// or a key that isn't a runtime key's.
+func (l *Loader) WithStored(stored map[string]string) (*Config, []Setting, error) {
+	cfg := &Config{}
+	ks := keys(cfg)
+	var errs []error
+	settings := make([]Setting, 0, len(ks)+len(l.groupSettings))
+	known := map[string]bool{}
+	for _, k := range ks {
+		known[k.Name] = true
+		r := l.base[k.Name]
+		st := Setting{Key: k.Name, Source: r.src}
+		raw := r.raw
+		if value, ok := stored[k.Name]; ok && !k.Runtime {
+			errs = append(errs, fmt.Errorf("%s (from %s): it's a bootstrap key, which the database can't set", k.Name, SourceDatabase))
+		} else if ok {
+			shown := value
+			if k.Secret {
+				shown = Redacted
+			}
+			st.Stored = &shown
+			if r.src.Kind == "default" {
+				raw, st.Source = value, Source{Kind: SourceDatabase}
+			}
+		}
+		if err := k.parse(raw); err != nil {
+			errs = append(errs, fmt.Errorf("%s (from %s): %w", k.Name, st.Source, err))
+		}
+		st.Value = k.show()
+		settings = append(settings, st)
+	}
+	for key := range stored {
+		if !known[key] {
+			errs = append(errs, fmt.Errorf("the database stores %s, which isn't a key", key))
+		}
+	}
+	cfg.PowerDNS.Groups = l.groups
+	settings = append(settings, l.groupSettings...)
+	slices.SortStableFunc(settings, func(a, b Setting) int { return strings.Compare(a.Key, b.Key) })
+	return cfg, settings, errors.Join(errs...)
+}
+
+// BootstrapError is the error for a bootstrap key given where only a runtime
+// key may go.
+type BootstrapError struct{ Key Key }
+
+func (e *BootstrapError) Error() string {
+	return fmt.Sprintf("%s is a bootstrap key, which only the config file, %s or --%s sets", e.Key.Name, e.Key.Env(), e.Key.Flag())
+}
+
+// CheckSetting returns the runtime key named name, and checks that value is
+// valid for it, as `nbpdns settings set` stores it. It returns a
+// *BootstrapError for a bootstrap key. Its error never holds the value,
+// which may be a secret.
+func CheckSetting(name, value string) (Key, error) {
+	for _, k := range keys(&Config{}) {
+		if k.Name != name {
+			continue
+		}
+		if !k.Runtime {
+			return k, &BootstrapError{Key: k}
+		}
+		if err := k.parse(value); err != nil {
+			return k, fmt.Errorf("%s: %w", name, err)
+		}
+		return k, nil
+	}
+	return Key{}, fmt.Errorf("there's no key %s; nbpdns settings list lists the runtime keys", name)
 }
 
 // resolve returns k's raw value and its source. For a secret, the file form
@@ -149,7 +252,7 @@ func (l *Loader) resolve(k Key, v *viper.Viper, path string) (any, Source, error
 			return nil, ly.src, fmt.Errorf("both %s and %s are set; set one", ly.src.Name, ly.fileSrc.Name)
 		case ly.fileSet:
 			// No higher layer sets either form, so Viper's value is this one.
-			s, err := readSecretFile(v.GetString(k.FileName()))
+			s, err := ReadSecretFile(v.GetString(k.FileName()))
 			return s, ly.fileSrc, err
 		case ly.plainSet:
 			return v.Get(k.Name), ly.src, nil
@@ -166,8 +269,9 @@ func (l *Loader) changed(flag string) bool {
 	return f != nil && f.Changed
 }
 
-// readSecretFile returns a secret file's content, without a final newline.
-func readSecretFile(path string) (string, error) {
+// ReadSecretFile returns a secret file's content, without a final newline.
+// It fails if that's empty.
+func ReadSecretFile(path string) (string, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return "", fmt.Errorf("reading the secret file: %w", err)
@@ -181,7 +285,7 @@ func readSecretFile(path string) (string, error) {
 
 // unknownEnv reports every NBPDNS_ environment variable that names no key.
 func unknownEnv(ks []Key) []error {
-	known := []string{ConfigEnv}
+	known := []string{ConfigEnv, GroupAPIKeyEnv}
 	for _, k := range ks {
 		known = append(known, k.Env())
 		if k.Secret {

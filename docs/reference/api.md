@@ -9,7 +9,7 @@ weight: 45
 # API
 
 `nbpdns serve` serves its API at `/api`, on `server.listen`. This page is
-generated from `api/openapi.yaml`, the API's source of truth, version 1.1.0.
+generated from `api/openapi.yaml`, the API's source of truth, version 1.2.0.
 The service serves the same document at `/api/openapi.yaml`, and a
 reference to browse at `/api/docs`.
 [How nbpdns's API is designed](../explanation/how-nbpdns-api-is-designed.md)
@@ -145,6 +145,47 @@ Returns a page of the RRsets of a zone that differ between NetBox and the group'
 | 404 | No such resource. | [`Problem`](#problem), `application/problem+json` |
 | default | Any other error. | [`Problem`](#problem), `application/problem+json` |
 
+### `GET /api/server-groups/{group}/zones/{zone}/history`
+
+List a zone's drift history. Operation `listZoneHistory`.
+
+Returns a page of a zone's drift history in a server group, newest first: a row for each refresh that found the zone in another state, or with other changes, than its row before, and a `removed` row once it left the group's report. A refresh that changes nothing writes no row, so each row holds from its time until the next. A zone with no history has an empty page: it may not have been compared yet, or its rows may be older than `drift.history_retention_days`.
+
+| Parameter | In | Type | Description |
+|---|---|---|---|
+| `X-Flow-ID` | header | `string` | The request's flow ID, to follow it through the logs. A request without a valid one is given one. Either way, the response returns it, and it's the request's `request_id` in nbpdns's logs. |
+| `group` | path, required | `string` | The server group's name. |
+| `zone` | path, required | `string` | The zone's name, with or without its final dot, such as `example.com`. Internationalized names are given in their ASCII form, such as `xn--bcher-kva.example`. |
+| `limit` | query | `integer` (`int32`) | The most items the page may have. |
+| `cursor` | query | `string` | Where the page starts: a previous page's `next` link carries it. It's opaque, and only good with the same filters as the page that gave it. |
+
+| Response | Description | Body |
+|---|---|---|
+| 200 | A page of the zone's drift history. | [`ZoneHistoryPage`](#zonehistorypage), `application/json` |
+| 400 | A parameter is invalid, such as a limit out of range, or a cursor that this API didn't give. | [`Problem`](#problem), `application/problem+json` |
+| 404 | No such resource. | [`Problem`](#problem), `application/problem+json` |
+| default | Any other error. | [`Problem`](#problem), `application/problem+json` |
+
+### `GET /api/server-groups/{group}/refreshes`
+
+List the refreshes, with a server group's result in each. Operation `listRefreshes`.
+
+Returns a page of the refreshes, newest first, full and of zones, each with the server group's result in it, or null if the refresh didn't try the group, as one that couldn't read NetBox doesn't. Refreshes older than `drift.history_retention_days` are gone.
+
+| Parameter | In | Type | Description |
+|---|---|---|---|
+| `X-Flow-ID` | header | `string` | The request's flow ID, to follow it through the logs. A request without a valid one is given one. Either way, the response returns it, and it's the request's `request_id` in nbpdns's logs. |
+| `group` | path, required | `string` | The server group's name. |
+| `limit` | query | `integer` (`int32`) | The most items the page may have. |
+| `cursor` | query | `string` | Where the page starts: a previous page's `next` link carries it. It's opaque, and only good with the same filters as the page that gave it. |
+
+| Response | Description | Body |
+|---|---|---|
+| 200 | A page of the refreshes. | [`RefreshPage`](#refreshpage), `application/json` |
+| 400 | A parameter is invalid, such as a limit out of range, or a cursor that this API didn't give. | [`Problem`](#problem), `application/problem+json` |
+| 404 | No such resource. | [`Problem`](#problem), `application/problem+json` |
+| default | Any other error. | [`Problem`](#problem), `application/problem+json` |
+
 ### `GET /api/server-groups/{group}/zones/{zone}/rrsets`
 
 List a zone's RRsets, as NetBox defines them. Operation `listZoneRRsets`.
@@ -213,12 +254,26 @@ The nbpdns service's state.
 | `revision` | `string` | The build's Git commit. |
 | `started` | `string` (`date-time`) | When the service started. |
 | `uptime_seconds` | `number` (`double`) | The time since the service started. |
-| `ready` | `boolean` | Whether the first refresh has finished, whatever its outcome, as `/readyz` reports. |
+| `ready` | `boolean` | Whether the service has restored the reports it kept before it restarted, or, with none to restore, whether its first refresh has finished, whatever its outcome, as `/readyz` reports. |
 | `live` | `boolean` | Whether a refresh has started within `drift.interval` + `drift.timeout` + 1 minute, as `/livez` reports. |
 | `schedule` | [`Schedule`](#schedule) | The refreshes' schedule, and how they went. |
 | `netbox` | [`NetBoxState`](#netboxstate) | NetBox's state, as of the last refresh. |
 | `tracing` | [`Tracing`](#tracing) | Where the service's spans are exported. |
 | `webhooks` | [`Webhooks`](#webhooks) | The state of NetBox's webhooks, which refresh the zones they name. |
+| `database` | [`Database`](#database) | The database that the service keeps its state in. |
+
+### `Database`
+
+The database that the service keeps its state in.
+
+| Field | Type | Description |
+|---|---|---|
+| `path` | `string` | The database's file, from `database.url`. |
+| `restored` | `boolean` | Whether the service started from the reports it kept before it restarted, which it serves until its first refresh replaces them. |
+| `restored_as_of` | `string` (`date-time`), or null | When the refresh before the restart finished, or null if nothing was restored. |
+| `history_write_failures` | `integer` (`int64`) | The refreshes that couldn't be written to the drift history since the service started. Each is still served. |
+| `last_write_failure` | `string` (`date-time`), or null | When the last of them was, or null. |
+| `last_write_error` | `string`, or null | Its error, or null. |
 
 ### `Schedule`
 
@@ -262,7 +317,7 @@ NetBox's state, as of the last refresh.
 | Field | Type | Description |
 |---|---|---|
 | `url` | `string` (`uri`) | NetBox's URL, `netbox.url`. |
-| `up` | `boolean`, or null | Whether the last refresh could read NetBox, or null before the first. |
+| `up` | `boolean`, or null | Whether the last refresh that read NetBox could, or null until one has. A refresh with no server groups to compare doesn't read NetBox. |
 | `error` | `string`, or null | Why NetBox couldn't be read, or null. |
 
 ### `Tracing`
@@ -352,10 +407,11 @@ A PowerDNS server group, with its last-known state. The counts are as of `last_s
 
 | Field | Type | Description |
 |---|---|---|
-| `name` | `string` | The group's name, its stable ID. |
+| `name` | `string` | The group's name, which identifies it in the API's paths. A rename with `nbpdns groups rename` changes it, and its drift history moves with it. |
 | `primary_url` | `string` (`uri`) | The URL of the group's primary's PowerDNS API. |
 | `views` | array of `string` | The NetBox views whose zones the group serves. |
 | `drift_policy` | [`DriftPolicy`](#driftpolicy) | What nbpdns does about a zone's drift: `report` reports it, `enforce` reports it and, from M14, corrects it, and `ignore` doesn't compare the zone. |
+| `managed_by` | `string` | What manages the group: `file`, the config file, or `cli`, `nbpdns groups`, which changes it while nbpdns runs. Later releases add other managers, so take an unknown value as one. |
 | `status` | `ok`, `failed`, or `unknown` | `ok` if the last refresh that tried the group's primary read it, `failed` if it couldn't, and `unknown` before any did. |
 | `error` | `string`, or null | Why the primary couldn't be read, or null. |
 | `last_success` | `string` (`date-time`), or null | When the group was last read and compared in full, or null if it never was. Zones that NetBox's webhooks named may have been compared since. |
@@ -474,6 +530,76 @@ The fields of [`PageLinks`](#pagelinks), and:
 |---|---|---|
 | `as_of` | `string` (`date-time`) | When the group was last compared in full. A zone that NetBox's webhooks named may have been compared since. |
 | `items` | array of [`Change`](#change) | The page's changes. |
+
+### `HistoryState`
+
+A zone's state in its drift history: as for `ZoneState`, but never `unmanaged`, which has no history; or `removed`, once the zone left the group's report, in neither its NetBox views nor its primary.
+
+One of `in_sync`, `drift`, `missing`, `inactive_in_netbox`, `ignored`, or `removed`.
+
+### `ZoneHistoryEntry`
+
+A row of a zone's drift history, which holds from its time until the next row's.
+
+| Field | Type | Description |
+|---|---|---|
+| `time` | `string` (`date-time`) | When the refresh that wrote the row finished. |
+| `refresh_id` | `integer` (`int64`) | The ID of that refresh, as `listRefreshes` lists it. |
+| `state` | [`HistoryState`](#historystate) | A zone's state in its drift history: as for `ZoneState`, but never `unmanaged`, which has no history; or `removed`, once the zone left the group's report, in neither its NetBox views nor its primary. |
+| `view` | `string` | The zone's NetBox view. |
+| `drift_policy` | [`DriftPolicy`](#driftpolicy) | What nbpdns does about a zone's drift: `report` reports it, `enforce` reports it and, from M14, corrects it, and `ignore` doesn't compare the zone. |
+| `netbox_serial` | `integer` (`int64`), or null | NetBox's SOA serial for the zone, or null if NetBox had none. |
+| `powerdns_serial` | `integer` (`int64`), or null | The primary's SOA serial for the zone, or null if it had none. |
+| `change_count` | `integer` (`int64`) | How many of the zone's RRsets differed. |
+| `changes` | array of [`Change`](#change) | The RRsets that differed, in canonical order. |
+
+### `ZoneHistoryPage`
+
+One page of a zone's drift history, newest first, with its links.
+
+The fields of [`PageLinks`](#pagelinks), and:
+
+| Field | Type | Description |
+|---|---|---|
+| `items` | array of [`ZoneHistoryEntry`](#zonehistoryentry) | The page's rows. |
+
+### `GroupResult`
+
+How a refresh went for a server group.
+
+| Field | Type | Description |
+|---|---|---|
+| `status` | `ok`, or `failed` | `ok` if the group's primary was read and compared, `failed` if it couldn't be read. |
+| `error` | `string`, or null | Why the group's primary couldn't be read in that refresh, or null. |
+| `counts` | [`ZoneCounts`](#zonecounts), or null | The group's zones, by state, after the refresh, or null if it failed. |
+
+### `RefreshEntry`
+
+A refresh, as the drift history keeps it, with a server group's result in it.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `integer` (`int64`) | The ID of the refresh. |
+| `kind` | `full`, or `zones` | `full` if it compared every zone, `zones` if only those that NetBox's webhooks named. |
+| `cause` | `schedule`, or `webhook` | `schedule` if `drift.interval` started it, `webhook` if NetBox's webhooks did. |
+| `started` | `string` (`date-time`) | When this refresh started. |
+| `finished` | `string` (`date-time`) | When this refresh finished. |
+| `outcome` | `complete`, `incomplete`, or `failed` | As for the status's last refresh. |
+| `error` | `string`, or null | Why this refresh failed, or null if it didn't. |
+| `zones` | array of `string`, or null | The zones that a refresh of zones compared, each as `view/name`, or null for a full refresh. |
+| `netbox_request_ids` | array of `string` | The IDs of the NetBox requests whose webhooks asked for it, if any did. |
+| `trace_id` | `string` | Its trace's ID, as its log lines carry it. |
+| `group` | [`GroupResult`](#groupresult), or null | The group's result in it, or null if it didn't try the group. |
+
+### `RefreshPage`
+
+One page of the refreshes, newest first, with its links.
+
+The fields of [`PageLinks`](#pagelinks), and:
+
+| Field | Type | Description |
+|---|---|---|
+| `items` | array of [`RefreshEntry`](#refreshentry) | The page's refreshes. |
 
 ### `Record`
 
