@@ -59,5 +59,8 @@ from [`template.md`](template.md).
 | [0043](0043-re-plan-m11-to-m20-roles-then-sign-in-then-the-web.md) | Re-plan M11 to M20: roles, then sign-in, then the web UI | accepted |
 | [0044](0044-one-item-per-session-and-a-haiku-agent-for-read-on.md) | One item per session, and a Haiku agent for read-only searches | accepted |
 | [0045](0045-rename-a-server-group-by-moving-its-name-keyed-row.md) | Rename a server group by moving its name-keyed rows | accepted |
+| [0046](0046-the-store-on-postgresql-18-with-pgx-and-a-second-s.md) | The store on PostgreSQL 18, with pgx and a second sqlc package | accepted |
+| [0047](0047-elect-the-leader-with-a-postgresql-session-advisor.md) | Elect the leader with a PostgreSQL session advisory lock | accepted |
+| [0048](0048-replicas-share-their-state-through-the-database.md) | Replicas share their state through the database | accepted |
 
 <!-- projctl:adr-index:end -->
