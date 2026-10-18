@@ -193,11 +193,17 @@ build: ## Build nbpdns as a static binary, bin/nbpdns
 ##@ Release
 
 # GoReleaser builds the release from .goreleaser.yaml (ADR-0030): archives
-# for linux/amd64 and linux/arm64, and checksums.txt, in dist/.
+# for linux/amd64 and linux/arm64, and checksums.txt, in dist/. It builds
+# one architecture at a time, in release-check and release alike: with a
+# cold build cache, building both at once takes the job's memory from 0.82
+# to 1.25 GiB, and CI's runner killed it (ITEM-0100). On a warm cache, one
+# at a time takes about 2 seconds longer.
+GORELEASER_RUN = $(GORELEASER) release --parallelism 1
+
 .PHONY: release-check
 release-check: $(GORELEASER) ## Build the release as a snapshot, into dist/, publishing nothing, and test it
 	$(need_cgo)
-	$(GORELEASER) release --snapshot --clean
+	$(GORELEASER_RUN) --snapshot --clean
 	go test -race -count=1 -tags release ./internal/release/
 
 # make release publishes the release of the version tag at HEAD (ADR-0030):
@@ -224,7 +230,7 @@ release: $(GORELEASER) ## Publish the version tag at HEAD: the image, and the Gi
 	auth=$$(printf '%s:%s' "$$RELEASE_REGISTRY_USER" "$$RELEASE_REGISTRY_PASSWORD" | base64 -w0); \
 	printf '{"auths":{"%s":{"auth":"%s"}}}\n' "$$RELEASE_REGISTRY" "$$auth" > "$$tmp/docker/config.json"; \
 	echo "release: publishing $$tag to $$RELEASE_IMAGE"; \
-	DOCKER_CONFIG="$$tmp/docker" GORELEASER_CURRENT_TAG="$$tag" $(GORELEASER) release --clean --release-notes "$$tmp/notes.md"
+	DOCKER_CONFIG="$$tmp/docker" GORELEASER_CURRENT_TAG="$$tag" $(GORELEASER_RUN) --clean --release-notes "$$tmp/notes.md"
 
 # The reference pages generated from the code (internal/cmd/gendocs), and
 # the API's server code and embedded spec, generated from api/openapi.yaml

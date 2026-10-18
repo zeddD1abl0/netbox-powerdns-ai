@@ -25,8 +25,10 @@ tag no longer fails main.
 
 ## Acceptance criteria
 
-- [ ] `go-lint`, `unit-test`, `integration-test` and `release-check` share one GitLab resource group, so only one of them runs at a time across pipelines.
-- [ ] `make project-lint` still passes: every job still runs only make targets, and none can skip.
+- [x] `go-lint`, `unit-test`, `integration-test` and `release-check` share one GitLab resource group, so only one of them runs at a time across pipelines.
+- [x] `make project-lint` still passes: every job still runs only make targets, and none can skip.
+- [x] Those jobs, and `release`, request memory from the Kubernetes runner, sized from their measured peaks: 2 GiB for each job, and 1.5 GiB for the integration lab's Docker-in-Docker service.
+- [x] GoReleaser builds one architecture at a time (`--parallelism 1`) in both `make release-check` and `make release`.
 - [ ] The next merge and its tag both pass, without a retry.
 
 ## Notes
@@ -71,3 +73,31 @@ tag no longer fails main.
   requests, so that Kubernetes places them only where they fit, and runs
   goreleaser with `--parallelism 1` where CI builds the release. The item
   closes once a merge's and its tag's pipelines pass without a retry.
+- 2026-10-18: Measured on 16 CPUs, each with an empty build cache, with
+  `/usr/bin/time -v` for the largest process and the cgroup's anonymous
+  memory, sampled every 100 ms, for the job's processes together. A pod is
+  killed on the total. Together, and largest: GoReleaser's snapshot at its
+  default parallelism, 1.25 and 0.68 GiB, in 46 s; with `--parallelism 1`,
+  0.82 and 0.80 GiB, in 40 s; `make test`, 1.62 and 1.30 GiB, in 2 min 46 s;
+  `make lint`, 1.60 and 1.63 GiB (golangci-lint itself), in 57 s; and the
+  integration tests' `-race` build, without running them, 1.65 and
+  1.41 GiB, in 1 min 38 s. The lab's service adds 1.1 to 1.25 GiB
+  (ITEM-0028, ITEM-0037). On a warm cache the snapshot takes 11.5 s at the
+  default, and 13.6 s with `--parallelism 1`.
+- 2026-10-18: The runner is GitLab's Helm chart, deployed by OpenTofu, and
+  its `runners.config` sets no resources: no requests, limits or overwrite
+  maxima, so every CI pod is BestEffort, the first that the kernel kills
+  when a node runs short. The nodes have 2 CPUs each, and 8 GB
+  (`talos-control-1`, `-3`) or 6 GB (`talos-control-temp`), so they compile
+  less at once than the measurements above, which bound them. Done:
+  `--parallelism 1` in both GoReleaser targets, through the Makefile's
+  `GORELEASER_RUN`, with no variable for CI to set, since it costs about
+  2 s; `.heavy` requests 2 GiB (`KUBERNETES_MEMORY_REQUEST`), the largest
+  peak plus about a fifth; the integration lab's service requests 1.5 GiB
+  (`KUBERNETES_SERVICE_MEMORY_REQUEST`); `release` joins `.heavy`; and no
+  limits, since the runner sets none and the peaks grow with a node's CPUs.
+  The requests take effect only once the user adds
+  `memory_request_overwrite_max_allowed` and
+  `service_memory_request_overwrite_max_allowed` to the runner's config;
+  until then GitLab ignores them, silently. The last criterion waits for a
+  merge and its tag.

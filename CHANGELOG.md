@@ -6,6 +6,13 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- `make release-check` and `make release` build one architecture at a
+  time, which lowers their peak memory by a third, and GitLab's
+  memory-heavy jobs request memory from the Kubernetes runner, so that
+  each runs only on a node with room for it.
+
 ## [0.8.0] - 2026-10-17
 
 ### Added

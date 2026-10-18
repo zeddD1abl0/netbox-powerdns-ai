@@ -28,6 +28,11 @@ the container image. Two make targets run it:
   image to the registry, and the archives and checksums to a GitLab
   release, with the version's section of the CHANGELOG as its notes.
 
+Both build one architecture at a time, with GoReleaser's `--parallelism 1`.
+Building both at once raises the build's peak memory by half, more than a
+small CI runner can always spare, and saves only about 2 seconds once Go's
+build cache is warm.
+
 ```mermaid
 flowchart LR
     commit[A push] --> checks[lint, test, build, security]

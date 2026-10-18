@@ -33,8 +33,19 @@ workflow:
 # project's pipelines: a tag pushed on a merge commit starts a second
 # pipeline beside main's, and the runner killed main's unit-test while both
 # ran (ITEM-0100). Within a pipeline, they're in different stages anyway.
+#
+# Each also requests memory, so that Kubernetes places it only on a node
+# that has it free, and kills other pods before it when a node runs short:
+# the runner killed release-check twice on its smallest node (ITEM-0100).
+# With a cold build cache on 16 CPUs, the job's processes peak together at
+# 1.65 GiB for the integration tests' build, 1.62 GiB for the unit tests,
+# 1.60 GiB for the linter, and 0.82 GiB for the release. The runner's nodes
+# have 2 CPUs, so the jobs compile less at once there. The request takes
+# effect only up to the runner's memory_request_overwrite_max_allowed.
 .heavy:
   resource_group: runner-memory
+  variables:
+    KUBERNETES_MEMORY_REQUEST: 2Gi
 
 go-lint:
   extends: [.go, .heavy]
@@ -70,10 +81,12 @@ unit-test:
 # runner, like the self-hosted Kubernetes runners (Q-049). The lab is one
 # NetBox and one PowerDNS server (ADR-0023, ADR-0026). The service's resident
 # memory peaks at about 1.1 to 1.25 GiB, almost all of it NetBox applying its
-# first-start migrations, and the job's at about 0.35 GiB; the service stores
-# about 2.2 GB (ITEM-0028, ITEM-0037). It waits for unit-test, so the two
-# never share the runner's memory: run together, the runner killed it
-# (ITEM-0075).
+# first-start migrations, and it stores about 2.2 GB (ITEM-0028, ITEM-0037).
+# So the service requests 1.5 GiB, up to the runner's
+# service_memory_request_overwrite_max_allowed, beside .heavy's 2 GiB for
+# the job, whose build peaks at 1.65 GiB (ITEM-0100). It waits for
+# unit-test, so the two never share the runner's memory: run together, the
+# runner killed it (ITEM-0075).
 integration-test:
   extends: [.go, .heavy]
   stage: test
@@ -83,6 +96,7 @@ integration-test:
       alias: docker
       variables:
         DOCKER_TLS_CERTDIR: ""
+        KUBERNETES_SERVICE_MEMORY_REQUEST: 1536Mi
   variables:
     DOCKER_HOST: tcp://docker:2375
   script:
@@ -134,9 +148,10 @@ secrets:
 # (ADR-0032): for a version tag, after every other stage of the tag's
 # pipeline has passed. GitLab's variables are mapped to the names that
 # `make release` takes, so the Makefile names no forge. The job token pushes
-# the image to the project's registry, and makes the release.
+# the image to the project's registry, and makes the release. It builds the
+# release again, from a cold cache, so it's one of the heavy jobs.
 release:
-  extends: .go
+  extends: [.go, .heavy]
   stage: release
   rules:
     - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/'
