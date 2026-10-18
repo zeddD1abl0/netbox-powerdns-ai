@@ -1,11 +1,13 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/audit"
@@ -32,12 +34,11 @@ type StoredSetting struct {
 // Settings returns the stored settings, by key, and their version, in one
 // read transaction.
 func (s *Store) Settings(ctx context.Context) (map[string]StoredSetting, int64, error) {
-	sqlTx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	sqlTx, q, err := s.readTx(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("reading the settings: %w", err)
 	}
 	defer func() { _ = sqlTx.Rollback() }()
-	q := s.q.WithTx(sqlTx)
 	rows, err := q.ListSettings(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("reading the settings: %w", err)
@@ -195,6 +196,8 @@ func (tx *Tx) sealed(ctx context.Context) ([]sealedValue, error) {
 	if err != nil {
 		return nil, err
 	}
+	// By key, byte by byte, on either database (ADR-0046).
+	slices.SortFunc(settings, func(a, b sqlite.SealedSettingsRow) int { return cmp.Compare(a.Key, b.Key) })
 	groups, err := tx.q.SealedGroupKeys(ctx)
 	if err != nil {
 		return nil, err

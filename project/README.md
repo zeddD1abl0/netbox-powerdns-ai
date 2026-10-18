@@ -18,7 +18,7 @@
 | [M06](milestones/M06-rest-api.md) | REST API | done | 10 of 10 |
 | [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | done | 9 of 9 |
 | [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | done | 19 of 19 |
-| [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | in-progress | 2 of 11 |
+| [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | in-progress | 3 of 11 |
 | [M10](milestones/M10-authentication.md) | Authentication | planned | 1 of 2 |
 | [M11](milestones/M11-roles-and-permissions.md) | Roles and permissions | planned | 1 of 1 |
 | [M12](milestones/M12-sign-in.md) | Sign-in | planned | 1 of 1 |
@@ -36,8 +36,7 @@
 | Item | Title | Type | Status | Waiting on |
 |---|---|---|---|---|
 | [ITEM-0100](items/ITEM-0100-keep-concurrent-pipelines-from-running-the-runner.md) | Keep concurrent pipelines from running the runner out of memory | bug | in-progress | — |
-| [ITEM-0110](items/ITEM-0110-the-store-on-postgresql-pgx-sqlc-s-postgresql-pack.md) | The store on PostgreSQL: pgx, sqlc's PostgreSQL package and tests on both | feature | open | — |
-| [ITEM-0111](items/ITEM-0111-database-url-for-postgresql-tls-the-url-as-a-secre.md) | database.url for PostgreSQL: TLS, the URL as a secret, and serve and the CLI on it | feature | open | ITEM-0110 |
+| [ITEM-0111](items/ITEM-0111-database-url-for-postgresql-tls-the-url-as-a-secre.md) | database.url for PostgreSQL: TLS, the URL as a secret, and serve and the CLI on it | feature | open | — |
 | [ITEM-0112](items/ITEM-0112-leader-election-by-a-postgresql-session-advisory-l.md) | Leader election by a PostgreSQL session advisory lock | feature | open | ITEM-0111 |
 | [ITEM-0113](items/ITEM-0113-the-replicas-change-feed-polling-and-listen-and-no.md) | The replicas' change feed: polling, and LISTEN and NOTIFY | feature | open | ITEM-0112 |
 | [ITEM-0114](items/ITEM-0114-every-replica-serves-the-api-and-status-from-the-d.md) | Every replica serves the API and status from the database | feature | open | ITEM-0113 |
@@ -46,6 +45,7 @@
 | [ITEM-0117](items/ITEM-0117-the-m09-docs-several-replicas-on-postgresql-and-ho.md) | The M09 docs: several replicas on PostgreSQL, and how the leader is chosen | task | open | ITEM-0116 |
 | [ITEM-0095](items/ITEM-0095-roadmap-m09-postgresql-and-ha.md) | Roadmap M09: PostgreSQL and HA | task | done 2026-10-09 | — |
 | [ITEM-0109](items/ITEM-0109-design-m09-postgresql-and-ha.md) | Design M09: PostgreSQL and HA | task | done 2026-10-18 | — |
+| [ITEM-0110](items/ITEM-0110-the-store-on-postgresql-pgx-sqlc-s-postgresql-pack.md) | The store on PostgreSQL: pgx, sqlc's PostgreSQL package and tests on both | feature | done 2026-10-18 | — |
 
 ## Open items in other milestones
 

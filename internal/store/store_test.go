@@ -1,7 +1,6 @@
 package store
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -12,20 +11,63 @@ import (
 	"time"
 )
 
-// open opens a new database in a test's directory, and closes it when the
-// test ends.
-func open(t *testing.T) *Store {
+// A backend is a database that the store's tests run on: SQLite, and, with
+// the build tag integration, the lab's PostgreSQL too
+// (postgres_integration_test.go). Each test gets a new database.
+type backend struct {
+	name string
+	// create makes a new, empty database, which it removes when the test
+	// ends, and returns where it is.
+	create func(t *testing.T) string
+	// connect opens the database at where, as another process would, and
+	// closes it when the test ends.
+	connect func(t *testing.T, where string) *Store
+}
+
+// backends are the databases that each test runs on, in turn.
+var backends = []backend{sqliteBackend}
+
+// sqliteBackend makes each database in the test's directory.
+var sqliteBackend = backend{
+	name:   "sqlite",
+	create: func(t *testing.T) string { return filepath.Join(t.TempDir(), "nbpdns.db") },
+	connect: func(t *testing.T, where string) *Store {
+		t.Helper()
+		s, err := Open(t.Context(), where, Options{Create: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = s.Close() })
+		return s
+	},
+}
+
+// onEach runs test on each backend, as a subtest named after it.
+func onEach(t *testing.T, test func(t *testing.T, db backend)) {
 	t.Helper()
-	s, err := Open(t.Context(), filepath.Join(t.TempDir(), "nbpdns.db"), Options{Create: true})
-	if err != nil {
+	for _, db := range backends {
+		t.Run(db.name, func(t *testing.T) { test(t, db) })
+	}
+}
+
+// open opens a new, empty database.
+func (b backend) open(t *testing.T) *Store {
+	t.Helper()
+	return b.connect(t, b.create(t))
+}
+
+// migrated opens a new database with every migration applied.
+func (b backend) migrated(t *testing.T) *Store {
+	t.Helper()
+	s := b.open(t)
+	if _, err := s.Migrate(t.Context(), "test"); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = s.Close() })
 	return s
 }
 
 func TestOpenCreatesTheDatabase(t *testing.T) {
-	s := open(t)
+	s := sqliteBackend.open(t)
 	fi, err := os.Stat(s.Path())
 	if err != nil {
 		t.Fatal(err)
@@ -122,155 +164,192 @@ func TestOpenUnwritableDirectory(t *testing.T) {
 }
 
 func TestMigrate(t *testing.T) {
-	s := open(t)
-	ctx := t.Context()
-	before, err := s.Status(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if before.Version != 0 || before.Latest < 1 || !before.Pending() {
-		t.Fatalf("a new database's Status() = %+v, want version 0 and pending migrations", before)
-	}
-	applied, err := s.Migrate(ctx, "v1.2.3")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(applied) != len(before.Migrations) || applied[0].Version != 1 || applied[0].Name != "database" {
-		t.Errorf("Migrate() applied %+v, want every migration, from 1, database", applied)
-	}
-	after, err := s.Status(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if after.Pending() || after.Version != after.Latest {
-		t.Errorf("after Migrate(), Status() = %+v, want nothing pending", after)
-	}
-	for _, m := range after.Migrations {
-		if m.Applied.IsZero() || time.Since(m.Applied) > time.Minute {
-			t.Errorf("migration %d applied at %v, want just now", m.Version, m.Applied)
+	onEach(t, func(t *testing.T, db backend) {
+		s := db.open(t)
+		ctx := t.Context()
+		before, err := s.Status(ctx)
+		if err != nil {
+			t.Fatal(err)
 		}
-	}
-	info, err := s.Info(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(info.ID) < 20 || info.CreatedBy != "v1.2.3" || time.Since(info.Created) > time.Minute {
-		t.Errorf("Info() = %+v, want a random ID, v1.2.3, and now", info)
-	}
+		if before.Version != 0 || before.Latest < 1 || !before.Pending() {
+			t.Fatalf("a new database's Status() = %+v, want version 0 and pending migrations", before)
+		}
+		applied, err := s.Migrate(ctx, "v1.2.3")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(applied) != len(before.Migrations) || applied[0].Version != 1 || applied[0].Name != "database" {
+			t.Errorf("Migrate() applied %+v, want every migration, from 1, database", applied)
+		}
+		after, err := s.Status(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if after.Pending() || after.Version != after.Latest {
+			t.Errorf("after Migrate(), Status() = %+v, want nothing pending", after)
+		}
+		for _, m := range after.Migrations {
+			if m.Applied.IsZero() || time.Since(m.Applied) > time.Minute {
+				t.Errorf("migration %d applied at %v, want just now", m.Version, m.Applied)
+			}
+		}
+		info, err := s.Info(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(info.ID) < 20 || info.CreatedBy != "v1.2.3" || time.Since(info.Created) > time.Minute {
+			t.Errorf("Info() = %+v, want a random ID, v1.2.3, and now", info)
+		}
 
-	// Again, nothing to apply, and the identity stays.
-	again, err := s.Migrate(ctx, "v9.9.9")
-	if err != nil || len(again) != 0 {
-		t.Errorf("Migrate() again = %+v, %v, want nothing applied", again, err)
-	}
-	if info2, err := s.Info(ctx); err != nil || info2 != info {
-		t.Errorf("Info() after a second Migrate() = %+v, %v, want %+v", info2, err, info)
-	}
+		// Again, nothing to apply, and the identity stays.
+		again, err := s.Migrate(ctx, "v9.9.9")
+		if err != nil || len(again) != 0 {
+			t.Errorf("Migrate() again = %+v, %v, want nothing applied", again, err)
+		}
+		if info2, err := s.Info(ctx); err != nil || info2 != info {
+			t.Errorf("Info() after a second Migrate() = %+v, %v, want %+v", info2, err, info)
+		}
+	})
 }
 
 // TestMigrateFromEachVersion applies every migration to a database at each
 // earlier version, as an upgrade from each release would.
 func TestMigrateFromEachVersion(t *testing.T) {
-	p, err := open(t).provider()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, src := range p.ListSources() {
-		t.Run(fmt.Sprint(src.Version), func(t *testing.T) {
-			s := open(t)
-			p, err := s.provider()
-			if err != nil {
-				t.Fatal(err)
-			}
-			if _, err := p.UpTo(t.Context(), src.Version); err != nil {
-				t.Fatal(err)
-			}
-			if _, err := s.Migrate(t.Context(), "test"); err != nil {
-				t.Fatalf("Migrate() from version %d: %v", src.Version, err)
-			}
-			st, err := s.Status(t.Context())
-			if err != nil || st.Pending() {
-				t.Errorf("Status() = %+v, %v, want nothing pending", st, err)
-			}
-		})
-	}
-}
-
-func TestMigrateRefusesANewerDatabase(t *testing.T) {
-	s := open(t)
-	ctx := t.Context()
-	if _, err := s.Migrate(ctx, "test"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.db.ExecContext(ctx, "INSERT INTO goose_db_version (version_id, is_applied) VALUES (99999, 1)"); err != nil {
-		t.Fatal(err)
-	}
-	_, err := s.Migrate(ctx, "test")
-	var tn *TooNewError
-	if !errors.As(err, &tn) || tn.Version != 99999 {
-		t.Fatalf("Migrate() error = %v, want a TooNewError at 99999", err)
-	}
-	if !strings.Contains(err.Error(), "newer than this nbpdns knows") {
-		t.Errorf("Migrate() error = %v", err)
-	}
-}
-
-// TestConcurrentWriters writes from two stores on one database at once, as
-// the command line does while serve runs: each write waits for the other's,
-// and none fails as busy.
-func TestConcurrentWriters(t *testing.T) {
-	a := open(t)
-	ctx := t.Context()
-	if _, err := a.db.ExecContext(ctx, "CREATE TABLE counter (n BIGINT NOT NULL)"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := a.db.ExecContext(ctx, "INSERT INTO counter (n) VALUES (0)"); err != nil {
-		t.Fatal(err)
-	}
-	b, err := Open(ctx, a.Path(), Options{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer b.Close()
-	const each = 50
-	var wg sync.WaitGroup
-	errs := make(chan error, 2*each)
-	for _, s := range []*Store{a, b} {
-		wg.Go(func() {
-			for range each {
-				errs <- increment(ctx, s)
-			}
-		})
-	}
-	wg.Wait()
-	close(errs)
-	for err := range errs {
+	onEach(t, func(t *testing.T, db backend) {
+		p, err := db.open(t).provider()
 		if err != nil {
 			t.Fatal(err)
 		}
-	}
-	var n int
-	if err := a.db.QueryRowContext(ctx, "SELECT n FROM counter").Scan(&n); err != nil {
-		t.Fatal(err)
-	}
-	if n != 2*each {
-		t.Errorf("counter = %d, want %d", n, 2*each)
-	}
+		for _, src := range p.ListSources() {
+			t.Run(fmt.Sprint(src.Version), func(t *testing.T) {
+				s := db.open(t)
+				p, err := s.provider()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := p.UpTo(t.Context(), src.Version); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := s.Migrate(t.Context(), "test"); err != nil {
+					t.Fatalf("Migrate() from version %d: %v", src.Version, err)
+				}
+				st, err := s.Status(t.Context())
+				if err != nil || st.Pending() {
+					t.Errorf("Status() = %+v, %v, want nothing pending", st, err)
+				}
+			})
+		}
+	})
 }
 
-// increment reads and writes the counter in one transaction.
-func increment(ctx context.Context, s *Store) error {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }() // after Commit, it does nothing
-	var n int
-	if err := tx.QueryRowContext(ctx, "SELECT n FROM counter").Scan(&n); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, "UPDATE counter SET n = ?", n+1); err != nil {
-		return err
-	}
-	return tx.Commit()
+func TestMigrateRefusesANewerDatabase(t *testing.T) {
+	onEach(t, func(t *testing.T, db backend) {
+		s := db.open(t)
+		ctx := t.Context()
+		if _, err := s.Migrate(ctx, "test"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.db.ExecContext(ctx, "INSERT INTO goose_db_version (version_id, is_applied) VALUES (99999, TRUE)"); err != nil {
+			t.Fatal(err)
+		}
+		_, err := s.Migrate(ctx, "test")
+		var tn *TooNewError
+		if !errors.As(err, &tn) || tn.Version != 99999 {
+			t.Fatalf("Migrate() error = %v, want a TooNewError at 99999", err)
+		}
+		if !strings.Contains(err.Error(), "newer than this nbpdns knows") {
+			t.Errorf("Migrate() error = %v", err)
+		}
+	})
+}
+
+// TestConcurrentWriters appends to the audit trail from two stores on one
+// database at once, two writers on each, as the command line does while
+// serve runs, and replicas do on PostgreSQL: each write waits for the
+// others, none fails, and the trail they leave is one unbroken chain, which
+// `nbpdns audit verify` checks.
+func TestConcurrentWriters(t *testing.T) {
+	onEach(t, func(t *testing.T, db backend) {
+		ctx := t.Context()
+		where := db.create(t)
+		stores := []*Store{db.connect(t, where), db.connect(t, where)}
+		if _, err := stores[0].Migrate(ctx, "test"); err != nil {
+			t.Fatal(err)
+		}
+		const writers, each = 2, 25
+		var wg sync.WaitGroup
+		errs := make(chan error, len(stores)*writers*each)
+		for i, s := range stores {
+			for w := range writers {
+				wg.Go(func() {
+					for n := range each {
+						_, err := s.Audit(ctx, started(time.Now(), fmt.Sprintf("host-%d-%d-%d", i, w, n)))
+						errs <- err
+					}
+				})
+			}
+		}
+		wg.Wait()
+		close(errs)
+		for err := range errs {
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		sum, err := stores[1].VerifyAudit(ctx)
+		if err != nil {
+			t.Fatalf("VerifyAudit() = %v", err)
+		}
+		if want := len(stores) * writers * each; sum.Count != want || sum.Last.Seq != int64(want) {
+			t.Errorf("VerifyAudit() found %d events, the last %d; want %d", sum.Count, sum.Last.Seq, want)
+		}
+	})
+}
+
+// TestConcurrentMigrations migrates one database from several stores at
+// once, as replicas that start together do: goose's lock lets one migrate at
+// a time, and each migration is applied once.
+func TestConcurrentMigrations(t *testing.T) {
+	onEach(t, func(t *testing.T, db backend) {
+		if db.name == sqliteBackend.name {
+			t.Skip("on SQLite, one serve migrates, under its flock (ADR-0038)")
+		}
+		ctx := t.Context()
+		where := db.create(t)
+		const replicas = 4
+		results := make([][]Migration, replicas)
+		errs := make([]error, replicas)
+		var wg sync.WaitGroup
+		for i := range replicas {
+			s := db.connect(t, where)
+			wg.Go(func() { results[i], errs[i] = s.Migrate(ctx, "test") })
+		}
+		wg.Wait()
+		applied := map[int64]int{}
+		for i := range replicas {
+			if errs[i] != nil {
+				t.Fatalf("replica %d: Migrate() = %v", i, errs[i])
+			}
+			for _, m := range results[i] {
+				applied[m.Version]++
+			}
+		}
+		s := db.connect(t, where)
+		st, err := s.Status(ctx)
+		if err != nil || st.Pending() {
+			t.Fatalf("Status() = %+v, %v, want nothing pending", st, err)
+		}
+		for _, m := range st.Migrations {
+			if applied[m.Version] != 1 {
+				t.Errorf("migration %d was applied %d times, want once", m.Version, applied[m.Version])
+			}
+		}
+		var rows int
+		if err := s.db.QueryRowContext(ctx, "SELECT count(*) FROM goose_db_version WHERE version_id > 0").Scan(&rows); err != nil {
+			t.Fatal(err)
+		}
+		if rows != len(st.Migrations) {
+			t.Errorf("goose_db_version has %d rows, want %d", rows, len(st.Migrations))
+		}
+	})
 }

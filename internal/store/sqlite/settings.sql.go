@@ -39,7 +39,7 @@ func (q *Queries) GetSetting(ctx context.Context, key string) (Setting, error) {
 }
 
 const listSettings = `-- name: ListSettings :many
-SELECT "key", value, sealed, updated_at, updated_by FROM settings ORDER BY key
+SELECT "key", value, sealed, updated_at, updated_by FROM settings
 `
 
 func (q *Queries) ListSettings(ctx context.Context) ([]Setting, error) {
@@ -72,7 +72,7 @@ func (q *Queries) ListSettings(ctx context.Context) ([]Setting, error) {
 }
 
 const sealedSettings = `-- name: SealedSettings :many
-SELECT key, value FROM settings WHERE sealed ORDER BY key
+SELECT key, value FROM settings WHERE sealed
 `
 
 type SealedSettingsRow struct {
@@ -80,6 +80,7 @@ type SealedSettingsRow struct {
 	Value string
 }
 
+// Unordered: the store sorts the keys in Go, byte by byte (ADR-0046).
 func (q *Queries) SealedSettings(ctx context.Context) ([]SealedSettingsRow, error) {
 	rows, err := q.db.QueryContext(ctx, sealedSettings)
 	if err != nil {

@@ -34,7 +34,7 @@ ON CONFLICT (group_name) DO UPDATE SET
     last_success = excluded.last_success, updated_at = excluded.updated_at, report_json = excluded.report_json;
 
 -- name: GroupReports :many
-SELECT * FROM drift_group_reports ORDER BY group_name;
+SELECT * FROM drift_group_reports;
 
 -- name: LastRefresh :one
 SELECT * FROM drift_refreshes ORDER BY id DESC LIMIT 1;
@@ -44,8 +44,7 @@ SELECT finished_at FROM drift_refreshes WHERE kind = 'full' AND outcome = 'compl
 
 -- name: LastGroupResults :many
 SELECT * FROM drift_refresh_groups g
-WHERE g.refresh_id = (SELECT MAX(l.refresh_id) FROM drift_refresh_groups l WHERE l.group_name = g.group_name)
-ORDER BY g.group_name;
+WHERE g.refresh_id = (SELECT MAX(l.refresh_id) FROM drift_refresh_groups l WHERE l.group_name = g.group_name);
 
 -- name: DeleteRefreshGroupsBefore :exec
 DELETE FROM drift_refresh_groups

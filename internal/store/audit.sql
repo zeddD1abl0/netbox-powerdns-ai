@@ -18,13 +18,15 @@ INSERT INTO audit_events (
 );
 
 -- name: ListAuditEvents :many
+-- Each filter is optional: NULL selects everything. The casts give
+-- PostgreSQL each parameter's type, which IS NULL doesn't.
 SELECT * FROM audit_events
-WHERE (sqlc.narg(since) IS NULL OR at >= sqlc.narg(since))
-  AND (sqlc.narg(until) IS NULL OR at < sqlc.narg(until))
-  AND (sqlc.narg(action) IS NULL OR action = sqlc.narg(action))
-  AND (sqlc.narg(actor) IS NULL OR actor = sqlc.narg(actor))
-  AND (sqlc.narg(target_type) IS NULL OR target_type = sqlc.narg(target_type))
-  AND (sqlc.narg(target_id) IS NULL OR target_id = sqlc.narg(target_id))
+WHERE (CAST(sqlc.narg(since) AS TEXT) IS NULL OR at >= sqlc.narg(since))
+  AND (CAST(sqlc.narg(until) AS TEXT) IS NULL OR at < sqlc.narg(until))
+  AND (CAST(sqlc.narg(action) AS TEXT) IS NULL OR action = sqlc.narg(action))
+  AND (CAST(sqlc.narg(actor) AS TEXT) IS NULL OR actor = sqlc.narg(actor))
+  AND (CAST(sqlc.narg(target_type) AS TEXT) IS NULL OR target_type = sqlc.narg(target_type))
+  AND (CAST(sqlc.narg(target_id) AS TEXT) IS NULL OR target_id = sqlc.narg(target_id))
 ORDER BY seq DESC
 LIMIT sqlc.arg(max_events);
 

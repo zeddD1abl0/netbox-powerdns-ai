@@ -2,6 +2,7 @@ package store
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -153,13 +154,12 @@ func storedGroup(r sqlite.ServerGroup) (StoredGroup, error) {
 // Groups returns the groups that the database stores, by name, and their
 // version, in one read transaction.
 func (s *Store) Groups(ctx context.Context) ([]StoredGroup, int64, error) {
-	sqlTx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	sqlTx, q, err := s.readTx(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("reading the server groups: %w", err)
 	}
 	defer func() { _ = sqlTx.Rollback() }()
-	q := s.q.WithTx(sqlTx)
-	rows, err := q.ListGroups(ctx)
+	rows, err := listGroups(ctx, q)
 	if err != nil {
 		return nil, 0, fmt.Errorf("reading the server groups: %w", err)
 	}
@@ -174,6 +174,15 @@ func (s *Store) Groups(ctx context.Context) ([]StoredGroup, int64, error) {
 		}
 	}
 	return out, version, nil
+}
+
+// listGroups returns the stored groups by name, sorted byte by byte, so
+// that they come in one order on either database, whatever its collation
+// (ADR-0046).
+func listGroups(ctx context.Context, q sqlite.Querier) ([]sqlite.ServerGroup, error) {
+	rows, err := q.ListGroups(ctx)
+	slices.SortFunc(rows, func(a, b sqlite.ServerGroup) int { return cmp.Compare(a.Name, b.Name) })
+	return rows, err
 }
 
 // GroupsVersion returns the groups' version, which each change bumps, so
@@ -207,7 +216,7 @@ func (s *Store) Group(ctx context.Context, name string) (StoredGroup, error) {
 // name is a *ConflictError, and changes nothing.
 func (s *Store) MirrorFileGroups(ctx context.Context, groups []config.Group, actor audit.Actor) ([]audit.Event, error) {
 	events, err := s.InTx(ctx, func(tx *Tx) error {
-		rows, err := tx.q.ListGroups(ctx)
+		rows, err := listGroups(ctx, tx.q)
 		if err != nil {
 			return err
 		}

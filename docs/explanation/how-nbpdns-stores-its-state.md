@@ -66,8 +66,9 @@ older one refuses a database that a newer one migrated. To go back to an
 older release, restore a copy of the database that was made before the
 upgrade. [Back up nbpdns's database](../how-to/back-up-nbpdns-database.md)
 shows how. The SQL stays portable to PostgreSQL, which M09 adds: `make
-check` compiles every migration and query for PostgreSQL too, and a test
-refuses SQLite's own functions.
+generate` makes the queries' code for each database from the same SQL,
+`make check` fails if either is stale, and a test refuses SQLite's own
+functions.
 
 ## Settings in the database
 

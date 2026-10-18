@@ -6,6 +6,13 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- The development lab publishes its PostgreSQL 18 server on port 5418, and
+  `make lab-up` creates a database in it for nbpdns, `nbpdns`, owned by the
+  role `nbpdns`. The store's integration tests run on it as well as on
+  SQLite, each test in a database of its own.
+
 ### Changed
 
 - `make release-check` and `make release` build one architecture at a

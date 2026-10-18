@@ -118,7 +118,7 @@ func (q *Queries) GroupRefreshes(ctx context.Context, arg GroupRefreshesParams) 
 }
 
 const groupReports = `-- name: GroupReports :many
-SELECT group_name, last_success, updated_at, report_json FROM drift_group_reports ORDER BY group_name
+SELECT group_name, last_success, updated_at, report_json FROM drift_group_reports
 `
 
 func (q *Queries) GroupReports(ctx context.Context) ([]DriftGroupReport, error) {
@@ -268,7 +268,6 @@ func (q *Queries) LastCompleteRefresh(ctx context.Context) (string, error) {
 const lastGroupResults = `-- name: LastGroupResults :many
 SELECT refresh_id, group_name, status, error, counts_json FROM drift_refresh_groups g
 WHERE g.refresh_id = (SELECT MAX(l.refresh_id) FROM drift_refresh_groups l WHERE l.group_name = g.group_name)
-ORDER BY g.group_name
 `
 
 func (q *Queries) LastGroupResults(ctx context.Context) ([]DriftRefreshGroup, error) {

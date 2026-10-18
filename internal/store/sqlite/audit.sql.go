@@ -188,26 +188,28 @@ func (q *Queries) LastAuditEventBefore(ctx context.Context, cutoff string) (Last
 
 const listAuditEvents = `-- name: ListAuditEvents :many
 SELECT seq, at, actor, "action", target_type, target_id, before_json, after_json, reason, outcome, trace_id, request_id, source_ip, prev_hash, hash FROM audit_events
-WHERE (?1 IS NULL OR at >= ?1)
-  AND (?2 IS NULL OR at < ?2)
-  AND (?3 IS NULL OR action = ?3)
-  AND (?4 IS NULL OR actor = ?4)
-  AND (?5 IS NULL OR target_type = ?5)
-  AND (?6 IS NULL OR target_id = ?6)
+WHERE (CAST(?1 AS TEXT) IS NULL OR at >= ?1)
+  AND (CAST(?2 AS TEXT) IS NULL OR at < ?2)
+  AND (CAST(?3 AS TEXT) IS NULL OR action = ?3)
+  AND (CAST(?4 AS TEXT) IS NULL OR actor = ?4)
+  AND (CAST(?5 AS TEXT) IS NULL OR target_type = ?5)
+  AND (CAST(?6 AS TEXT) IS NULL OR target_id = ?6)
 ORDER BY seq DESC
 LIMIT ?7
 `
 
 type ListAuditEventsParams struct {
-	Since      interface{}
-	Until      interface{}
-	Action     interface{}
-	Actor      interface{}
-	TargetType interface{}
-	TargetID   interface{}
+	Since      sql.NullString
+	Until      sql.NullString
+	Action     sql.NullString
+	Actor      sql.NullString
+	TargetType sql.NullString
+	TargetID   sql.NullString
 	MaxEvents  int64
 }
 
+// Each filter is optional: NULL selects everything. The casts give
+// PostgreSQL each parameter's type, which IS NULL doesn't.
 func (q *Queries) ListAuditEvents(ctx context.Context, arg ListAuditEventsParams) ([]AuditEvent, error) {
 	rows, err := q.db.QueryContext(ctx, listAuditEvents,
 		arg.Since,

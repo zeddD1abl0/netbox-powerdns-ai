@@ -354,12 +354,11 @@ type RestoredGroup struct {
 // result, in one read transaction.
 func (s *Store) RestoreDrift(ctx context.Context) (Restored, error) {
 	out := Restored{Groups: map[string]RestoredGroup{}}
-	sqlTx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	sqlTx, q, err := s.readTx(ctx)
 	if err != nil {
 		return out, fmt.Errorf("restoring the drift report: %w", err)
 	}
 	defer func() { _ = sqlTx.Rollback() }()
-	q := s.q.WithTx(sqlTx)
 	fail := func(err error) (Restored, error) { return out, fmt.Errorf("restoring the drift report: %w", err) }
 
 	switch r, err := q.LastRefresh(ctx); {
