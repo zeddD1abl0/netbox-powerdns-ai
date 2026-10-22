@@ -20,6 +20,14 @@ All notable changes to this project are recorded here. The format follows
   memory-heavy jobs request memory from the Kubernetes runner, so that
   each runs only on a node with room for it.
 
+### Security
+
+- nbpdns is built with Go 1.27.3, which fixes GO-2026-6809: when nbpdns
+  checks the certificate of a server that it connects to over TLS, such as
+  NetBox or PowerDNS, Go now refuses a chain through any of the known
+  intermediate certificates that are no longer trustworthy, even where the
+  system's trust store hasn't been updated to distrust them.
+
 ## [0.8.0] - 2026-10-17
 
 ### Added

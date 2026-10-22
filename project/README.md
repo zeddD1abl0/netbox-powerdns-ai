@@ -18,7 +18,7 @@
 | [M06](milestones/M06-rest-api.md) | REST API | done | 10 of 10 |
 | [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | done | 9 of 9 |
 | [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | done | 19 of 19 |
-| [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | in-progress | 3 of 11 |
+| [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | in-progress | 4 of 12 |
 | [M10](milestones/M10-authentication.md) | Authentication | planned | 1 of 2 |
 | [M11](milestones/M11-roles-and-permissions.md) | Roles and permissions | planned | 1 of 1 |
 | [M12](milestones/M12-sign-in.md) | Sign-in | planned | 1 of 1 |
@@ -46,6 +46,7 @@
 | [ITEM-0095](items/ITEM-0095-roadmap-m09-postgresql-and-ha.md) | Roadmap M09: PostgreSQL and HA | task | done 2026-10-09 | — |
 | [ITEM-0109](items/ITEM-0109-design-m09-postgresql-and-ha.md) | Design M09: PostgreSQL and HA | task | done 2026-10-18 | — |
 | [ITEM-0110](items/ITEM-0110-the-store-on-postgresql-pgx-sqlc-s-postgresql-pack.md) | The store on PostgreSQL: pgx, sqlc's PostgreSQL package and tests on both | feature | done 2026-10-18 | — |
+| [ITEM-0118](items/ITEM-0118-update-go-to-1-27-3-for-go-2026-6809.md) | Update Go to 1.27.3 for GO-2026-6809 | debt | done 2026-10-22 | — |
 
 ## Open items in other milestones
 

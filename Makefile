@@ -12,7 +12,7 @@ comma := ,
 
 # The image CI runs in, pinned by digest. `make project-lint` checks that both
 # forges' CI files use exactly this image (ADR-0032).
-CI_IMAGE := golang:1.27.2@sha256:5bc7f572bbaa98885a3a1fd9c0aa76b59e3e14e8628bfc316bbfd0c701e4818c
+CI_IMAGE := golang:1.27.3@sha256:f20d83a83e18dbd2a4714b8ffd4b30b287b6243962dd75608e86abcc63ba4efc
 
 ##@ Tools
 
