@@ -142,3 +142,6 @@ libpq('s)?
 etcd
 URL's
 [Rr]efresh's
+PostgreSQL
+psql('s)?
+CAs

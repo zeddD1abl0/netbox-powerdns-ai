@@ -56,12 +56,12 @@ type Options struct {
 	// Webhooks says whether the API takes NetBox's webhooks, for /status.
 	Webhooks bool
 	// History, if set, keeps each refresh, and restores the last reports
-	// at start; DatabasePath is where, for /status.
-	History      History
-	DatabasePath string
-	Log          *slog.Logger
-	Tracer       trace.Tracer
-	Metrics      *metrics.Metrics
+	// at start; Database says where, for /status.
+	History  History
+	Database DatabaseInfo
+	Log      *slog.Logger
+	Tracer   trace.Tracer
+	Metrics  *metrics.Metrics
 
 	// What /status and the API show besides the refreshes: the build,
 	// NetBox's URL, each group, in the configuration's order, which

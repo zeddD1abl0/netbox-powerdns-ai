@@ -137,6 +137,12 @@ func TestStatus(t *testing.T) {
 	fullRefresh := hooked
 	fullRefresh.Webhooks.LastRefresh = &service.WebhookRefresh{Started: at("2026-10-08T01:11:00Z"), Finished: at("2026-10-08T01:11:01Z"),
 		Full: true, Reason: "a view was updated", Outcome: "failed", Error: "NetBox isn't reachable", Requests: []service.Request{}}
+	onSQLite := failed
+	onSQLite.Database = service.Database{DatabaseInfo: service.DatabaseInfo{Backend: "sqlite",
+		URL: "sqlite:///var/lib/nbpdns/nbpdns.db", Path: "/var/lib/nbpdns/nbpdns.db"}}
+	onPostgres := failed
+	onPostgres.Database = service.Database{DatabaseInfo: service.DatabaseInfo{Backend: "postgresql",
+		URL: "postgres://nbpdns:xxxxx@db.example.com/nbpdns?sslmode=verify-full", TLS: ptr(true)}}
 
 	tests := []struct {
 		name   string
@@ -166,6 +172,14 @@ func TestStatus(t *testing.T) {
 		{"a full refresh from webhooks", fullRefresh, []string{
 			`"error":"NetBox isn't reachable","events":0,`, `"full":true,"outcome":"failed","reason":"a view was updated","requests":[],`,
 			`"zones":null}`,
+		}},
+		{"on SQLite", onSQLite, []string{
+			`"database":{"backend":"sqlite","history_write_failures":0,"last_write_error":null,"last_write_failure":null,` +
+				`"path":"/var/lib/nbpdns/nbpdns.db","restored":false,"restored_as_of":null,"tls":null,"url":"sqlite:///var/lib/nbpdns/nbpdns.db"}`,
+		}},
+		{"on PostgreSQL", onPostgres, []string{
+			`"database":{"backend":"postgresql","history_write_failures":0,"last_write_error":null,"last_write_failure":null,` +
+				`"path":"","restored":false,"restored_as_of":null,"tls":true,"url":"postgres://nbpdns:xxxxx@db.example.com/nbpdns?sslmode=verify-full"}`,
 		}},
 	}
 	for _, tt := range tests {

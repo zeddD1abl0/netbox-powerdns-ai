@@ -101,3 +101,9 @@ tag no longer fails main.
   `service_memory_request_overwrite_max_allowed` to the runner's config;
   until then GitLab ignores them, silently. The last criterion waits for a
   merge and its tag.
+- 2026-10-22: The M09 branch's pipelines so far, 832 (821cb9e, this
+  item's fix) and 836 (ec27fff), passed with every job first time:
+  836's integration job took 23 min, and `release-check` 7 min. ITEM-0110's
+  commit, 951cb7c, isn't pushed yet, so its pipeline, the first to run the
+  store's tests on PostgreSQL, is still to come. The item still waits for a
+  merge and its tag.

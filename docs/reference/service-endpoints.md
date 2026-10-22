@@ -164,7 +164,10 @@ be read:
     }
   },
   "database": {
+    "backend": "sqlite",
+    "url": "sqlite:///var/lib/nbpdns/nbpdns.db",
     "path": "/var/lib/nbpdns/nbpdns.db",
+    "tls": null,
     "restored": true,
     "restored_as_of": "2026-10-07T00:55:40.1Z",
     "history_write_failures": 0,
@@ -241,7 +244,10 @@ be read:
 | `webhooks.last_refresh.events` | integer | The webhooks it served. |
 | `webhooks.last_refresh.requests[].id` | string | The ID of each NetBox request whose changes it refreshed, up to 128. |
 | `webhooks.last_refresh.requests[].user` | string | The user who made the request. |
-| `database.path` | string | The database's file, from `database.url`. |
+| `database.backend` | string | The database that `database.url` names: `sqlite` or `postgresql`. |
+| `database.url` | string | `database.url`, with each password in it masked as `xxxxx`. |
+| `database.path` | string | SQLite's file, from `database.url`, or empty on PostgreSQL. |
+| `database.tls` | Boolean or null | Whether the connection to PostgreSQL uses TLS, as it did when the service started, or `null` on SQLite. With `sslmode` at `prefer`, libpq's default, it may not. |
 | `database.restored` | Boolean | Whether the service started from the reports it kept before it restarted, which it serves until its first refresh replaces them. The groups' `last_success` say how old each one is. |
 | `database.restored_as_of` | time or null | When the refresh before the restart finished, or `null` if nothing was restored. |
 | `database.history_write_failures` | integer | The refreshes that couldn't be written to the drift history since the service started. Each is still served, and the next refresh writes the zones' changes since their last rows. |

@@ -121,7 +121,10 @@ paths:
                       - id: 3bd63b08-a526-45f3-a819-aa7c507dd31f
                         user: admin
                 database:
+                  backend: sqlite
+                  url: sqlite:///var/lib/nbpdns/nbpdns.db
                   path: /var/lib/nbpdns/nbpdns.db
+                  tls: null
                   restored: true
                   restored_as_of: "2026-10-08T00:55:40Z"
                   history_write_failures: 0
@@ -903,12 +906,31 @@ components:
     Database:
       type: object
       description: The database that the service keeps its state in.
-      required: [path, restored, restored_as_of, history_write_failures, last_write_failure, last_write_error]
+      required: [backend, url, path, tls, restored, restored_as_of, history_write_failures, last_write_failure, last_write_error]
       properties:
+        backend:
+          type: string
+          x-extensible-enum: [sqlite, postgresql]
+          description: The database that `database.url` names.
+          examples: [postgresql]
+        url:
+          type: string
+          description: >-
+            `database.url`, with each password in it, the URL's own and the
+            values of its `password` and `sslpassword` parameters, masked as
+            `xxxxx`.
+          examples: ["postgres://nbpdns:xxxxx@db.example.com/nbpdns?sslmode=verify-full"]
         path:
           type: string
-          description: The database's file, from `database.url`.
+          description: SQLite's file, from `database.url`, or empty on PostgreSQL.
           examples: [/var/lib/nbpdns/nbpdns.db]
+        tls:
+          type: [boolean, "null"]
+          description: >-
+            Whether the connection to PostgreSQL uses TLS, as it did when the
+            service started, or null on SQLite. With `sslmode` at `prefer`,
+            libpq's default, it may not.
+          examples: [true]
         restored:
           type: boolean
           description: >-

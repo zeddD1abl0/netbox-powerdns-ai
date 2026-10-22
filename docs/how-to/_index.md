@@ -16,6 +16,7 @@ its goal and prerequisites, then gives numbered steps.
 - [Connect nbpdns to PowerDNS](connect-nbpdns-to-powerdns.md)
 - [Put the PowerDNS API behind a TLS proxy](put-the-powerdns-api-behind-a-tls-proxy.md)
 - [Set a zone's drift policy](set-a-zones-drift-policy.md)
+- [Run nbpdns on PostgreSQL](run-nbpdns-on-postgresql.md)
 - [Run nbpdns in a container](run-nbpdns-in-a-container.md)
 - [Change nbpdns's settings while it runs](change-nbpdns-settings-while-it-runs.md)
 - [Manage server groups from the command line](manage-server-groups-from-the-command-line.md)

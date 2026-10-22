@@ -153,6 +153,25 @@ func secretKey(dst *Secret, k Key, check func(string) error) Key {
 	return k
 }
 
+// databaseURLKey declares database.url, stored in dst: a secret, since a
+// PostgreSQL URL can hold a password, so that it can come from a file, but
+// shown with its passwords masked, so that it's still visible which
+// database is used (ADR-0046).
+func databaseURLKey(dst *Secret, k Key) Key {
+	k = secretKey(dst, k, checkDatabaseURL)
+	k.typ, k.flagType = "a `sqlite:`, `postgres://` or `postgresql://` URL, secret", "url"
+	k.show = func() string { return maskURL(dst.Reveal()) }
+	// It has a default, so an empty value is a mistake, not an unset key.
+	parse := k.parse
+	k.parse = func(raw any) error {
+		if s, ok := raw.(string); ok && s == "" {
+			return errors.New("it's empty; give a sqlite:, postgres:// or postgresql:// URL")
+		}
+		return parse(raw)
+	}
+	return k
+}
+
 // intKey declares an integer key stored in dst, from 1 to hi inclusive.
 func intKey(dst *int, k Key, hi int) Key {
 	const lo = 1
@@ -281,10 +300,35 @@ func checkURL(s string) error {
 	return nil
 }
 
-// checkDatabaseURL accepts a sqlite: URL that names a file.
+// errNotURL is the error for a database.url that isn't a URL. It never
+// holds the value, or url.Parse's error, which quotes it: a password in it
+// can't be found to mask.
+var errNotURL = errors.New("it isn't a URL; percent-encode any reserved character in a password, such as @ as %40")
+
+// isPostgresURL reports whether s is a PostgreSQL URL, with a scheme that
+// pgx reads as one: postgres:// or postgresql://, in lower case.
+func isPostgresURL(s string) bool {
+	return strings.HasPrefix(s, "postgres://") || strings.HasPrefix(s, "postgresql://")
+}
+
+// checkDatabaseURL accepts a sqlite: URL that names a file, or a PostgreSQL
+// URL (ADR-0046). Only a PostgreSQL URL's form is checked here: pgx reads
+// its parameters, and the files that they name, when the store opens it, so
+// that a command that doesn't use the database, such as nbpdns drift, works
+// without them. Its errors show the URL masked.
 func checkDatabaseURL(s string) error {
-	_, err := sqlitePath(s)
-	return err
+	if !isPostgresURL(s) {
+		_, err := sqlitePath(s)
+		return err
+	}
+	u, err := url.Parse(s)
+	switch {
+	case err != nil:
+		return errNotURL
+	case u.Fragment != "":
+		return fmt.Errorf("%q mustn't have a fragment; percent-encode any # in a password as %%23", maskURL(s))
+	}
+	return nil
 }
 
 // sqlitePath returns the file that a sqlite: URL names: the path after
@@ -292,26 +336,66 @@ func checkDatabaseURL(s string) error {
 // working directory.
 func sqlitePath(s string) (string, error) {
 	u, err := url.Parse(s)
+	if err != nil {
+		return "", errNotURL
+	}
+	shown := maskURL(s)
 	switch {
-	case err != nil:
-		return "", fmt.Errorf("%q isn't a URL", s)
 	case !strings.EqualFold(u.Scheme, "sqlite"):
-		return "", fmt.Errorf("%q isn't a sqlite: URL, such as sqlite:///var/lib/nbpdns/nbpdns.db", s)
+		return "", fmt.Errorf("%q isn't a sqlite: URL, such as sqlite:///var/lib/nbpdns/nbpdns.db, "+
+			"or a postgres:// or postgresql:// URL", shown)
 	case u.User != nil || u.RawQuery != "" || u.Fragment != "":
-		return "", fmt.Errorf("%q mustn't have credentials, a query or a fragment", s)
+		return "", fmt.Errorf("%q mustn't have credentials, a query or a fragment", shown)
 	case u.Host != "":
-		return "", fmt.Errorf("%q names a host; write sqlite:/// and an absolute path, with three slashes, or sqlite: and a relative path", s)
+		return "", fmt.Errorf("%q names a host; write sqlite:/// and an absolute path, with three slashes, or sqlite: and a relative path", shown)
 	}
 	p := u.Path
 	if u.Opaque != "" {
 		if p, err = url.PathUnescape(u.Opaque); err != nil {
-			return "", fmt.Errorf("%q isn't a URL", s)
+			return "", errNotURL
 		}
 	}
 	if p == "" || strings.HasSuffix(p, "/") {
-		return "", fmt.Errorf("%q doesn't name a file", s)
+		return "", fmt.Errorf("%q doesn't name a file", shown)
 	}
 	return filepath.Clean(p), nil
+}
+
+// passwordMask is what a shown URL has in place of a password, as in Go's
+// url.URL.Redacted and pgx's errors.
+const passwordMask = "xxxxx"
+
+// maskURL returns s, a URL, with each password in it masked: its userinfo's,
+// and the values of libpq's password and sslpassword parameters. If s isn't
+// a URL, so that its passwords can't be found, it returns Redacted. A URL
+// without a password comes back as it was.
+func maskURL(s string) string {
+	u, err := url.Parse(s)
+	if err != nil {
+		return Redacted
+	}
+	masked := false
+	if _, ok := u.User.Password(); ok {
+		u.User = url.UserPassword(u.User.Username(), passwordMask)
+		masked = true
+	}
+	if u.RawQuery != "" {
+		params := strings.Split(u.RawQuery, "&")
+		for i, p := range params {
+			name, _, _ := strings.Cut(p, "=")
+			// A name that doesn't decode is masked too, value and all.
+			if n, err := url.QueryUnescape(name); err != nil {
+				params[i], masked = passwordMask, true
+			} else if strings.EqualFold(n, "password") || strings.EqualFold(n, "sslpassword") {
+				params[i], masked = name+"="+passwordMask, true
+			}
+		}
+		u.RawQuery = strings.Join(params, "&")
+	}
+	if !masked {
+		return s
+	}
+	return u.String()
 }
 
 // secretString accepts only a string. A secret that YAML reads as a number

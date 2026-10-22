@@ -204,7 +204,7 @@ func (s *server) GetStatus(_ context.Context, _ gen.GetStatusRequestObject) (gen
 	}
 	out.Webhooks = webhooks(st.Webhooks)
 	d := st.Database
-	out.Database = gen.Database{Path: d.Path, Restored: d.Restored, RestoredAsOf: d.RestoredAsOf,
+	out.Database = gen.Database{Backend: d.Backend, Url: d.URL, Path: d.Path, Tls: d.TLS, Restored: d.Restored, RestoredAsOf: d.RestoredAsOf,
 		HistoryWriteFailures: int64(d.HistoryWriteFailures), LastWriteFailure: d.LastWriteFailure, LastWriteError: optional(d.LastWriteError)}
 	return gen.GetStatus200JSONResponse{Body: out}, nil
 }

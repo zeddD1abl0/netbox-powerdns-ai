@@ -22,6 +22,7 @@ import (
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/metrics"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/netbox"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/powerdns"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/store"
 )
 
 // pages maps each generated page's file name to its writer.
@@ -37,7 +38,10 @@ var pages = map[string]func(io.Writer) error{
 		if err := netbox.WriteReference(w); err != nil {
 			return err
 		}
-		return powerdns.WriteReference(w)
+		if err := powerdns.WriteReference(w); err != nil {
+			return err
+		}
+		return store.WriteReference(w)
 	},
 }
 

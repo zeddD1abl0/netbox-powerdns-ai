@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -48,7 +49,7 @@ func returning(r drift.Report) RefreshFunc {
 func TestRefreshesAreKept(t *testing.T) {
 	st := testStore(t)
 	r := report(group("site-a", drift.StateInSync), failedGroup("site-b"))
-	s, logs, _ := testService(t, Options{Groups: twoGroups, History: st, DatabasePath: st.Path(), Refresh: func(context.Context, []drift.ZoneRef) (drift.Report, error) {
+	s, logs, _ := testService(t, Options{Groups: twoGroups, History: st, Database: DatabaseInfo{Backend: "sqlite", Path: st.Path()}, Refresh: func(context.Context, []drift.ZoneRef) (drift.Report, error) {
 		return r, nil
 	}})
 	ctx := t.Context()
@@ -96,7 +97,7 @@ func TestRestore(t *testing.T) {
 	// The second service doesn't serve site-b, and serves site-c, which was
 	// never read.
 	groups := []Group{{Name: "site-a", URL: "https://a"}, {Name: "site-c", URL: "https://c"}}
-	s, logs, _ := testService(t, Options{Groups: groups, History: st, DatabasePath: st.Path(), Refresh: returning(report())})
+	s, logs, _ := testService(t, Options{Groups: groups, History: st, Database: DatabaseInfo{Backend: "sqlite", Path: st.Path()}, Refresh: returning(report())})
 	if s.Status().Ready {
 		t.Fatal("ready before Restore")
 	}
@@ -156,7 +157,7 @@ func (failingHistory) RestoreDrift(context.Context) (store.Restored, error) {
 // TestHistoryWriteFailure checks that a refresh whose history can't be
 // written is still served, and the failure counted, logged and shown.
 func TestHistoryWriteFailure(t *testing.T) {
-	s, logs, _ := testService(t, Options{Groups: twoGroups, History: failingHistory{}, DatabasePath: "/x/nbpdns.db",
+	s, logs, _ := testService(t, Options{Groups: twoGroups, History: failingHistory{}, Database: DatabaseInfo{Backend: "sqlite", Path: "/x/nbpdns.db"},
 		Refresh: returning(report(group("site-a", drift.StateDrift), group("site-b", drift.StateInSync)))})
 	s.Restore(t.Context())
 	s.refresh(t.Context(), time.Now(), batch{})
@@ -214,5 +215,46 @@ func TestSetTiming(t *testing.T) {
 	status := s.Status()
 	if status.Schedule.IntervalSeconds != 0.05 || status.Schedule.TimeoutSeconds != 1 || status.Webhooks.DelaySeconds != 0.2 {
 		t.Errorf("schedule %+v, webhooks' delay %v, want the new timing", status.Schedule, status.Webhooks.DelaySeconds)
+	}
+}
+
+// TestStatusDatabase checks how /status shows each database (ADR-0046).
+func TestStatusDatabase(t *testing.T) {
+	yes, no := true, false
+	tests := []struct {
+		name string
+		db   DatabaseInfo
+		want string
+	}{
+		{"SQLite", DatabaseInfo{Backend: "sqlite", URL: "sqlite:///var/lib/nbpdns/nbpdns.db", Path: "/var/lib/nbpdns/nbpdns.db"},
+			"Database: /var/lib/nbpdns/nbpdns.db\n"},
+		{"PostgreSQL over TLS", DatabaseInfo{Backend: "postgresql", URL: "postgres://nbpdns:xxxxx@db/nbpdns", TLS: &yes},
+			"Database: PostgreSQL, postgres://nbpdns:xxxxx@db/nbpdns, over TLS\n"},
+		{"PostgreSQL unencrypted", DatabaseInfo{Backend: "postgresql", URL: "postgres://db/nbpdns", TLS: &no},
+			"Database: PostgreSQL, postgres://db/nbpdns, unencrypted\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, _, _ := testService(t, Options{Groups: twoGroups, Database: tt.db, Refresh: returning(report())})
+			status := s.Status()
+			var page strings.Builder
+			if err := writeStatus(&page, status); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(page.String(), tt.want) {
+				t.Errorf("the status page doesn't have %q:\n%s", tt.want, page.String())
+			}
+			b, err := json.Marshal(status.Database)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got map[string]any
+			if err := json.Unmarshal(b, &got); err != nil {
+				t.Fatal(err)
+			}
+			if got["backend"] != tt.db.Backend || got["url"] != tt.db.URL || (got["tls"] == nil) != (tt.db.TLS == nil) {
+				t.Errorf("database as JSON = %s, want %+v", b, tt.db)
+			}
+		})
 	}
 }

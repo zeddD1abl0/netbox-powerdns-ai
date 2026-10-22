@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/lab"
 )
 
 // A backend is a database that the store's tests run on: SQLite, and, with
@@ -64,6 +67,40 @@ func (b backend) migrated(t *testing.T) *Store {
 		t.Fatal(err)
 	}
 	return s
+}
+
+// TestBackend checks what a store says of its database.
+func TestBackend(t *testing.T) {
+	onEach(t, func(t *testing.T, db backend) {
+		s := db.open(t)
+		want := map[string]string{"sqlite": SQLite, "postgres": PostgreSQL}[db.name]
+		if s.Backend() != want {
+			t.Errorf("Backend() = %q, want %q", s.Backend(), want)
+		}
+		// Neither the test's SQLite nor the lab's PostgreSQL has TLS.
+		if s.TLS() || s.Cleartext() != (want == PostgreSQL) {
+			t.Errorf("TLS() = %v, Cleartext() = %v; want no TLS, and cleartext on PostgreSQL", s.TLS(), s.Cleartext())
+		}
+		if r := s.ServerRelease(); (r == "") != (want == SQLite) || (r != "" && !SupportedRelease(r)) {
+			t.Errorf("ServerRelease() = %q, want a supported release on PostgreSQL only", r)
+		}
+	})
+}
+
+// TestSupportedMatchesLab checks that the lab runs the supported PostgreSQL
+// release, so that the integration tests cover it.
+func TestSupportedMatchesLab(t *testing.T) {
+	if !slices.Equal(Supported, []string{lab.PostgresVersion}) {
+		t.Errorf("Supported = %v, but the lab runs %v", Supported, lab.PostgresVersion)
+	}
+}
+
+func TestSupportedRelease(t *testing.T) {
+	for release, want := range map[string]bool{"18.1": true, "18": true, "17.6": false, "180.1": false, "": false} {
+		if got := SupportedRelease(release); got != want {
+			t.Errorf("SupportedRelease(%q) = %v, want %v", release, got, want)
+		}
+	}
 }
 
 func TestOpenCreatesTheDatabase(t *testing.T) {

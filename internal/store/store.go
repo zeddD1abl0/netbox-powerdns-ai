@@ -37,6 +37,12 @@ const busyTimeout = 5 * time.Second
 // audit trail's, whose hashes cover times as stored.
 const TimeLayout = audit.TimeLayout
 
+// The databases that a store can be open on, as Backend names them.
+const (
+	SQLite     = "sqlite"
+	PostgreSQL = "postgresql"
+)
+
 // A Store is an open database.
 type Store struct {
 	db      *sql.DB
@@ -44,10 +50,23 @@ type Store struct {
 	q       sqlite.Querier
 	// path is SQLite's file, or empty on PostgreSQL.
 	path string
+	// On PostgreSQL, conn is the connection that the store opened with,
+	// and release is the server's, such as 18.1.
+	conn    connection
+	release string
+}
+
+// A connection says how a store connects to PostgreSQL.
+type connection struct {
+	// encrypted is whether it uses TLS, and socket whether it's through a
+	// Unix socket, which needs none.
+	encrypted, socket bool
 }
 
 // A dialect is what the store does differently on each database.
 type dialect struct {
+	// name is the database's, as Backend returns it.
+	name string
 	// queries returns the store's queries on db, the database or one of its
 	// transactions.
 	queries func(db sqlite.DBTX) sqlite.Querier
@@ -69,6 +88,7 @@ var readOptions = &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelRepeatableR
 // sqliteDialect is SQLite's: its immediate transactions take the write lock
 // as they begin, so writes run one at a time already.
 var sqliteDialect = &dialect{
+	name:         SQLite,
 	queries:      func(db sqlite.DBTX) sqlite.Querier { return sqlite.New(db) },
 	goose:        goose.DialectSQLite3,
 	gooseOptions: func() ([]goose.ProviderOption, error) { return nil, nil },
@@ -119,6 +139,25 @@ func Open(ctx context.Context, path string, opts Options) (*Store, error) {
 // Path returns SQLite's file, as an absolute path, or nothing on
 // PostgreSQL.
 func (s *Store) Path() string { return s.path }
+
+// Backend returns the kind of database the store is open on: SQLite or
+// PostgreSQL.
+func (s *Store) Backend() string { return s.dialect.name }
+
+// TLS reports whether the store's connection to PostgreSQL uses TLS, as it
+// did when the store opened it: with sslmode at prefer, libpq's default, it
+// may not. It's false on SQLite, which has no connection.
+func (s *Store) TLS() bool { return s.conn.encrypted }
+
+// Cleartext reports whether the store's connection to PostgreSQL crosses a
+// network unencrypted: over TCP, without TLS.
+func (s *Store) Cleartext() bool {
+	return s.dialect == postgresDialect && !s.conn.encrypted && !s.conn.socket
+}
+
+// ServerRelease returns the PostgreSQL server's release, such as 18.1, or
+// nothing on SQLite.
+func (s *Store) ServerRelease() string { return s.release }
 
 // Close closes the database.
 func (s *Store) Close() error { return s.db.Close() }

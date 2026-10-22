@@ -44,7 +44,7 @@ a secret's value.
 |---|---|---|---|
 | [`audit.retention_days`](#auditretention_days) | runtime | integer, 1 to 36500 | `2557` |
 | [`database.master_key`](#databasemaster_key) | bootstrap | string, secret | none |
-| [`database.url`](#databaseurl) | bootstrap | a `sqlite:` URL | `sqlite:///var/lib/nbpdns/nbpdns.db` |
+| [`database.url`](#databaseurl) | bootstrap | a `sqlite:`, `postgres://` or `postgresql://` URL, secret | `sqlite:///var/lib/nbpdns/nbpdns.db` |
 | [`drift.group_concurrency`](#driftgroup_concurrency) | runtime | integer, 1 to 32 | `4` |
 | [`drift.history_retention_days`](#drifthistory_retention_days) | runtime | integer, 1 to 36500 | `400` |
 | [`drift.interval`](#driftinterval) | runtime | duration, at least `10s` | `5m` |
@@ -109,21 +109,38 @@ secrets that it can't open. `nbpdns secrets rotate-master-key` replaces it.
 
 ## `database.url`
 
-Where `nbpdns serve` keeps its state, such as
-`sqlite:///var/lib/nbpdns/nbpdns.db`. `sqlite:///` and an absolute path, with
-three slashes, or `sqlite:` and a path relative to the working directory. Its
-directory must exist, and nbpdns's user must be able to write to it: in the
-image, mount a volume at `/var/lib/nbpdns`, writable by user 65532. nbpdns
-creates the file, readable only by its owner, and a lock file beside it, named
-for it with `.lock` added, which stops a second `nbpdns serve` from using the
-same database. Commands that only read NetBox or PowerDNS, such as `nbpdns
-drift`, don't use it.
+Where `nbpdns serve` keeps its state: a SQLite file, such as
+`sqlite:///var/lib/nbpdns/nbpdns.db`, or a PostgreSQL database, such as
+`postgres://nbpdns@db.example.com/nbpdns?sslmode=verify-full`. For SQLite,
+`sqlite:///` and an absolute path, with three slashes, or `sqlite:` and a path
+relative to the working directory. Its directory must exist, and nbpdns's user
+must be able to write to it: in the image, mount a volume at `/var/lib/nbpdns`,
+writable by user 65532. nbpdns creates the file, readable only by its owner,
+and a lock file beside it, named for it with `.lock` added, which stops a
+second `nbpdns serve` from using the same database. For PostgreSQL 18, a
+`postgres://` or `postgresql://` URL in libpq's form, with libpq's parameters
+and defaults, such as `sslmode`, `prefer` by default, `sslrootcert`, `sslcert`,
+`sslkey`, `passfile` and `host` for a Unix socket. libpq's `PG` environment
+variables, such as `PGPASSWORD`, fill in what the URL leaves out. The database
+must exist; nbpdns creates its tables. It's a secret, since it can hold a
+password: nbpdns shows and logs it with each password masked as `xxxxx`.
+Commands that only read NetBox or PowerDNS, such as `nbpdns drift`, don't use
+it.
 
 - **Kind:** bootstrap
-- **Type:** a `sqlite:` URL
+- **Type:** a `sqlite:`, `postgres://` or `postgresql://` URL, secret
 - **Default:** `sqlite:///var/lib/nbpdns/nbpdns.db`
 - **Environment variable:** `NBPDNS_DATABASE_URL`
 - **Flag:** `--database-url`
+- **From a file:** `NBPDNS_DATABASE_URL_FILE`, `--database-url-file`, or `database.url_file` in the config file
+
+> [!WARNING]
+> With `sslmode` at `prefer`, libpq's default, or at `allow` or `disable`, the
+> password and the data cross the network unencrypted wherever the server
+> doesn't offer TLS, and nbpdns logs a warning each time it connects that way.
+> Below `verify-full`, nothing checks that the server is the one that the URL
+> names. Use `sslmode=verify-full`, with `sslrootcert` if the server's
+> certificate comes from a private CA.
 
 ## `drift.group_concurrency`
 
@@ -485,7 +502,7 @@ powerdns:
 
 ## Example config file
 
-Every key except the secrets, with its default:
+Every key with its default, except the secrets that have none:
 
 ```yaml
 audit:

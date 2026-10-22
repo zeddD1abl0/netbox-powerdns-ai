@@ -33,6 +33,9 @@ func fieldPaths(t reflect.Type, prefix string, paths map[string]bool) {
 			ft = ft.Elem()
 		}
 		switch {
+		case f.Anonymous && name == "":
+			// encoding/json puts an embedded struct's fields in its own.
+			fieldPaths(ft, prefix, paths)
 		case ft.Kind() == reflect.Struct && ft != reflect.TypeFor[time.Time]():
 			paths[path] = false
 			fieldPaths(ft, path+".", paths)

@@ -45,21 +45,31 @@ type AuditConfig struct {
 	RetentionDays int
 }
 
-// DatabaseConfig says where `nbpdns serve` keeps its state (ADR-0038).
+// DatabaseConfig says where `nbpdns serve` keeps its state (ADR-0038,
+// ADR-0046).
 type DatabaseConfig struct {
-	// URL is the database's location, such as
-	// sqlite:///var/lib/nbpdns/nbpdns.db.
-	URL string
+	// URL is the database's location: a sqlite: URL, such as
+	// sqlite:///var/lib/nbpdns/nbpdns.db, or a PostgreSQL URL, which can hold
+	// a password. ShownURL shows it.
+	URL Secret
 	// MasterKey seals the secrets that the database stores (ADR-0041), in
 	// base64.
 	MasterKey Secret
 }
 
-// SQLitePath returns the file that URL names. The loader has checked URL.
+// SQLitePath returns the file that URL names, or nothing if it names a
+// PostgreSQL database. The loader has checked URL.
 func (c DatabaseConfig) SQLitePath() string {
-	p, _ := sqlitePath(c.URL)
+	if isPostgresURL(c.URL.Reveal()) {
+		return ""
+	}
+	p, _ := sqlitePath(c.URL.Reveal())
 	return p
 }
+
+// ShownURL returns URL with its passwords masked, as nbpdns shows and logs
+// it.
+func (c DatabaseConfig) ShownURL() string { return maskURL(c.URL.Reveal()) }
 
 // ServerConfig configures the listener of `nbpdns serve`.
 type ServerConfig struct {
@@ -159,16 +169,26 @@ func keys(c *Config) []Key {
 			_, err := secrets.ParseMasterKey(s)
 			return err
 		}),
-		stringKey(&c.Database.URL, "a `sqlite:` URL", "url", Key{
-			Name:    "database.url",
-			Summary: "Where `nbpdns serve` keeps its state, such as `sqlite:///var/lib/nbpdns/nbpdns.db`.",
-			Details: "`sqlite:///` and an absolute path, with three slashes, or `sqlite:` and a path relative to the working directory. " +
+		databaseURLKey(&c.Database.URL, Key{
+			Name: "database.url",
+			Summary: "Where `nbpdns serve` keeps its state: a SQLite file, such as `sqlite:///var/lib/nbpdns/nbpdns.db`, " +
+				"or a PostgreSQL database, such as `postgres://nbpdns@db.example.com/nbpdns?sslmode=verify-full`.",
+			Details: "For SQLite, `sqlite:///` and an absolute path, with three slashes, or `sqlite:` and a path relative to the working directory. " +
 				"Its directory must exist, and nbpdns's user must be able to write to it: in the image, mount a volume at `/var/lib/nbpdns`, " +
 				"writable by user 65532. nbpdns creates the file, readable only by its owner, and a lock file beside it, " +
 				"named for it with `.lock` added, which stops a second `nbpdns serve` from using the same database. " +
+				"For PostgreSQL 18, a `postgres://` or `postgresql://` URL in libpq's form, with libpq's parameters and defaults, " +
+				"such as `sslmode`, `prefer` by default, `sslrootcert`, `sslcert`, `sslkey`, `passfile` and `host` for a Unix socket. " +
+				"libpq's `PG` environment variables, such as `PGPASSWORD`, fill in what the URL leaves out. " +
+				"The database must exist; nbpdns creates its tables. " +
+				"It's a secret, since it can hold a password: nbpdns shows and logs it with each password masked as `xxxxx`. " +
 				"Commands that only read NetBox or PowerDNS, such as `nbpdns drift`, don't use it.",
+			Warning: "With `sslmode` at `prefer`, libpq's default, or at `allow` or `disable`, the password and the data cross the network unencrypted " +
+				"wherever the server doesn't offer TLS, and nbpdns logs a warning each time it connects that way. " +
+				"Below `verify-full`, nothing checks that the server is the one that the URL names. " +
+				"Use `sslmode=verify-full`, with `sslrootcert` if the server's certificate comes from a private CA.",
 			Default: "sqlite:///var/lib/nbpdns/nbpdns.db",
-		}, checkDatabaseURL),
+		}),
 		enumKey(&c.Log.Level, Key{
 			Name:    "log.level",
 			Runtime: true,

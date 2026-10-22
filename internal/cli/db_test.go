@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/config"
 )
 
 func TestDBCommands(t *testing.T) {
@@ -110,4 +112,57 @@ func loggedDatabaseID(t *testing.T, log string) string {
 	}
 	t.Fatalf("serve didn't log the database's ID:\n%s", log)
 	return ""
+}
+
+// TestPostgresURLIsSecret checks that a PostgreSQL URL's password shows
+// nowhere: not in config show, which masks it, nor in the error of a
+// connection that fails, nor in the warning of config show, which carries on
+// without the database (ADR-0046).
+func TestPostgresURLIsSecret(t *testing.T) {
+	const pw = "s3cret-pw"
+	where := "postgres://nbpdns:" + pw + "@127.0.0.1:1/nbpdns?sslmode=disable&sslpassword=" + pw
+	shown := "postgres://nbpdns:xxxxx@127.0.0.1:1/nbpdns?sslmode=disable&sslpassword=xxxxx"
+	env := map[string]string{"NBPDNS_DATABASE_URL": where}
+
+	code, stdout, stderr := run(t, env, "config", "show")
+	if code != exitOK || !regexp.MustCompile(`(?m)^database\.url +`+regexp.QuoteMeta(shown)+` +env NBPDNS_DATABASE_URL$`).MatchString(stdout) {
+		t.Errorf("config show: exit %d, want database.url as %s:\n%s%s", code, shown, stdout, stderr)
+	}
+	if !strings.Contains(stderr, "couldn't read the settings that the database stores") || !strings.Contains(stderr, "connection refused") {
+		t.Errorf("config show without the database: no warning:\n%s", stderr)
+	}
+	all := stdout + stderr
+	for _, args := range [][]string{{"db", "status"}, {"db", "migrate"}, {"serve"}, {"settings", "list"}} {
+		code, stdout, stderr := run(t, with(env, "NBPDNS_SERVER_LISTEN", "127.0.0.1:0"), args...)
+		if code != exitError || !strings.Contains(stderr, "opening the database: failed to connect to `user=nbpdns database=nbpdns`") {
+			t.Errorf("%s: exit %d, want %d, failing to connect:\n%s", strings.Join(args, " "), code, exitError, stderr)
+		}
+		all += stdout + stderr
+	}
+	if strings.Contains(all, pw) {
+		t.Errorf("the output shows the password:\n%s", all)
+	}
+}
+
+// TestFingerprintLeavesOutThePassword checks that the configuration's
+// fingerprint, which serve records in the audit trail at each start, covers
+// database.url without its password: a change of password alone doesn't
+// change it, and a change of database does (ADR-0046).
+func TestFingerprintLeavesOutThePassword(t *testing.T) {
+	fingerprint := func(url string) string {
+		t.Helper()
+		t.Setenv("NBPDNS_DATABASE_URL", url)
+		cfg, settings, err := config.NewLoader().Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return (&session{cfg: cfg, settings: settings}).configFingerprint()
+	}
+	one := fingerprint("postgres://nbpdns:first-s3cret@db.example.com/nbpdns")
+	if two := fingerprint("postgres://nbpdns:second-s3cret@db.example.com/nbpdns"); two != one {
+		t.Errorf("a change of password changed the fingerprint, from %s to %s", one, two)
+	}
+	if other := fingerprint("postgres://nbpdns:first-s3cret@db2.example.com/nbpdns"); other == one {
+		t.Error("a change of database didn't change the fingerprint")
+	}
 }

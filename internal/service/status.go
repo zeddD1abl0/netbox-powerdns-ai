@@ -39,11 +39,24 @@ type Status struct {
 	Database      Database    `json:"database"`
 }
 
+// DatabaseInfo says which database the service keeps its history in, for
+// /status (ADR-0046).
+type DatabaseInfo struct {
+	// Backend is sqlite or postgresql.
+	Backend string `json:"backend"`
+	// URL is database.url, with its passwords masked.
+	URL string `json:"url"`
+	// Path is SQLite's file, or empty on PostgreSQL.
+	Path string `json:"path"`
+	// TLS is whether the connection to PostgreSQL uses TLS, or nil on
+	// SQLite.
+	TLS *bool `json:"tls"`
+}
+
 // Database is the state of the database that the service keeps its
 // history in (ADR-0038, ADR-0042).
 type Database struct {
-	// Path is the database's file.
-	Path string `json:"path"`
+	DatabaseInfo
 	// Restored is whether the service started from the reports it kept
 	// before it restarted, and RestoredAsOf is when the refresh before the
 	// restart finished, or null.
@@ -189,7 +202,7 @@ func (s *Service) Status() Status {
 		Groups:   []GroupInfo{},
 		Tracing:  Tracing{Exported: s.o.OTLP.Endpoint != "", Endpoint: s.o.OTLP.Endpoint, Protocol: s.o.OTLP.Protocol},
 		Webhooks: s.webhooks(),
-		Database: Database{Path: s.o.DatabasePath, Restored: st.restored, HistoryWriteFailures: st.writeFailures,
+		Database: Database{DatabaseInfo: s.o.Database, Restored: st.restored, HistoryWriteFailures: st.writeFailures,
 			LastWriteError: st.lastWriteError},
 	}
 	if st.restored && !st.restoredAsOf.IsZero() {
@@ -414,11 +427,19 @@ func writeStatus(w io.Writer, st Status) error {
 
 // writeDatabase writes the database's state with p.
 func writeDatabase(p func(string, ...any), d Database) {
-	if d.Path == "" {
+	switch {
+	case d.Backend == "postgresql":
+		conn := "unencrypted"
+		if d.TLS != nil && *d.TLS {
+			conn = "over TLS"
+		}
+		p("Database: PostgreSQL, %s, %s\n", d.URL, conn)
+	case d.Path != "":
+		p("Database: %s\n", d.Path)
+	default:
 		p("\n")
 		return
 	}
-	p("Database: %s\n", d.Path)
 	if d.Restored {
 		p("  restored:      the reports of the refresh that finished %s, before the restart\n", when(d.RestoredAsOf))
 	}

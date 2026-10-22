@@ -91,3 +91,37 @@ func TestLockErrors(t *testing.T) {
 		t.Errorf("Acquire() in a read-only directory: error = %v, want it to contain %q", err, want)
 	}
 }
+
+// TestStoreLock checks that one process at a time holds a database's lock,
+// on each database, and that Close releases it.
+func TestStoreLock(t *testing.T) {
+	onEach(t, func(t *testing.T, db backend) {
+		where := db.create(t)
+		l, err := db.connect(t, where).Lock(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Another process, with a store of its own.
+		other := db.connect(t, where)
+		_, err = other.Lock(t.Context())
+		var le *LockedError
+		if !errors.As(err, &le) {
+			t.Fatalf("a second Lock() error = %v, want a LockedError", err)
+		}
+		host, _ := os.Hostname()
+		if want := fmt.Sprintf("host %s, PID %d, since ", host, os.Getpid()); !strings.HasPrefix(le.Holder, want) {
+			t.Errorf("Holder = %q, want it to start %q", le.Holder, want)
+		}
+		if !strings.Contains(err.Error(), "another nbpdns holds the database's lock") {
+			t.Errorf("error = %v", err)
+		}
+		if err := l.Close(); err != nil {
+			t.Fatal(err)
+		}
+		l2, err := other.Lock(t.Context())
+		if err != nil {
+			t.Fatalf("Lock() after Close() error = %v", err)
+		}
+		_ = l2.Close()
+	})
+}

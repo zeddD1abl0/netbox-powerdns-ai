@@ -12,6 +12,20 @@ All notable changes to this project are recorded here. The format follows
   `make lab-up` creates a database in it for nbpdns, `nbpdns`, owned by the
   role `nbpdns`. The store's integration tests run on it as well as on
   SQLite, each test in a database of its own.
+- `nbpdns serve` and every command that uses its database run on
+  PostgreSQL 18 as well as SQLite: give `database.url` a `postgres://` or
+  `postgresql://` URL, in libpq's form, with its parameters and defaults,
+  such as `sslmode`, `sslrootcert`, `sslcert`, `sslkey` and `passfile`,
+  and its `PG` environment variables. One `serve` uses a database at a
+  time, under a session advisory lock. `database.url` is now a secret, so
+  it can come from `NBPDNS_DATABASE_URL_FILE`, and nbpdns shows and logs it
+  with each password masked as `xxxxx`. It warns of a connection that
+  crosses the network unencrypted, and of a PostgreSQL release that it
+  doesn't support. [Run nbpdns on PostgreSQL](docs/how-to/run-nbpdns-on-postgresql.md)
+  sets it up, and [Back up nbpdns's database](docs/how-to/back-up-nbpdns-database.md)
+  copies it with `pg_dump`.
+- `/status`, `/api/status` and `nbpdns db status` show the database's
+  backend, its URL, masked, and whether its connection uses TLS.
 
 ### Changed
 

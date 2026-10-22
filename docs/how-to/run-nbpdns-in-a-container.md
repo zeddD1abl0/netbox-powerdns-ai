@@ -41,6 +41,9 @@ You need:
   ```text
   the database's directory, /var/lib/nbpdns, doesn't exist; create it, or mount a volume there, writable by user 65532
   ```
+
+  With its state in PostgreSQL, it needs no volume, as
+  [Run nbpdns on PostgreSQL](run-nbpdns-on-postgresql.md) describes.
 - Only one `serve` may use a database at a time. A second one refuses to
   start, and names the first one's host and PID.
 - It logs JSON to standard error.

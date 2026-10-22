@@ -10,7 +10,6 @@ import (
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/audit"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/config"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/secrets"
-	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/store"
 )
 
 func newSecretsCmd(a *app) *cobra.Command {
@@ -67,16 +66,12 @@ func newSecretsRotateCmd(a *app) *cobra.Command {
 				return errors.New("the new master key is database.master_key")
 			}
 			// serve opens the secrets with the old key, so it mustn't run.
-			lock, err := store.Acquire(s.cfg.Database.SQLitePath())
-			if err != nil {
-				return err
-			}
-			defer lock.Close()
-			st, err := s.currentStore(ctx)
+			st, lock, err := s.openLocked(ctx, s.currentStore)
 			if err != nil {
 				return err
 			}
 			defer st.Close()
+			defer lock.Close()
 			n, err := st.RotateMasterKey(ctx, old.ID(), next.ID(), func(place, sealed string) (string, error) {
 				return secrets.Rewrap(old, next, place, sealed)
 			}, audit.OSUser(), *reason)

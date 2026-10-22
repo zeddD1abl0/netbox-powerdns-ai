@@ -104,7 +104,7 @@ func newServeCmd(a *app) *cobra.Command {
 				WebhookDelay: s.cfg.Drift.WebhookDelay,
 				Webhooks:     s.cfg.NetBox.WebhookSecret.IsSet(),
 				History:      st,
-				DatabasePath: st.Path(),
+				Database:     s.databaseInfo(st),
 				Log:          s.log,
 				Tracer:       s.tracer,
 				Metrics:      s.metrics,
@@ -147,22 +147,17 @@ const pruneInterval = 24 * time.Hour
 // (ADR-0038), opens and migrates the database, applies its settings,
 // mirrors the config file's groups into it (ADR-0040), and records serve's
 // start in the audit trail (ADR-0039). Its close function records serve's stop,
-// with err, the error it stopped with, if any, then closes the database and
-// releases the lock.
+// with err, the error it stopped with, if any, then releases the lock and
+// closes the database.
 func (s *session) openServeStore(ctx context.Context) (*store.Store, int64, func(err error), error) {
-	// The lock comes first, so that a second serve changes nothing.
-	lock, err := store.Acquire(s.cfg.Database.SQLitePath())
+	// A second serve changes nothing.
+	st, lock, err := s.openLocked(ctx, s.createStore)
 	if err != nil {
-		return nil, 0, nil, err
-	}
-	st, err := s.openStore(ctx, true)
-	if err != nil {
-		_ = lock.Close()
 		return nil, 0, nil, err
 	}
 	fail := func(err error) (*store.Store, int64, func(error), error) {
-		_ = st.Close()
 		_ = lock.Close()
+		_ = st.Close()
 		return nil, 0, nil, err
 	}
 	if _, err := s.migrate(ctx, st); err != nil {
@@ -172,7 +167,12 @@ func (s *session) openServeStore(ctx context.Context) (*store.Store, int64, func
 	if err != nil {
 		return fail(err)
 	}
-	s.log.InfoContext(ctx, "opened the database", "path", st.Path(), "database_id", info.ID)
+	if st.Backend() == store.PostgreSQL {
+		s.log.InfoContext(ctx, "opened the database", "backend", st.Backend(), "url", s.cfg.Database.ShownURL(),
+			"tls", st.TLS(), "release", st.ServerRelease(), "database_id", info.ID)
+	} else {
+		s.log.InfoContext(ctx, "opened the database", "backend", st.Backend(), "path", st.Path(), "database_id", info.ID)
+	}
 	// The runtime settings that the database stores (ADR-0040), which the
 	// configuration's fingerprint covers.
 	settingsVersion, err := s.applyStored(ctx, st)
@@ -221,9 +221,19 @@ func (s *session) openServeStore(ctx context.Context) (*store.Store, int64, func
 		} else {
 			s.metrics.AuditEvents([]audit.Event{e})
 		}
-		_ = st.Close()
 		_ = lock.Close()
+		_ = st.Close()
 	}, nil
+}
+
+// databaseInfo describes st, the database at database.url, for /status.
+func (s *session) databaseInfo(st *store.Store) service.DatabaseInfo {
+	d := service.DatabaseInfo{Backend: st.Backend(), URL: s.cfg.Database.ShownURL(), Path: st.Path()}
+	if st.Backend() == store.PostgreSQL {
+		encrypted := st.TLS()
+		d.TLS = &encrypted
+	}
+	return d
 }
 
 // configFingerprint returns the SHA-384 of the configuration's settings,

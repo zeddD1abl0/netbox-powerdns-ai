@@ -348,6 +348,11 @@ type ChangeRequest struct {
 
 // Database The database that the service keeps its state in.
 type Database struct {
+	// Backend The database that `database.url` names.
+	//
+	// Examples: postgresql
+	Backend string `json:"backend"`
+
 	// HistoryWriteFailures The refreshes that couldn't be written to the drift history since the service started. Each is still served.
 	//
 	// Examples: 0
@@ -363,7 +368,7 @@ type Database struct {
 	// Examples: null
 	LastWriteFailure *time.Time `json:"last_write_failure"`
 
-	// Path The database's file, from `database.url`.
+	// Path SQLite's file, from `database.url`, or empty on PostgreSQL.
 	//
 	// Examples: /var/lib/nbpdns/nbpdns.db
 	Path string `json:"path"`
@@ -377,6 +382,16 @@ type Database struct {
 	//
 	// Examples: 2026-10-08T00:55:40Z
 	RestoredAsOf *time.Time `json:"restored_as_of"`
+
+	// Tls Whether the connection to PostgreSQL uses TLS, as it did when the service started, or null on SQLite. With `sslmode` at `prefer`, libpq's default, it may not.
+	//
+	// Examples: true
+	Tls *bool `json:"tls"`
+
+	// Url `database.url`, with each password in it, the URL's own and the values of its `password` and `sslpassword` parameters, masked as `xxxxx`.
+	//
+	// Examples: postgres://nbpdns:xxxxx@db.example.com/nbpdns?sslmode=verify-full
+	Url string `json:"url"`
 }
 
 // DriftPolicy What nbpdns does about a zone's drift: `report` reports it, `enforce` reports it and, from M14, corrects it, and `ignore` doesn't compare the zone.

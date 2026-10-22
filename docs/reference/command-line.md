@@ -30,7 +30,8 @@ in the [configuration reference](configuration.md).
 | `--config` | `string` | none | The YAML config file to read, instead of `$NBPDNS_CONFIG`. |
 | `--database-master-key` | `string` | none | The master key that seals the secrets the database stores, such as a `netbox.token` that `nbpdns settings set` stores: 32 random bytes, in base64. |
 | `--database-master-key-file` | `path` | none | Read `database.master_key` from this file. |
-| `--database-url` | `url` | `sqlite:///var/lib/nbpdns/nbpdns.db` | Where `nbpdns serve` keeps its state, such as `sqlite:///var/lib/nbpdns/nbpdns.db`. |
+| `--database-url` | `url` | `sqlite:///var/lib/nbpdns/nbpdns.db` | Where `nbpdns serve` keeps its state: a SQLite file, such as `sqlite:///var/lib/nbpdns/nbpdns.db`, or a PostgreSQL database, such as `postgres://nbpdns@db.example.com/nbpdns?sslmode=verify-full`. |
+| `--database-url-file` | `path` | none | Read `database.url` from this file. |
 | `--drift-group-concurrency` | `integer` | `4` | How many server groups are read and compared at once. |
 | `--drift-history-retention-days` | `integer` | `400` | How many days the drift history keeps each refresh, and each zone's changes. |
 | `--drift-interval` | `duration` | `5m` | How often `nbpdns serve` refreshes the drift report, from the start of one refresh to the start of the next. |
@@ -203,10 +204,11 @@ Subcommands: [`migrate`](#nbpdns-db-migrate) and [`status`](#nbpdns-db-status).
 
 ### `nbpdns db migrate`
 
-Create the database at database.url if it doesn't exist, and apply the
-migrations it lacks, each in its own transaction. It refuses while nbpdns
-serve runs on the database, since serve applies them itself when it starts,
-and on a database that a newer nbpdns has migrated.
+Apply the migrations that the database at database.url lacks, each in its own
+transaction, and create a SQLite database if it doesn't exist. A PostgreSQL
+database must exist. It refuses while nbpdns serve runs on the database, since
+serve applies them itself when it starts, and on a database that a newer
+nbpdns has migrated.
 
 ```text
 nbpdns db migrate
@@ -214,8 +216,9 @@ nbpdns db migrate
 
 ### `nbpdns db status`
 
-Show the database at database.url: its file, its identity, and each migration
-that this nbpdns knows, with when it was applied, or that it's pending.
+Show the database at database.url: its file, or its URL, with any password
+masked, its identity, and each migration that this nbpdns knows, with when it
+was applied, or that it's pending.
 
 ```text
 nbpdns db status [flags]

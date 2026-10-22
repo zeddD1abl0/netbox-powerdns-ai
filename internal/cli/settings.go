@@ -325,11 +325,19 @@ func (s *session) storedConfig(ctx context.Context, st *store.Store) (*config.Co
 	return cfg, settings, version, nil
 }
 
+// storeProbeTimeout bounds how long applyStoredIfAny waits for PostgreSQL.
+const storeProbeTimeout = 10 * time.Second
+
 // applyStoredIfAny is applyStored, for a command that works without a
 // database: if there's none, or it can't be read, the configuration stays
-// as it is, and a warning says why.
+// as it is, and a warning says why. It waits for PostgreSQL for
+// storeProbeTimeout at most.
 func (s *session) applyStoredIfAny(ctx context.Context) {
-	if _, err := os.Stat(s.cfg.Database.SQLitePath()); errors.Is(err, fs.ErrNotExist) {
+	if path := s.cfg.Database.SQLitePath(); path == "" {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, storeProbeTimeout)
+		defer cancel()
+	} else if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
 		return
 	}
 	st, err := s.currentStore(ctx)

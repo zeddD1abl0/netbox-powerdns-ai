@@ -268,7 +268,10 @@ The database that the service keeps its state in.
 
 | Field | Type | Description |
 |---|---|---|
-| `path` | `string` | The database's file, from `database.url`. |
+| `backend` | `string` | The database that `database.url` names. |
+| `url` | `string` | `database.url`, with each password in it, the URL's own and the values of its `password` and `sslpassword` parameters, masked as `xxxxx`. |
+| `path` | `string` | SQLite's file, from `database.url`, or empty on PostgreSQL. |
+| `tls` | `boolean`, or null | Whether the connection to PostgreSQL uses TLS, as it did when the service started, or null on SQLite. With `sslmode` at `prefer`, libpq's default, it may not. |
 | `restored` | `boolean` | Whether the service started from the reports it kept before it restarted, which it serves until its first refresh replaces them. |
 | `restored_as_of` | `string` (`date-time`), or null | When the refresh before the restart finished, or null if nothing was restored. |
 | `history_write_failures` | `integer` (`int64`) | The refreshes that couldn't be written to the drift history since the service started. Each is still served. |

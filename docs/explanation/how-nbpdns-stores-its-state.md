@@ -53,6 +53,14 @@ promises. `database.url` says where the file is, by default
   `nbpdns secrets rotate-master-key` do take it, and refuse while `serve`
   runs.
 
+The database can be PostgreSQL 18 instead, when `database.url` is a
+`postgres://` URL, as [Run nbpdns on PostgreSQL](../how-to/run-nbpdns-on-postgresql.md)
+sets up. It holds the same tables, from the same migrations, and one `serve`
+uses it at a time too: `serve` holds a session advisory lock in the
+database, which PostgreSQL releases when the session ends, however it ends.
+[ADR-0046](../adr/0046-the-store-on-postgresql-18-with-pgx-and-a-second-s.md)
+records the decision.
+
 ## Migrations
 
 The schema is built by migrations, which are SQL files embedded in the
@@ -65,10 +73,9 @@ Migrations only move forward. A newer release can migrate a database, but an
 older one refuses a database that a newer one migrated. To go back to an
 older release, restore a copy of the database that was made before the
 upgrade. [Back up nbpdns's database](../how-to/back-up-nbpdns-database.md)
-shows how. The SQL stays portable to PostgreSQL, which M09 adds: `make
-generate` makes the queries' code for each database from the same SQL,
-`make check` fails if either is stale, and a test refuses SQLite's own
-functions.
+shows how. The same SQL runs on SQLite and PostgreSQL: `make generate`
+makes the queries' code for each database from it, `make check` fails if
+either is stale, and a test refuses SQLite's own functions.
 
 ## Settings in the database
 
@@ -250,7 +257,7 @@ from the copies, and keep it for as long as copies made with it exist.
 
 ## What it doesn't do yet
 
-- **PostgreSQL, and more than one instance.** Both come in M09.
+- **More than one instance.** That comes in M09, on PostgreSQL.
 - **Serve the audit trail through the API.** That comes in M10.
 - **Send the audit trail to a SIEM.** That comes in M17.
 - **Export, import, and back up.** Commands for them come in M18.

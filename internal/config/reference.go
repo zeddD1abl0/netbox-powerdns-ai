@@ -69,7 +69,7 @@ func WriteReference(w io.Writer) error {
 	writeGroupsReference(p)
 
 	p("\n## Example config file\n\n")
-	p("Every key except the secrets, with its default:\n\n")
+	p("Every key with its default, except the secrets that have none:\n\n")
 	p("```yaml\n%s```\n", exampleYAML(ks))
 
 	_, err := io.WriteString(w, b.String())
@@ -120,13 +120,13 @@ func writeGroupsReference(p func(string, ...any)) {
 	p("```\n")
 }
 
-// exampleYAML renders every non-secret key with its default, nested the way
-// the config file nests them.
+// exampleYAML renders every key with its default, except the secrets that
+// have none, nested the way the config file nests them.
 func exampleYAML(ks []Key) string {
 	var b strings.Builder
 	var parent string
 	for _, k := range ks {
-		if k.Secret {
+		if k.Secret && k.Default == "" {
 			continue
 		}
 		group, leaf, _ := strings.Cut(k.Name, ".")
