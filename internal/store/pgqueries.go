@@ -43,6 +43,7 @@ var (
 	pgAuditEvent              = func(r postgres.AuditEvent) sqlite.AuditEvent { return sqlite.AuditEvent(r) }
 	pgGetAuditAnchorRow       = func(r postgres.GetAuditAnchorRow) sqlite.GetAuditAnchorRow { return sqlite.GetAuditAnchorRow(r) }
 	pgGetDatabaseInfoRow      = func(r postgres.GetDatabaseInfoRow) sqlite.GetDatabaseInfoRow { return sqlite.GetDatabaseInfoRow(r) }
+	pgGetLeaderRow            = func(r postgres.GetLeaderRow) sqlite.GetLeaderRow { return sqlite.GetLeaderRow(r) }
 	pgServerGroup             = func(r postgres.ServerGroup) sqlite.ServerGroup { return sqlite.ServerGroup(r) }
 	pgSetting                 = func(r postgres.Setting) sqlite.Setting { return sqlite.Setting(r) }
 	pgGroupRefreshesRow       = func(r postgres.GroupRefreshesRow) sqlite.GroupRefreshesRow { return sqlite.GroupRefreshesRow(r) }
@@ -114,6 +115,10 @@ func (p pgQueries) GetDatabaseInfo(ctx context.Context) (sqlite.GetDatabaseInfoR
 	return one(pgGetDatabaseInfoRow)(p.q.GetDatabaseInfo(ctx))
 }
 
+func (p pgQueries) GetLeader(ctx context.Context) (sqlite.GetLeaderRow, error) {
+	return one(pgGetLeaderRow)(p.q.GetLeader(ctx))
+}
+
 func (p pgQueries) GetGroup(ctx context.Context, name string) (sqlite.ServerGroup, error) {
 	return one(pgServerGroup)(p.q.GetGroup(ctx, name))
 }
@@ -182,6 +187,10 @@ func (p pgQueries) LatestZoneRows(ctx context.Context, groupName string) ([]sqli
 	return all(pgDriftZoneHistory)(p.q.LatestZoneRows(ctx, groupName))
 }
 
+func (p pgQueries) LeaderHeartbeat(ctx context.Context, arg sqlite.LeaderHeartbeatParams) (int64, error) {
+	return p.q.LeaderHeartbeat(ctx, postgres.LeaderHeartbeatParams(arg))
+}
+
 func (p pgQueries) ListAuditEvents(ctx context.Context, arg sqlite.ListAuditEventsParams) ([]sqlite.AuditEvent, error) {
 	return all(pgAuditEvent)(p.q.ListAuditEvents(ctx, postgres.ListAuditEventsParams(arg)))
 }
@@ -228,6 +237,10 @@ func (p pgQueries) SequenceValue(ctx context.Context, name string) (int64, error
 
 func (p pgQueries) SetAuditAnchor(ctx context.Context, arg sqlite.SetAuditAnchorParams) error {
 	return p.q.SetAuditAnchor(ctx, postgres.SetAuditAnchorParams(arg))
+}
+
+func (p pgQueries) SetLeader(ctx context.Context, arg sqlite.SetLeaderParams) error {
+	return p.q.SetLeader(ctx, postgres.SetLeaderParams(arg))
 }
 
 func (p pgQueries) UpdateGroup(ctx context.Context, arg sqlite.UpdateGroupParams) error {

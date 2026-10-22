@@ -55,11 +55,27 @@ promises. `database.url` says where the file is, by default
 
 The database can be PostgreSQL 18 instead, when `database.url` is a
 `postgres://` URL, as [Run nbpdns on PostgreSQL](../how-to/run-nbpdns-on-postgresql.md)
-sets up. It holds the same tables, from the same migrations, and one `serve`
-uses it at a time too: `serve` holds a session advisory lock in the
-database, which PostgreSQL releases when the session ends, however it ends.
+sets up. It holds the same tables, from the same migrations. Several
+`serve`s can use it at once, as replicas, and one of them, the leader,
+refreshes and prunes:
+
+- Each replica holds a session advisory lock in the database, shared with
+  the others, on a connection of its own. `nbpdns db migrate` and
+  `nbpdns secrets rotate-master-key` take that lock alone, and refuse while
+  any replica runs.
+- The leader holds a second lock. Its session's keepalives and timeouts
+  have PostgreSQL end it, and free the lock, within about 30 seconds of the
+  leader's loss. Another replica then takes the lock, and the lead.
+- Every 5 seconds, the leader confirms that it still holds its lock. If it
+  can't, within 5 seconds, it stops leading before PostgreSQL can free the
+  lock, so two replicas never lead at once.
+- A refresh's history and the prune check, as they write, that the
+  writer still holds the leader's lock. A leader that lost it, but hasn't
+  noticed, such as a process that resumes after a pause, can't write.
+
 [ADR-0046](../adr/0046-the-store-on-postgresql-18-with-pgx-and-a-second-s.md)
-records the decision.
+and [ADR-0047](../adr/0047-elect-the-leader-with-a-postgresql-session-advisor.md)
+record the decisions.
 
 ## Migrations
 

@@ -182,6 +182,16 @@ var (
 		values: map[string][]string{"outcome": ReloadOutcomes},
 		help: "Reloads of the runtime settings or the server groups, after `nbpdns settings` or `nbpdns groups` changed them, by outcome: " +
 			"`applied`, or `failed` if a stored value wasn't valid, or a group's API key didn't open, and serve kept what it had."}
+	defLeader = def{name: "nbpdns_leader", kind: gauge,
+		help: "1 if this replica of `nbpdns serve` leads, and so refreshes and prunes, else 0 (ADR-0047). " +
+			"On SQLite, where serve always leads, 1."}
+	defLeaderSince = def{name: "nbpdns_leader_since_timestamp_seconds", kind: gauge,
+		help: "When the leader took over, as a Unix time, as this replica last saw it: on the leader, its own takeover; " +
+			"on a follower, the leader's row in the database. On SQLite, when serve started. It has no value until a replica leads."}
+	defLeaderChanges = def{name: "nbpdns_leader_changes_total", kind: counter,
+		help: "Changes of leader that this replica saw: its own takeovers from another replica, and, while it follows, " +
+			"each new leader that it found in the database. The leader that it finds when it starts isn't a change. " +
+			"Every replica counts each change, so take the `max` across them. It stays 0 on SQLite."}
 	defBuildInfo = def{name: "nbpdns_build_info", kind: gauge, labels: []string{"version", "revision", "goversion"},
 		help: "1, with the running build's version, VCS revision, and Go version."}
 
@@ -191,7 +201,8 @@ var (
 		defZones, defRRsetChanges, defZoneDrifted, defProblems, defWarnings,
 		defNetBoxUp, defGroupUp, defGroupLastSuccess,
 		defRequests, defRequestDuration, defRetries, defAPIRequests, defAPIRequestDuration,
-		defWebhooks, defAuditEvents, defDBWriteFailures, defSettingsReloads, defBuildInfo,
+		defWebhooks, defAuditEvents, defDBWriteFailures, defSettingsReloads,
+		defLeader, defLeaderSince, defLeaderChanges, defBuildInfo,
 	}
 )
 
@@ -227,6 +238,10 @@ type Metrics struct {
 	auditEvents        *prometheus.CounterVec
 	dbWriteFailures    *prometheus.CounterVec
 	settingsReloads    *prometheus.CounterVec
+	leader             prometheus.Gauge
+	// leaderSince has no labels, but is a vector, as LastRefresh is.
+	leaderSince   *prometheus.GaugeVec
+	leaderChanges prometheus.Counter
 }
 
 // New returns nbpdns's metrics for the build info, registered in a new
@@ -260,6 +275,9 @@ func New(info version.Info) *Metrics {
 		auditEvents:         register(reg, prometheus.NewCounterVec(counterOpts(defAuditEvents), defAuditEvents.labels)),
 		dbWriteFailures:     register(reg, prometheus.NewCounterVec(counterOpts(defDBWriteFailures), defDBWriteFailures.labels)),
 		settingsReloads:     register(reg, prometheus.NewCounterVec(counterOpts(defSettingsReloads), defSettingsReloads.labels)),
+		leader:              register(reg, prometheus.NewGauge(gaugeOpts(defLeader))),
+		leaderSince:         register(reg, prometheus.NewGaugeVec(gaugeOpts(defLeaderSince), nil)),
+		leaderChanges:       register(reg, prometheus.NewCounter(counterOpts(defLeaderChanges))),
 	}
 	build := register(reg, prometheus.NewGaugeVec(gaugeOpts(defBuildInfo), defBuildInfo.labels))
 	build.WithLabelValues(info.Version, info.Commit, info.GoVersion).Set(1)
@@ -317,6 +335,22 @@ func (m *Metrics) SettingsReload(outcome string) { m.settingsReloads.WithLabelVa
 // DBWriteFailure counts a write to the database that failed, with one of
 // WriteOps.
 func (m *Metrics) DBWriteFailure(op string) { m.dbWriteFailures.WithLabelValues(op).Inc() }
+
+// Leader sets whether this replica leads, and since when the leader has led,
+// if it's known (ADR-0047).
+func (m *Metrics) Leader(leads bool, since time.Time) {
+	v := 0.0
+	if leads {
+		v = 1
+	}
+	m.leader.Set(v)
+	if !since.IsZero() {
+		m.leaderSince.WithLabelValues().Set(float64(since.UnixNano()) / 1e9)
+	}
+}
+
+// LeaderChanged counts a change of leader.
+func (m *Metrics) LeaderChanged() { m.leaderChanges.Inc() }
 
 // AuditEvents counts the events that serve recorded.
 func (m *Metrics) AuditEvents(events []audit.Event) {

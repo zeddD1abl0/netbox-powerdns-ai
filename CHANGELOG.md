@@ -16,8 +16,7 @@ All notable changes to this project are recorded here. The format follows
   PostgreSQL 18 as well as SQLite: give `database.url` a `postgres://` or
   `postgresql://` URL, in libpq's form, with its parameters and defaults,
   such as `sslmode`, `sslrootcert`, `sslcert`, `sslkey` and `passfile`,
-  and its `PG` environment variables. One `serve` uses a database at a
-  time, under a session advisory lock. `database.url` is now a secret, so
+  and its `PG` environment variables. `database.url` is now a secret, so
   it can come from `NBPDNS_DATABASE_URL_FILE`, and nbpdns shows and logs it
   with each password masked as `xxxxx`. It warns of a connection that
   crosses the network unencrypted, and of a PostgreSQL release that it
@@ -26,6 +25,19 @@ All notable changes to this project are recorded here. The format follows
   copies it with `pg_dump`.
 - `/status`, `/api/status` and `nbpdns db status` show the database's
   backend, its URL, masked, and whether its connection uses TLS.
+- Several `nbpdns serve`s can run on one PostgreSQL database, as replicas.
+  One of them, the leader, holds a session advisory lock, and only it
+  refreshes and prunes. It confirms its lead every 5 seconds, and steps
+  down if it can't, before PostgreSQL, which ends a lost replica's session
+  within about 30 seconds, frees its lock for another replica to take. A
+  refresh's history and the prune refuse to write once their replica has
+  lost the lock. `nbpdns db migrate` and `nbpdns secrets rotate-master-key`
+  refuse while any replica runs. `/status` and `/api/status` gain `replica`
+  and `leader`; the metrics `nbpdns_leader`,
+  `nbpdns_leader_since_timestamp_seconds` and `nbpdns_leader_changes_total`
+  say which replica leads; and each takeover is a `service.leader_acquired`
+  audit event. On SQLite, `serve` always leads. For now, only the leader
+  serves its refreshes.
 
 ### Changed
 

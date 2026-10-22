@@ -206,9 +206,9 @@ Subcommands: [`migrate`](#nbpdns-db-migrate) and [`status`](#nbpdns-db-status).
 
 Apply the migrations that the database at database.url lacks, each in its own
 transaction, and create a SQLite database if it doesn't exist. A PostgreSQL
-database must exist. It refuses while nbpdns serve runs on the database, since
-serve applies them itself when it starts, and on a database that a newer
-nbpdns has migrated.
+database must exist. It refuses while nbpdns serve runs on the database, any
+of its replicas on PostgreSQL, since serve applies them itself when it starts,
+and on a database that a newer nbpdns has migrated.
 
 ```text
 nbpdns db migrate
@@ -582,7 +582,8 @@ Refresh the drift report on a schedule, every drift.interval, as nbpdns drift
 would make it, and keep each server group's last-known state when its primary,
 or NetBox, can't be read. Serve, at server.listen:
 
-  /livez    200 unless no refresh has started for longer than one can take
+  /livez    200 unless no refresh has started for longer than one can take,
+            or, on a follower, it hasn't tried to lead for a minute
   /readyz   200 once it has restored its last reports, or, with none, once
             the first refresh has finished
   /status   the service's state, as text, or as JSON with ?json=1
@@ -591,8 +592,10 @@ or NetBox, can't be read. Serve, at server.listen:
 It keeps its state in the database at database.url, which it creates, and
 migrates, when it starts: the audit trail, each refresh, and each zone's
 drift history. It restores its last reports from it at start, and serves
-them until its first refresh replaces them. Only one serve may use a
-database at a time.
+them until its first refresh replaces them. On SQLite, only one serve may use
+a database at a time. On PostgreSQL, several can, as replicas: one of them,
+the leader, refreshes and prunes, and another takes over within about 30
+seconds if it stops, dies or is cut off.
 
 It compares the config file's server groups, which it mirrors into the
 database at start, and those that nbpdns groups added, whose changes it

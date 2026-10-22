@@ -37,6 +37,33 @@ type Status struct {
 	Tracing       Tracing     `json:"tracing"`
 	Webhooks      Webhooks    `json:"webhooks"`
 	Database      Database    `json:"database"`
+	Replica       Replica     `json:"replica"`
+	// Leader is the replica that leads, as this one last knew it, or null
+	// if it knows none.
+	Leader *Leader `json:"leader"`
+}
+
+// A Replica is this serve, one of those on its database (ADR-0047).
+type Replica struct {
+	// Name is its host's name, and ID a random one from its start.
+	Name string `json:"name"`
+	ID   string `json:"id"`
+	// Role is leader or follower.
+	Role string `json:"role"`
+}
+
+// A Leader is the replica that leads, which refreshes and prunes
+// (ADR-0047).
+type Leader struct {
+	Name string `json:"name"`
+	ID   string `json:"id"`
+	// Since is when it took over, and LastSeen when it last confirmed that
+	// it led. On SQLite, they're when serve started, and now.
+	Since    time.Time `json:"since"`
+	LastSeen time.Time `json:"last_seen"`
+	// NextRefresh is when its next refresh starts, as of LastSeen, or null
+	// while one runs.
+	NextRefresh *time.Time `json:"next_refresh"`
 }
 
 // DatabaseInfo says which database the service keeps its history in, for
@@ -187,7 +214,7 @@ func (s *Service) Status() Status {
 	st := s.st
 	now := s.o.now()
 	t := s.Timing()
-	alive, _ := s.alive(st.lastStart)
+	alive, _ := s.alive(&st)
 	out := Status{
 		Version: s.o.Version.Version, Revision: s.o.Version.Commit, Started: s.started.UTC(),
 		UptimeSeconds: now.Sub(s.started).Seconds(), Ready: st.ready, Live: alive,
@@ -230,6 +257,20 @@ func (s *Service) Status() Status {
 	}
 	for _, g := range s.groups {
 		out.Groups = append(out.Groups, groupInfo(g, st.groups[g.Name]))
+	}
+	out.Replica = Replica{Name: s.o.Replica.Name, ID: s.o.Replica.ID, Role: RoleFollower}
+	if st.leads {
+		out.Replica.Role = RoleLeader
+	}
+	switch l := st.leader; {
+	case !s.o.Elected:
+		out.Leader = &Leader{Name: s.o.Replica.Name, ID: s.o.Replica.ID, Since: s.started.UTC(), LastSeen: now.UTC(),
+			NextRefresh: out.Schedule.NextRefresh}
+	case l != nil:
+		out.Leader = &Leader{Name: l.Name, ID: l.ID, Since: l.Since.UTC(), LastSeen: l.LastSeen.UTC()}
+		if !l.NextRefresh.IsZero() {
+			out.Leader.NextRefresh = utc(l.NextRefresh)
+		}
 	}
 	return out
 }
@@ -356,6 +397,7 @@ func writeStatus(w io.Writer, st Status) error {
 	}
 	p("nbpdns %s, up %s, since %s\n", st.Version, (time.Duration(st.UptimeSeconds) * time.Second).Round(time.Second), when(&st.Started))
 	p("Ready: %s. Live: %s.\n", yes(st.Ready), yes(st.Live))
+	writeReplica(p, st.Replica, st.Leader)
 	writeDatabase(p, st.Database)
 
 	sc := st.Schedule
@@ -423,6 +465,19 @@ func writeStatus(w io.Writer, st Status) error {
 	p("\nFor this page as JSON, add ?json=1. For each RRset's changes, run nbpdns drift.\n")
 	_, err := io.WriteString(w, b.String())
 	return err
+}
+
+// writeReplica writes this replica, and the leader, l, with p.
+func writeReplica(p func(string, ...any), r Replica, l *Leader) {
+	switch {
+	case r.Role == RoleLeader && l != nil:
+		p("Replica: %s, ID %s, the leader since %s\n", r.Name, r.ID, when(&l.Since))
+	case l != nil:
+		p("Replica: %s, ID %s, a follower of %s, ID %s, the leader since %s, last seen %s\n",
+			r.Name, r.ID, l.Name, l.ID, when(&l.Since), when(&l.LastSeen))
+	default:
+		p("Replica: %s, ID %s, a follower; no replica leads yet\n", r.Name, r.ID)
+	}
 }
 
 // writeDatabase writes the database's state with p.

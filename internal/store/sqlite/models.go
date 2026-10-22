@@ -83,6 +83,15 @@ type DriftZoneHistory struct {
 	Digest         string
 }
 
+type Leader struct {
+	Singleton   int64
+	Replica     string
+	InstanceID  string
+	Since       string
+	LastSeen    string
+	NextRefresh string
+}
+
 type Sequence struct {
 	Name  string
 	Value int64

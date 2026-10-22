@@ -196,20 +196,40 @@ the same, in its `database` section:
 }
 ```
 
-`serve` holds a lock in the database, a PostgreSQL session advisory lock,
-while it runs. A second `serve` on the same database refuses to start, as
-`nbpdns db migrate` and `nbpdns secrets rotate-master-key` do:
+## Run more than one `serve`
+
+Several `serve`s can run on one PostgreSQL database, as replicas. One of
+them leads: it refreshes and prunes. The others follow, and one of them
+takes over if the leader stops, dies or is cut off: at once if it stops, and
+within about 30 seconds otherwise. `/status` names the replica that answers,
+its role, and the leader, as does the `nbpdns_leader` metric, and each
+takeover is a `service.leader_acquired` event in the audit trail.
+
+> [!WARNING]
+> For now, a follower serves the reports it restored when it started, and
+> only the leader's API and `/status` show its refreshes. The rest of M09
+> has every replica serve what the database holds, and webhooks reach the
+> leader through any replica. Until then, send the API's requests and
+> NetBox's webhooks to the leader.
+
+Each replica holds a lock in the database, a PostgreSQL session advisory
+lock, shared with the other replicas. `nbpdns db migrate` and
+`nbpdns secrets rotate-master-key` take it alone, so they refuse while any
+replica runs, and a replica refuses to start while one of them runs:
 
 ```text
-another nbpdns holds the database's lock: host nbpdns-1, PID 4242, since 2026-10-18T14:15:27Z; stop it first, or give this one another database.url
+2 other nbpdns processes hold the database's lock: host nbpdns-0, PID 1, since 2026-10-22T09:15:27Z; host nbpdns-1, PID 1, since 2026-10-22T09:15:31Z; stop them first, or give this one another database.url
 ```
 
-PostgreSQL releases the lock when `serve`'s session ends, however it ends.
+PostgreSQL releases a replica's locks when its session ends, however it
+ends: when the replica stops, or within about 30 seconds of its host
+dying, its network failing, or its process hanging.
 
 ## Connect through a pooler
 
 nbpdns keeps a few connections open, and needs its sessions to itself: its
-lock lasts as long as the session that took it. Connect directly to
+locks last as long as the session that took them, and each replica's own
+session sets its timeouts. Connect directly to
 PostgreSQL, or through a pooler in session mode, such as PgBouncer with
 `pool_mode = session`. A pooler in transaction mode can't hold the lock.
 

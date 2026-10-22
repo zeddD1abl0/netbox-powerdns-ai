@@ -21,7 +21,7 @@ the request's own, if it sent a valid one, or a new one. It's the request's
 
 | Path | Answers |
 |---|---|
-| `/livez` | `200 ok` unless no drift refresh has started for `drift.interval` + `drift.timeout` + 1 minute; then `503`, with when the last one started. |
+| `/livez` | `200 ok` unless no drift refresh has started for `drift.interval` + `drift.timeout` + 1 minute, or, on a follower, it hasn't tried for the leader's lock for a minute; then `503`, with when the last one started, or when it last tried. |
 | `/readyz` | `200 ready` once the service has restored the reports it kept before it restarted; with none to restore, `503` until the first drift refresh has finished, whatever its outcome, then `200 ready`. |
 | `/status` | The service's state, as text for a person, or as JSON with `?json=1`. |
 | `/metrics` | The metrics, in Prometheus's text format, or in OpenMetrics if the scraper asks for it. The [metrics reference](metrics.md) lists them. |
@@ -173,6 +173,18 @@ be read:
     "history_write_failures": 0,
     "last_write_failure": null,
     "last_write_error": ""
+  },
+  "replica": {
+    "name": "nbpdns-0",
+    "id": "KJ4G3RZQ6V7XHN2WYB5T5DM7QE",
+    "role": "leader"
+  },
+  "leader": {
+    "name": "nbpdns-0",
+    "id": "KJ4G3RZQ6V7XHN2WYB5T5DM7QE",
+    "since": "2026-10-07T01:00:00Z",
+    "last_seen": "2026-10-07T02:00:00.5Z",
+    "next_refresh": "2026-10-07T02:00:00Z"
   }
 }
 ```
@@ -253,3 +265,12 @@ be read:
 | `database.history_write_failures` | integer | The refreshes that couldn't be written to the drift history since the service started. Each is still served, and the next refresh writes the zones' changes since their last rows. |
 | `database.last_write_failure` | time or null | When the last of them was, or `null`. |
 | `database.last_write_error` | string | Its error, or empty. |
+| `replica.name` | string | This replica's host name. On PostgreSQL, several replicas can run on one database, and one of them leads: it refreshes and prunes. On SQLite, one runs. |
+| `replica.id` | string | A random ID, new at each start, which tells apart two replicas on one host. |
+| `replica.role` | string | `leader` if this replica holds the leader's lock, and so refreshes and prunes, or `follower`. On SQLite, always `leader`. |
+| `leader` | object or null | The replica that leads, as this one last knew it: a follower reads it from the database every 5 seconds. `null` if it knows of none: before a replica first leads the database, or just after this one stepped down. |
+| `leader.name` | string | The leader's host name. |
+| `leader.id` | string | The leader's random ID, from its start. |
+| `leader.since` | time | When it took over. On SQLite, when the service started. |
+| `leader.last_seen` | time | When it last confirmed that it led, which it does every 5 seconds. On SQLite, now. More than 10 seconds old means that the leader has stepped down, or is lost: another replica takes over once PostgreSQL frees its lock. |
+| `leader.next_refresh` | time or null | When the leader's next refresh starts, as of `last_seen`, or `null` while one runs. |

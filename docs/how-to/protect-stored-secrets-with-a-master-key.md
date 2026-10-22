@@ -96,8 +96,8 @@ themselves don't change.
    (umask 077 && openssl rand -base64 32 > /etc/nbpdns/secrets/master-key.new)
    ```
 
-2. Stop serve. The rotation refuses while it runs, since serve opens the
-   secrets with the old key.
+2. Stop serve, every replica of it on PostgreSQL. The rotation refuses
+   while any runs, since each opens the secrets with the old key.
 
 3. Rotate, with `database.master_key` still the old key:
 

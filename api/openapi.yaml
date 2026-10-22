@@ -47,9 +47,10 @@ paths:
       summary: Get the service's status
       description: >-
         Returns the service's build, uptime, readiness and liveness, the
-        refresh schedule and how the last refresh went, NetBox's state, and
-        where spans are exported. Each server group's state is a resource
-        of its own, under `/server-groups`.
+        refresh schedule and how the last refresh went, NetBox's state,
+        where spans are exported, and which replica answers and which one
+        leads. Each server group's state is a resource of its own, under
+        `/server-groups`.
       tags: [service]
       parameters:
         - $ref: "#/components/parameters/FlowID"
@@ -130,6 +131,16 @@ paths:
                   history_write_failures: 0
                   last_write_failure: null
                   last_write_error: null
+                replica:
+                  name: nbpdns-0
+                  id: KJ4G3RZQ6V7XHN2WYB5T5DM7QE
+                  role: leader
+                leader:
+                  name: nbpdns-0
+                  id: KJ4G3RZQ6V7XHN2WYB5T5DM7QE
+                  since: "2026-10-08T01:00:00Z"
+                  last_seen: "2026-10-08T01:12:34Z"
+                  next_refresh: "2026-10-08T01:15:00Z"
         default:
           $ref: "#/components/responses/Problem"
   /server-groups:
@@ -859,7 +870,7 @@ components:
     Status:
       type: object
       description: The nbpdns service's state.
-      required: [version, revision, started, uptime_seconds, ready, live, schedule, netbox, tracing, webhooks, database]
+      required: [version, revision, started, uptime_seconds, ready, live, schedule, netbox, tracing, webhooks, database, replica, leader]
       properties:
         version:
           type: string
@@ -890,8 +901,10 @@ components:
         live:
           type: boolean
           description: >-
-            Whether a refresh has started within `drift.interval` +
-            `drift.timeout` + 1 minute, as `/livez` reports.
+            On the leader, whether a refresh has started within
+            `drift.interval` + `drift.timeout` + 1 minute, or since it took
+            over. On a follower, whether it has tried for the leader's lock
+            within the last minute. As `/livez` reports.
           examples: [true]
         schedule:
           $ref: "#/components/schemas/Schedule"
@@ -903,6 +916,70 @@ components:
           $ref: "#/components/schemas/Webhooks"
         database:
           $ref: "#/components/schemas/Database"
+        replica:
+          $ref: "#/components/schemas/Replica"
+        leader:
+          description: >-
+            The replica that leads, as this replica last knew it: from the
+            database, which it reads every 5 seconds, on a follower. Null if
+            it knows of none, before a replica first leads the database, or
+            just after this one stepped down.
+          oneOf:
+            - $ref: "#/components/schemas/Leader"
+            - type: "null"
+    Replica:
+      type: object
+      description: >-
+        This replica of the service, one of those on its database. On
+        PostgreSQL, several can run, and one of them leads: it refreshes and
+        prunes. On SQLite, one runs, and it always leads.
+      required: [name, id, role]
+      properties:
+        name:
+          type: string
+          description: The replica's host name.
+          examples: [nbpdns-0]
+        id:
+          type: string
+          description: A random ID, new at each start, which tells apart two replicas on one host.
+          examples: [KJ4G3RZQ6V7XHN2WYB5T5DM7QE]
+        role:
+          type: string
+          x-extensible-enum: [leader, follower]
+          description: >-
+            `leader` if this replica holds the leader's lock, and so refreshes
+            and prunes; `follower` if it doesn't.
+          examples: [leader]
+    Leader:
+      type: object
+      description: The replica that leads, which refreshes and prunes.
+      required: [name, id, since, last_seen, next_refresh]
+      properties:
+        name:
+          type: string
+          description: The leader's host name.
+          examples: [nbpdns-0]
+        id:
+          type: string
+          description: The leader's random ID, from its start.
+          examples: [KJ4G3RZQ6V7XHN2WYB5T5DM7QE]
+        since:
+          type: string
+          format: date-time
+          description: When it took over. On SQLite, when the service started.
+          examples: ["2026-10-08T01:00:00Z"]
+        last_seen:
+          type: string
+          format: date-time
+          description: >-
+            When it last confirmed that it led, which it does every 5 seconds.
+            On SQLite, now.
+          examples: ["2026-10-08T01:12:34Z"]
+        next_refresh:
+          type: [string, "null"]
+          format: date-time
+          description: When its next refresh starts, as of `last_seen`, or null while one runs.
+          examples: ["2026-10-08T01:15:00Z"]
     Database:
       type: object
       description: The database that the service keeps its state in.

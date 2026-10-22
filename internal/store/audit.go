@@ -19,7 +19,8 @@ const verifyPage = 1000
 // A Tx is a transaction on the store: a change, and the audit events that
 // record it, which commit or roll back together (ADR-0039).
 type Tx struct {
-	q sqlite.Querier
+	tx *sql.Tx
+	q  sqlite.Querier
 	// appended are the events appended, for InTx's caller once it commits.
 	appended []audit.Event
 }
@@ -39,7 +40,7 @@ func (s *Store) InTx(ctx context.Context, fn func(tx *Tx) error) ([]audit.Event,
 			return nil, fmt.Errorf("waiting for the other writes: %w", err)
 		}
 	}
-	tx := &Tx{q: s.dialect.queries(sqlTx)}
+	tx := &Tx{tx: sqlTx, q: s.dialect.queries(sqlTx)}
 	if err := fn(tx); err != nil {
 		return nil, err
 	}
@@ -213,11 +214,12 @@ func (s *Store) VerifyAudit(ctx context.Context) (AuditSummary, error) {
 // PruneAudit deletes the events before cutoff, from the trail's start up to
 // the first one at or after it, so that none younger than cutoff goes,
 // keeps the last one it deletes as the trail's anchor, and records the
-// prune as an event, all in one transaction. It returns how many it deleted, and the prune's event,
-// if it deleted any.
+// prune as an event, all in one transaction. It's a leader-only write, as
+// RecordRefresh is. It returns how many it deleted, and the prune's event, if
+// it deleted any.
 func (s *Store) PruneAudit(ctx context.Context, cutoff time.Time, retentionDays int) (int64, []audit.Event, error) {
 	var deleted int64
-	events, err := s.InTx(ctx, func(tx *Tx) error {
+	events, err := s.leaderTx(ctx, func(tx *Tx) error {
 		last, err := tx.q.LastAuditEventBefore(ctx, cutoff.UTC().Format(TimeLayout))
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil

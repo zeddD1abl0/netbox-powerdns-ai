@@ -85,11 +85,12 @@ type KeptReport struct {
 // group's report, replacing its last. Each zone's change of state is also a
 // zone.drift_changed event (ADR-0008, ADR-0039), with ctx's trace and request
 // IDs, as is a new zone's, if it drifted. Only the groups that the database
-// stores are written. It returns how many zone rows it wrote, and the
-// events.
+// stores are written. It's a leader-only write, which fails with
+// ErrNotLeader on a replica that doesn't lead (ADR-0047). It returns how many
+// zone rows it wrote, and the events.
 func (s *Store) RecordRefresh(ctx context.Context, r RefreshRecord) (int, []audit.Event, error) {
 	rows := 0
-	events, err := s.InTx(ctx, func(tx *Tx) error {
+	events, err := s.leaderTx(ctx, func(tx *Tx) error {
 		names, err := tx.q.GroupNames(ctx)
 		if err != nil {
 			return err
@@ -413,10 +414,11 @@ func (s *Store) RestoreDrift(ctx context.Context) (Restored, error) {
 // their groups' results, and the zone rows written before it, but for each
 // zone's last row, unless that row says the zone was removed, or its group
 // is. It also deletes the last reports of groups that the database no
-// longer stores. It returns how many refreshes and zone rows it deleted.
+// longer stores. It's a leader-only write, as RecordRefresh is. It returns
+// how many refreshes and zone rows it deleted.
 func (s *Store) PruneDriftHistory(ctx context.Context, cutoff time.Time) (refreshes, rows int64, err error) {
 	at := cutoff.UTC().Format(TimeLayout)
-	_, err = s.InTx(ctx, func(tx *Tx) error {
+	_, err = s.leaderTx(ctx, func(tx *Tx) error {
 		if err := tx.q.DeleteRefreshGroupsBefore(ctx, at); err != nil {
 			return err
 		}

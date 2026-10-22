@@ -24,6 +24,7 @@ type Querier interface {
 	GetAuditAnchor(ctx context.Context) (GetAuditAnchorRow, error)
 	GetDatabaseInfo(ctx context.Context) (GetDatabaseInfoRow, error)
 	GetGroup(ctx context.Context, name string) (ServerGroup, error)
+	GetLeader(ctx context.Context) (GetLeaderRow, error)
 	GetSetting(ctx context.Context, key string) (Setting, error)
 	GroupNames(ctx context.Context) ([]string, error)
 	GroupRefreshes(ctx context.Context, arg GroupRefreshesParams) ([]GroupRefreshesRow, error)
@@ -43,6 +44,7 @@ type Querier interface {
 	LastGroupResults(ctx context.Context) ([]DriftRefreshGroup, error)
 	LastRefresh(ctx context.Context) (DriftRefresh, error)
 	LatestZoneRows(ctx context.Context, groupName string) ([]DriftZoneHistory, error)
+	LeaderHeartbeat(ctx context.Context, arg LeaderHeartbeatParams) (int64, error)
 	// Each filter is optional: NULL selects everything. The casts give
 	// PostgreSQL each parameter's type, which IS NULL doesn't.
 	ListAuditEvents(ctx context.Context, arg ListAuditEventsParams) ([]AuditEvent, error)
@@ -60,6 +62,7 @@ type Querier interface {
 	SealedSettings(ctx context.Context) ([]SealedSettingsRow, error)
 	SequenceValue(ctx context.Context, name string) (int64, error)
 	SetAuditAnchor(ctx context.Context, arg SetAuditAnchorParams) error
+	SetLeader(ctx context.Context, arg SetLeaderParams) error
 	UpdateGroup(ctx context.Context, arg UpdateGroupParams) error
 	UpdateGroupKey(ctx context.Context, arg UpdateGroupKeyParams) error
 	UpdateSealedSetting(ctx context.Context, arg UpdateSealedSettingParams) error

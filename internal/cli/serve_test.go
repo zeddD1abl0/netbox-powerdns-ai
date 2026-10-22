@@ -21,6 +21,7 @@ import (
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/api"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/api/contract"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/config"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/service"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/tracing"
 )
 
@@ -210,6 +211,10 @@ func TestServeWithoutNetBox(t *testing.T) {
 		`nbpdns_drift_refreshes_total{outcome="failed"} 1`,
 		`nbpdns_http_client_requests_total{code="error",method="GET",service="NetBox",target="netbox"}`,
 		"nbpdns_build_info{",
+		// On SQLite, serve leads at once (ADR-0047).
+		"nbpdns_leader 1",
+		"nbpdns_leader_since_timestamp_seconds ",
+		"nbpdns_leader_changes_total 0",
 	} {
 		if code != http.StatusOK || !strings.Contains(body, want) {
 			t.Errorf("metrics have no %q:\n%s", want, body)
@@ -229,8 +234,16 @@ func TestServeWithoutNetBox(t *testing.T) {
 	if code, page := s.api("/api/server-groups"); code != http.StatusOK || strings.Count(page, `"status":"unknown"`) != 2 {
 		t.Errorf("/api/server-groups: %d:\n%s", code, page)
 	}
+	var st service.Status
+	if _, page := s.get("/status?json=1"); json.Unmarshal([]byte(page), &st) != nil || st.Replica.Role != service.RoleLeader ||
+		st.Leader == nil || st.Leader.ID != st.Replica.ID || !st.Leader.Since.Equal(st.Started) {
+		t.Errorf("/status names no replica that leads since serve started:\n%s", page)
+	}
 	if code := s.stop(); code != exitOK {
 		t.Errorf("exit %d, want 0:\n%s", code, s.stderr)
+	}
+	if _, stdout, _ := run(t, env, "audit", "list"); strings.Contains(stdout, "service.leader_acquired") || !strings.Contains(stdout, "service.started") {
+		t.Errorf("audit list on SQLite: want service.started, and no leader events:\n%s", stdout)
 	}
 	for _, want := range []string{"couldn't read NetBox", `"msg":"shutting down"`} {
 		if !strings.Contains(s.stderr.String(), want) {

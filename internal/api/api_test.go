@@ -143,6 +143,14 @@ func TestStatus(t *testing.T) {
 	onPostgres := failed
 	onPostgres.Database = service.Database{DatabaseInfo: service.DatabaseInfo{Backend: "postgresql",
 		URL: "postgres://nbpdns:xxxxx@db.example.com/nbpdns?sslmode=verify-full", TLS: ptr(true)}}
+	leading := onPostgres
+	leading.Replica = service.Replica{Name: "nbpdns-0", ID: "KJ4G3RZQ6V7XHN2WYB5T5DM7QE", Role: "leader"}
+	leading.Leader = &service.Leader{Name: "nbpdns-0", ID: "KJ4G3RZQ6V7XHN2WYB5T5DM7QE", Since: at("2026-10-08T01:00:00Z"),
+		LastSeen: at("2026-10-08T01:09:58Z"), NextRefresh: ptr(at("2026-10-08T01:10:00Z"))}
+	following := onPostgres
+	following.Replica = service.Replica{Name: "nbpdns-1", ID: "M5NCAJ2PDB4VE6RXQW7HKTZ3GY", Role: "follower"}
+	following.Leader = &service.Leader{Name: "nbpdns-0", ID: "KJ4G3RZQ6V7XHN2WYB5T5DM7QE", Since: at("2026-10-08T01:00:00Z"),
+		LastSeen: at("2026-10-08T01:09:58Z")}
 
 	tests := []struct {
 		name   string
@@ -180,6 +188,17 @@ func TestStatus(t *testing.T) {
 		{"on PostgreSQL", onPostgres, []string{
 			`"database":{"backend":"postgresql","history_write_failures":0,"last_write_error":null,"last_write_failure":null,` +
 				`"path":"","restored":false,"restored_as_of":null,"tls":true,"url":"postgres://nbpdns:xxxxx@db.example.com/nbpdns?sslmode=verify-full"}`,
+		}},
+		{"knowing no leader", before, []string{`"leader":null`}},
+		{"the leader", leading, []string{
+			`"replica":{"id":"KJ4G3RZQ6V7XHN2WYB5T5DM7QE","name":"nbpdns-0","role":"leader"}`,
+			`"leader":{"id":"KJ4G3RZQ6V7XHN2WYB5T5DM7QE","last_seen":"2026-10-08T01:09:58Z","name":"nbpdns-0",` +
+				`"next_refresh":"2026-10-08T01:10:00Z","since":"2026-10-08T01:00:00Z"}`,
+		}},
+		{"a follower", following, []string{
+			`"replica":{"id":"M5NCAJ2PDB4VE6RXQW7HKTZ3GY","name":"nbpdns-1","role":"follower"}`,
+			`"leader":{"id":"KJ4G3RZQ6V7XHN2WYB5T5DM7QE","last_seen":"2026-10-08T01:09:58Z","name":"nbpdns-0",` +
+				`"next_refresh":null,"since":"2026-10-08T01:00:00Z"}`,
 		}},
 	}
 	for _, tt := range tests {

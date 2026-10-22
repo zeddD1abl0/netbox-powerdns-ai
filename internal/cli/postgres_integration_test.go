@@ -3,8 +3,12 @@
 package cli
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -14,7 +18,11 @@ import (
 	"time"
 
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/lab"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/metrics"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/secrets"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/service"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/store"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/version"
 )
 
 // TestCLIOnPostgres runs each command that uses the database on a database
@@ -101,10 +109,13 @@ func TestCLIOnPostgres(t *testing.T) {
 	}
 }
 
-// TestServeOnPostgres runs serve on PostgreSQL, checks that /status says so
-// without the password, and that a second serve, or db migrate, refuses to
-// run on the same database while it does (ADR-0046).
+// TestServeOnPostgres runs two replicas of serve on PostgreSQL, and checks
+// that /status says so without the password (ADR-0046); that one of them
+// leads and refreshes, and the other follows; that db migrate refuses while
+// either runs; and that the follower takes over when the leader stops, which
+// the audit trail records (ADR-0047).
 func TestServeOnPostgres(t *testing.T) {
+	shortenElection(t)
 	where := lab.NewPostgresDatabase(t)
 	shown := strings.Replace(where, lab.PostgresPassword, "xxxxx", 1)
 	env := configFile(t, twoGroups)
@@ -143,29 +154,83 @@ func TestServeOnPostgres(t *testing.T) {
 		}
 	}
 
-	second := with(env, "NBPDNS_SERVER_LISTEN", "127.0.0.1:0")
+	// The first serve leads, and the second follows it.
+	leader := first.statusWhen(t, func(st service.Status) bool { return st.Replica.Role == service.RoleLeader })
+	second := startServe(t, env)
+	follower := second.statusWhen(t, func(st service.Status) bool { return st.Leader != nil })
+	if follower.Replica.Role != service.RoleFollower || follower.Leader.ID != leader.Replica.ID ||
+		follower.Replica.ID == leader.Replica.ID || follower.Replica.Name != leader.Replica.Name {
+		t.Errorf("the second serve: replica %+v, leader %+v, want a follower of %+v", follower.Replica, follower.Leader, leader.Replica)
+	}
+	if follower.Schedule.LastRefresh != nil || follower.Schedule.Refreshes != (service.Refreshes{}) || follower.Schedule.NextRefresh != nil {
+		t.Errorf("the follower refreshed, or scheduled a refresh: %+v", follower.Schedule)
+	}
+	for _, r := range []struct {
+		s    *served
+		want []string
+	}{
+		{first, []string{"nbpdns_leader 1", "nbpdns_leader_changes_total 0", `nbpdns_drift_refreshes_total{outcome="failed"} 1`}},
+		{second, []string{"nbpdns_leader 0", "nbpdns_leader_changes_total 0", `nbpdns_drift_refreshes_total{outcome="failed"} 0`,
+			"nbpdns_leader_since_timestamp_seconds "}},
+	} {
+		if _, body := r.s.get("/metrics"); !containsAll(body, r.want) {
+			t.Errorf("the metrics of %s have no %q:\n%s", r.s.addr, r.want, body)
+		}
+	}
+	if code, api := second.api("/api/status"); code != http.StatusOK || !strings.Contains(api, `"role":"follower"`) {
+		t.Errorf("the follower's /api/status: %d:\n%s", code, api)
+	}
+
+	other := with(env, "NBPDNS_SERVER_LISTEN", "127.0.0.1:0")
 	host, _ := os.Hostname()
-	code, _, stderr := run(t, second, "serve")
-	want := fmt.Sprintf("another nbpdns holds the database's lock: host %s, PID %d, since ", host, os.Getpid())
+	code, _, stderr := run(t, other, "db", "migrate")
+	want := fmt.Sprintf("2 other nbpdns processes hold the database's lock: host %s, PID %d, since ", host, os.Getpid())
 	if code != exitError || !strings.Contains(stderr, want) {
-		t.Errorf("a second serve: exit %d, want %d with %q:\n%s", code, exitError, want, stderr)
+		t.Errorf("db migrate while two serves run: exit %d, want %d with %q:\n%s", code, exitError, want, stderr)
 	}
 	pages.WriteString(stderr)
-	code, _, stderr = run(t, second, "db", "migrate")
-	if code != exitError || !strings.Contains(stderr, "another nbpdns holds the database's lock") {
-		t.Errorf("db migrate while serve runs: exit %d:\n%s", code, stderr)
-	}
+
+	// The leader stops, and releases its lock: the follower takes over at
+	// its next poll.
 	if code := first.stop(); code != exitOK {
 		t.Fatalf("exit %d:\n%s", code, first.stderr)
 	}
+	took := second.statusWhen(t, func(st service.Status) bool {
+		return st.Replica.Role == service.RoleLeader && st.Schedule.LastRefresh != nil
+	})
+	if took.Leader == nil || took.Leader.ID != follower.Replica.ID {
+		t.Errorf("after the takeover: leader %+v, want the second serve", took.Leader)
+	}
+	if _, body := second.get("/metrics"); !containsAll(body, []string{"nbpdns_leader 1", "nbpdns_leader_changes_total 1",
+		`nbpdns_audit_events_total{action="service.leader_acquired"} 1`}) {
+		t.Errorf("the new leader's metrics:\n%s", body)
+	}
+	_, stdout, _ := run(t, other, "audit", "list", "--action", "service.leader_acquired", "-o", "json")
+	var events []auditEvent
+	if err := json.Unmarshal([]byte(stdout), &events); err != nil || len(events) != 2 {
+		t.Fatalf("audit list: %v, want two takeovers:\n%s", err, stdout)
+	}
+	var before struct {
+		Replica    string    `json:"replica"`
+		InstanceID string    `json:"instance_id"`
+		LastSeen   time.Time `json:"last_seen"`
+	}
+	if err := json.Unmarshal(events[1].Before, &before); err != nil || before.Replica != host || before.InstanceID != leader.Replica.ID ||
+		before.LastSeen.IsZero() || string(events[0].Before) != "null" || events[1].Target != "service:"+host {
+		t.Errorf("the takeovers: %+v, %+v, the second's before %s", events[0], events[1], events[1].Before)
+	}
 
-	// The lock went with the first serve's session.
+	// A serve that starts again follows the new leader.
 	again := startServe(t, env)
 	if got := loggedDatabaseID(t, again.stderr.String()); got != id {
 		t.Errorf("after a restart, the database's ID is %s, want %s", got, id)
 	}
-	for name, out := range map[string]string{"/status and the second serve": pages.String(),
-		"the first serve's log": first.stderr.String(), "the restarted serve's log": again.stderr.String()} {
+	if st := again.statusWhen(t, func(st service.Status) bool { return st.Leader != nil }); st.Leader.ID != took.Replica.ID {
+		t.Errorf("the restarted serve follows %+v, want the second serve", st.Leader)
+	}
+	for name, out := range map[string]string{"/status and db migrate": pages.String(),
+		"the first serve's log": first.stderr.String(), "the second serve's log": second.stderr.String(),
+		"the restarted serve's log": again.stderr.String()} {
 		if strings.Contains(out, lab.PostgresPassword) {
 			t.Errorf("%s shows the database's password:\n%s", name, out)
 		}
@@ -173,4 +238,145 @@ func TestServeOnPostgres(t *testing.T) {
 	if !strings.Contains(first.stderr.String(), "the connection to PostgreSQL isn't encrypted") {
 		t.Errorf("serve didn't warn of the unencrypted connection:\n%s", first.stderr)
 	}
+}
+
+// TestLeaderStepsDown checks that a leader whose heartbeat misses its
+// deadline steps down within 10 seconds, as ADR-0047 has it: it stops its
+// work, and releases the leader's lock, which another replica then takes,
+// and its leader-only writes fail.
+func TestLeaderStepsDown(t *testing.T) {
+	where := lab.NewPostgresDatabase(t)
+	s := testSession(t)
+	logs := &lockedBuffer{}
+	s.log, s.metrics = slog.New(slog.NewJSONHandler(logs, nil)), metrics.New(version.Get())
+	open := func() *store.Store {
+		st, err := store.OpenPostgres(t.Context(), where)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = st.Close() })
+		return st
+	}
+	st, other := open(), open()
+	if _, err := st.Migrate(t.Context(), "test"); err != nil {
+		t.Fatal(err)
+	}
+	me := store.Replica{Name: "host-a", ID: "A"}
+	ss, err := st.Join(t.Context(), me)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := service.New(service.Options{Replica: me, Elected: true, Log: s.log, Tracer: s.tracer, Metrics: s.metrics,
+		Interval: time.Hour, Timeout: time.Minute})
+	led, stopped := make(chan struct{}), make(chan time.Time, 1)
+	e := &election{s: s, st: st, svc: svc, me: me, ss: ss, lead: func(ctx context.Context) {
+		close(led)
+		<-ctx.Done()
+		stopped <- time.Now()
+	}}
+	ctx, cancel := context.WithCancel(t.Context())
+	ran := make(chan struct{})
+	go func() {
+		defer close(ran)
+		e.run(ctx)
+	}()
+	defer func() {
+		cancel()
+		<-ran
+	}()
+	select {
+	case <-led:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the only replica didn't lead")
+	}
+
+	// Another session holds the leader's row, so the next heartbeat waits,
+	// past its deadline.
+	db, err := sql.Open("pgx", where)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	tx, err := db.BeginTx(t.Context(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(t.Context(), "SELECT * FROM leader FOR UPDATE"); err != nil {
+		t.Fatal(err)
+	}
+	held := time.Now()
+	var down time.Time
+	select {
+	case down = <-stopped:
+	case <-time.After(15 * time.Second):
+		t.Fatal("the leader didn't step down")
+	}
+	if d := down.Sub(held); d > heartbeatInterval+heartbeatTimeout+time.Second {
+		t.Errorf("the leader stepped down %s after its heartbeat stalled, want within %s", d, heartbeatInterval+heartbeatTimeout)
+	}
+	// It follows once its work has stopped, and its session has ended.
+	for deadline := time.Now().Add(5 * time.Second); svc.Status().Replica.Role != service.RoleFollower; time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("the replica didn't follow after it stepped down")
+		}
+	}
+	if _, _, err := st.RecordRefresh(t.Context(), store.RefreshRecord{Kind: store.RefreshFull, Cause: store.CauseSchedule,
+		Started: time.Now(), Finished: time.Now(), Outcome: "complete"}); !errors.Is(err, store.ErrNotLeader) {
+		t.Errorf("a refresh's write after the step-down: error = %v, want ErrNotLeader", err)
+	}
+	if !strings.Contains(logs.String(), "the leader missed its heartbeat, so this replica steps down") {
+		t.Errorf("no step-down in the logs:\n%s", logs)
+	}
+	// The lock is free: another replica takes it, once the row is.
+	if err := tx.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	b, err := other.Join(t.Context(), store.Replica{Name: "host-b", ID: "B"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	if tb, err := b.TryLead(t.Context(), time.Time{}); err != nil || tb == nil || tb.Previous == nil || tb.Previous.ID != "A" {
+		t.Errorf("another replica's TryLead() after the step-down = %+v, %v, want a takeover from A", tb, err)
+	}
+}
+
+// shortenElection has followers poll every 100 milliseconds, for the test.
+func shortenElection(t *testing.T) {
+	t.Helper()
+	poll := leaderPoll
+	leaderPoll = 100 * time.Millisecond
+	t.Cleanup(func() { leaderPoll = poll })
+}
+
+// statusWhen polls the service's /status until cond holds of it, for up to
+// 15 seconds, and returns it.
+func (s *served) statusWhen(t *testing.T, cond func(service.Status) bool) service.Status {
+	t.Helper()
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		_, body := s.get("/status?json=1")
+		var st service.Status
+		if err := json.Unmarshal([]byte(body), &st); err != nil {
+			t.Fatalf("/status?json=1: %v:\n%s", err, body)
+		}
+		if cond(st) {
+			return st
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("/status didn't come to the state wanted:\n%s\n%s", body, s.stderr)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+// containsAll reports whether s contains each of subs.
+func containsAll(s string, subs []string) bool {
+	for _, sub := range subs {
+		if !strings.Contains(s, sub) {
+			return false
+		}
+	}
+	return true
 }

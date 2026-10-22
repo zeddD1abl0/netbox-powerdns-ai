@@ -30,6 +30,16 @@ import (
 // happens after the refresh, whatever was left of its drift.timeout.
 const historyWriteTimeout = 30 * time.Second
 
+// electionStall is how long a follower's election may go without polling
+// before /livez calls it stuck.
+const electionStall = time.Minute
+
+// The roles of a replica (ADR-0047).
+const (
+	RoleLeader   = "leader"
+	RoleFollower = "follower"
+)
+
 // A History keeps each refresh, and gives back the last reports at start
 // (ADR-0042). The store is one.
 type History interface {
@@ -59,9 +69,15 @@ type Options struct {
 	// at start; Database says where, for /status.
 	History  History
 	Database DatabaseInfo
-	Log      *slog.Logger
-	Tracer   trace.Tracer
-	Metrics  *metrics.Metrics
+	// Replica is this serve, among those on the database. Elected says
+	// whether an election chooses the leader among them, on PostgreSQL,
+	// which reports to Lead and Follow, and runs Run while this replica
+	// leads (ADR-0047). Otherwise, on SQLite, the service always leads.
+	Replica store.Replica
+	Elected bool
+	Log     *slog.Logger
+	Tracer  trace.Tracer
+	Metrics *metrics.Metrics
 
 	// What /status and the API show besides the refreshes: the build,
 	// NetBox's URL, each group, in the configuration's order, which
@@ -175,6 +191,13 @@ type state struct {
 	lastWebhookRefresh *WebhookRefresh
 	// refreshNow brings the next full refresh forward to now.
 	refreshNow bool
+	// leads is whether this replica leads, which it has since leadSince;
+	// leader is the leader as it last knew it, or nil if it knows none; and
+	// polled is when the election last reported.
+	leads     bool
+	leadSince time.Time
+	leader    *store.Leader
+	polled    time.Time
 }
 
 // groupState is a server group's last-known state.
@@ -200,7 +223,48 @@ func New(o Options) *Service {
 		st: state{refreshes: map[string]int{}, groups: map[string]*groupState{}}}
 	s.storeTiming(Timing{Interval: o.Interval, Timeout: o.Timeout, WebhookDelay: o.WebhookDelay})
 	s.webhooksOn.Store(o.Webhooks)
+	if !o.Elected {
+		s.st.leads, s.st.leadSince = true, s.started
+	}
 	return s
+}
+
+// Lead records that this replica leads, with l, its row (ADR-0047). The
+// election calls it when the replica takes over, and at each heartbeat.
+func (s *Service) Lead(l store.Leader) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := s.o.now()
+	if !s.st.leads {
+		s.st.leads, s.st.leadSince = true, now
+	}
+	s.st.leader, s.st.polled = &l, now
+}
+
+// Follow records that this replica follows the leader l, or, if it's nil,
+// that it knows no leader. The election calls it at each poll, and when the
+// replica steps down, once Run has returned.
+func (s *Service) Follow(l *store.Leader) {
+	if l != nil {
+		copied := *l
+		l = &copied
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.st.leads, s.st.leader, s.st.polled = false, l, s.o.now()
+	// A follower schedules no refresh.
+	s.st.next = time.Time{}
+}
+
+// NextRefresh returns when the next scheduled refresh starts, or zero while
+// one runs, or if none is scheduled, for the leader's row.
+func (s *Service) NextRefresh() time.Time {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.st.lastStart.After(s.st.lastEnd) {
+		return time.Time{}
+	}
+	return s.st.next
 }
 
 // viewsOf returns the views that groups serve.
@@ -725,25 +789,44 @@ func (s *Service) Handler() http.Handler {
 	return mux
 }
 
-// livez answers 200 unless no refresh has started for longer than a
-// refresh can take, which means the loop is stuck.
+// livez answers 200 unless the service is stuck: on the leader, its
+// refreshes; on a follower, its election.
 func (s *Service) livez(w http.ResponseWriter, _ *http.Request) {
 	s.mu.Lock()
-	last := s.st.lastStart
+	alive, since := s.alive(&s.st)
+	leads := s.st.leads
 	s.mu.Unlock()
-	if alive, since := s.alive(last); !alive {
+	switch {
+	case alive:
+		text(w, http.StatusOK, "ok")
+	case leads:
 		text(w, http.StatusServiceUnavailable, fmt.Sprintf("stuck: no drift refresh has started since %s", since.UTC().Format(time.RFC3339)))
-		return
+	default:
+		text(w, http.StatusServiceUnavailable, fmt.Sprintf("stuck: this follower hasn't tried for the leader's lock since %s", since.UTC().Format(time.RFC3339)))
 	}
-	text(w, http.StatusOK, "ok")
 }
 
-// alive reports whether a refresh has started, since last, or since the
-// service started if none has since, within the time a refresh can take. A
-// restored refresh from before the start doesn't count.
-func (s *Service) alive(last time.Time) (bool, time.Time) {
+// alive reports whether the service isn't stuck, from st, and since when it
+// has made no progress. The leader is alive if a refresh has started within
+// the time a refresh can take, since the last one started, or since it took
+// over or the service started if none has since; a restored refresh from
+// before the start doesn't count. A follower is alive if its election has
+// polled within electionStall, or the service started within it. It's
+// called with s.mu held.
+func (s *Service) alive(st *state) (bool, time.Time) {
+	if !st.leads {
+		last := st.polled
+		if last.Before(s.started) {
+			last = s.started
+		}
+		return s.o.now().Sub(last) <= electionStall, last
+	}
+	last := st.lastStart
 	if last.Before(s.started) {
 		last = s.started
+	}
+	if last.Before(st.leadSince) {
+		last = st.leadSince
 	}
 	t := s.Timing()
 	return s.o.now().Sub(last) <= t.Interval+t.Timeout+time.Minute, last

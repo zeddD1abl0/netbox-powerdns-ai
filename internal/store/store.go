@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/pressly/goose/v3"
@@ -54,6 +55,11 @@ type Store struct {
 	// and release is the server's, such as 18.1.
 	conn    connection
 	release string
+	// replica is set once a replica of serve has joined the database
+	// through the store, and leading is its session that holds the leader's
+	// lock, if one does, which leader-only writes check (ADR-0047).
+	replica atomic.Bool
+	leading atomic.Pointer[Session]
 }
 
 // A connection says how a store connects to PostgreSQL.

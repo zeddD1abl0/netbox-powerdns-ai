@@ -65,7 +65,8 @@ func newSecretsRotateCmd(a *app) *cobra.Command {
 			case old.ID() == next.ID():
 				return errors.New("the new master key is database.master_key")
 			}
-			// serve opens the secrets with the old key, so it mustn't run.
+			// serve opens the secrets with the old key, so none of its
+			// replicas may run.
 			st, lock, err := s.openLocked(ctx, s.currentStore)
 			if err != nil {
 				return err

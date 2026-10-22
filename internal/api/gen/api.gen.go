@@ -425,6 +425,34 @@ type GroupResultStatus string
 // Examples: drift
 type HistoryState string
 
+// Leader The replica that leads, which refreshes and prunes.
+type Leader struct {
+	// Id The leader's random ID, from its start.
+	//
+	// Examples: KJ4G3RZQ6V7XHN2WYB5T5DM7QE
+	Id string `json:"id"`
+
+	// LastSeen When it last confirmed that it led, which it does every 5 seconds. On SQLite, now.
+	//
+	// Examples: 2026-10-08T01:12:34Z
+	LastSeen time.Time `json:"last_seen"`
+
+	// Name The leader's host name.
+	//
+	// Examples: nbpdns-0
+	Name string `json:"name"`
+
+	// NextRefresh When its next refresh starts, as of `last_seen`, or null while one runs.
+	//
+	// Examples: 2026-10-08T01:15:00Z
+	NextRefresh *time.Time `json:"next_refresh"`
+
+	// Since When it took over. On SQLite, when the service started.
+	//
+	// Examples: 2026-10-08T01:00:00Z
+	Since time.Time `json:"since"`
+}
+
 // NetBoxEvent A NetBox webhook's event, as NetBox 4.7 sends it without a body template: what happened to an object, the object, and the request that made the change. nbpdns reads only the fields below, and ignores the rest.
 //
 // Examples: {"data":{"id":1106,"name":"example.com","view":{"id":1,"name":"_default_"}},"event":"deleted","object_type":"netbox_dns.zone","request":{"id":"23778ad9-07a9-40a0-b9f2-721252181a5e","user":"admin"},"snapshots":{"postchange":null,"prechange":{"name":"example.com","view":1}}}
@@ -746,6 +774,24 @@ type RefreshPage struct {
 	Self string `json:"self"`
 }
 
+// Replica This replica of the service, one of those on its database. On PostgreSQL, several can run, and one of them leads: it refreshes and prunes. On SQLite, one runs, and it always leads.
+type Replica struct {
+	// Id A random ID, new at each start, which tells apart two replicas on one host.
+	//
+	// Examples: KJ4G3RZQ6V7XHN2WYB5T5DM7QE
+	Id string `json:"id"`
+
+	// Name The replica's host name.
+	//
+	// Examples: nbpdns-0
+	Name string `json:"name"`
+
+	// Role `leader` if this replica holds the leader's lock, and so refreshes and prunes; `follower` if it doesn't.
+	//
+	// Examples: leader
+	Role string `json:"role"`
+}
+
 // Schedule The refreshes' schedule, and how they went.
 type Schedule struct {
 	// IntervalSeconds The time from the start of one refresh to the start of the next, `drift.interval`.
@@ -874,7 +920,10 @@ type Status struct {
 	// Database The database that the service keeps its state in.
 	Database Database `json:"database"`
 
-	// Live Whether a refresh has started within `drift.interval` + `drift.timeout` + 1 minute, as `/livez` reports.
+	// Leader The replica that leads, as this replica last knew it: from the database, which it reads every 5 seconds, on a follower. Null if it knows of none, before a replica first leads the database, or just after this one stepped down.
+	Leader *Leader `json:"leader"`
+
+	// Live On the leader, whether a refresh has started within `drift.interval` + `drift.timeout` + 1 minute, or since it took over. On a follower, whether it has tried for the leader's lock within the last minute. As `/livez` reports.
 	//
 	// Examples: true
 	Live bool `json:"live"`
@@ -886,6 +935,9 @@ type Status struct {
 	//
 	// Examples: true
 	Ready bool `json:"ready"`
+
+	// Replica This replica of the service, one of those on its database. On PostgreSQL, several can run, and one of them leads: it refreshes and prunes. On SQLite, one runs, and it always leads.
+	Replica Replica `json:"replica"`
 
 	// Revision The build's Git commit.
 	//

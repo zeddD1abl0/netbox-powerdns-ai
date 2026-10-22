@@ -18,30 +18,39 @@ import (
 // maxHolder bounds what's read of a lock file's holder.
 const maxHolder = 256
 
-// A Lock is held on a database by the one `nbpdns serve` that may use it
-// (ADR-0038, REQ-033). On SQLite, it's an exclusive flock on the file beside
-// the database, path.lock, which the kernel releases if the process dies,
-// however it dies; the lock file names its holder, for the error that
-// another serve gets. On PostgreSQL, it's a session advisory lock, held on a
-// connection of its own, which PostgreSQL releases when the session ends;
-// the session's application_name names its holder (ADR-0046).
+// A Lock is held on a database by the one nbpdns process that may change it
+// while no serve runs (ADR-0038, REQ-033). On SQLite, it's an exclusive flock
+// on the file beside the database, path.lock, which the kernel releases if
+// the process dies, however it dies; the lock file names its holder, for the
+// error that another process gets. serve holds it there too, as the one
+// instance on the database. On PostgreSQL, it's the serve lock, a session
+// advisory lock, taken exclusively, on a connection of its own, which
+// PostgreSQL releases when the session ends; the session's application_name
+// names its holder (ADR-0046). There, each replica of serve holds the serve
+// lock shared, through Join (ADR-0047), so that db migrate, say, refuses
+// while any replica runs.
 type Lock struct {
 	f    *os.File
 	conn *sql.Conn
 }
 
-// serveLockKey is the key of the session advisory lock that one nbpdns serve
-// holds on a PostgreSQL database: "nbpdns" in ASCII, then 2. Advisory locks
-// belong to their database, so two databases on one server never share it.
+// serveLockKey is the key of the serve lock on a PostgreSQL database: "nbpdns"
+// in ASCII, then 2. Advisory locks belong to their database, so two
+// databases on one server never share it.
 const serveLockKey int64 = 0x6e62_7064_6e73_0002
+
+// maxHolders is how many of a lock's holders a LockedError names.
+const maxHolders = 3
 
 // LockedError is the error for a database whose lock another process holds.
 type LockedError struct {
 	// Path is the lock file, or empty on PostgreSQL.
 	Path string
 	// Holder names the holder, as it named itself: its host and PID, and
-	// when it took the lock.
-	Holder string
+	// when it took the lock. On PostgreSQL, it names up to three, of
+	// Holders.
+	Holder  string
+	Holders int
 }
 
 func (e *LockedError) Error() string {
@@ -52,6 +61,10 @@ func (e *LockedError) Error() string {
 	lock := "the database's lock"
 	if e.Path != "" {
 		lock += ", " + e.Path
+	}
+	if e.Holders > 1 {
+		return fmt.Sprintf("%d other nbpdns processes hold %s: %s; stop them first, "+
+			"or give this one another database.url", e.Holders, lock, holder)
 	}
 	return fmt.Sprintf("another nbpdns holds %s: %s; stop it first, "+
 		"or give this one another database.url", lock, holder)
@@ -94,9 +107,10 @@ func Acquire(path string) (*Lock, error) {
 }
 
 // Lock takes the lock on the store's database, or fails with a *LockedError
-// if another process holds it. It doesn't wait. On PostgreSQL, the lock is
-// held on a connection of its own until Close. On SQLite, it's Acquire's,
-// which can be taken before the database is opened.
+// if another process holds it, such as a replica of serve on PostgreSQL. It
+// doesn't wait. On PostgreSQL, the lock is held on a connection of its own
+// until Close. On SQLite, it's Acquire's, which can be taken before the
+// database is opened.
 func (s *Store) Lock(ctx context.Context) (*Lock, error) {
 	if s.dialect != postgresDialect {
 		return Acquire(s.path)
@@ -105,45 +119,75 @@ func (s *Store) Lock(ctx context.Context) (*Lock, error) {
 	if err != nil {
 		return nil, fmt.Errorf("locking the database: %w", err)
 	}
+	// As on SQLite, the holder's name only helps the error that another
+	// process gets.
+	if _, err := conn.ExecContext(ctx, "SELECT set_config('application_name', $1, false)", holderName()); err != nil {
+		discard(conn)
+		return nil, fmt.Errorf("locking the database: %w", err)
+	}
 	var locked bool
 	if err := conn.QueryRowContext(ctx, "SELECT pg_try_advisory_lock($1)", serveLockKey).Scan(&locked); err != nil {
 		discard(conn)
 		return nil, fmt.Errorf("locking the database: %w", err)
 	}
 	if !locked {
-		holder := lockHolder(ctx, conn)
+		err := lockedError(ctx, conn)
 		discard(conn)
-		return nil, &LockedError{Holder: holder}
+		return nil, err
 	}
-	// As on SQLite, the holder's name only helps the error that another
-	// process gets. PostgreSQL keeps 63 bytes of it.
-	host, _ := os.Hostname()
-	name := fmt.Sprintf("nbpdns: host %s, PID %d", host, os.Getpid())
-	_, _ = conn.ExecContext(ctx, "SELECT set_config('application_name', $1, false)", name)
 	return &Lock{conn: conn}, nil
 }
 
-// lockHolder names the session that holds the serve lock, from its
-// application_name and when it connected, or returns nothing if it can't.
-func lockHolder(ctx context.Context, conn *sql.Conn) string {
-	var name sql.NullString
-	var since sql.NullTime
+// holderName is the application_name of a session that holds the serve
+// lock, which names the process. PostgreSQL keeps 63 bytes of it.
+func holderName() string {
+	host, _ := os.Hostname()
+	return fmt.Sprintf("nbpdns: host %s, PID %d", host, os.Getpid())
+}
+
+// lockedError returns the error for the serve lock that conn couldn't take,
+// which names its holders, from their sessions' application_name and when
+// they connected, if it can.
+func lockedError(ctx context.Context, conn *sql.Conn) *LockedError {
 	// A bigint key is split into classid, its high 32 bits, and objid, its
 	// low ones, with objsubid 1.
-	err := conn.QueryRowContext(ctx, `SELECT a.application_name, a.backend_start
+	rows, err := conn.QueryContext(ctx, `SELECT a.application_name, a.backend_start
 FROM pg_locks l JOIN pg_stat_activity a ON a.pid = l.pid
 WHERE l.locktype = 'advisory' AND l.granted AND l.objsubid = 1
   AND l.database = (SELECT oid FROM pg_database WHERE datname = current_database())
-  AND l.classid::bigint = $1 AND l.objid::bigint = $2`,
-		serveLockKey>>32, serveLockKey&0xffff_ffff).Scan(&name, &since)
-	if err != nil || name.String == "" {
-		return ""
+  AND l.classid::bigint = $1 AND l.objid::bigint = $2
+ORDER BY a.backend_start`,
+		serveLockKey>>32, serveLockKey&0xffff_ffff)
+	if err != nil {
+		return &LockedError{}
 	}
-	holder := strings.TrimPrefix(printable(name.String), "nbpdns: ")
-	if since.Valid {
-		holder += ", since " + since.Time.UTC().Format(time.RFC3339)
+	defer rows.Close()
+	e := &LockedError{}
+	var named []string
+	for rows.Next() {
+		var name sql.NullString
+		var since sql.NullTime
+		if rows.Scan(&name, &since) != nil {
+			return &LockedError{}
+		}
+		e.Holders++
+		if len(named) == maxHolders || name.String == "" {
+			continue
+		}
+		holder := strings.TrimPrefix(printable(name.String), "nbpdns: ")
+		if since.Valid {
+			holder += ", since " + since.Time.UTC().Format(time.RFC3339)
+		}
+		named = append(named, holder)
 	}
-	return holder
+	if rows.Err() != nil {
+		return &LockedError{}
+	}
+	e.Holder = strings.Join(named, "; ")
+	if n := e.Holders - len(named); n > 0 && len(named) > 0 {
+		e.Holder += fmt.Sprintf("; and %d more", n)
+	}
+	return e
 }
 
 // Close releases the lock. On SQLite, the lock file stays, for the next

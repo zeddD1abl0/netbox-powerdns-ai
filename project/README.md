@@ -18,7 +18,7 @@
 | [M06](milestones/M06-rest-api.md) | REST API | done | 10 of 10 |
 | [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | done | 9 of 9 |
 | [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | done | 19 of 19 |
-| [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | in-progress | 5 of 13 |
+| [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | in-progress | 6 of 13 |
 | [M10](milestones/M10-authentication.md) | Authentication | planned | 1 of 2 |
 | [M11](milestones/M11-roles-and-permissions.md) | Roles and permissions | planned | 1 of 1 |
 | [M12](milestones/M12-sign-in.md) | Sign-in | planned | 1 of 1 |
@@ -36,8 +36,7 @@
 | Item | Title | Type | Status | Waiting on |
 |---|---|---|---|---|
 | [ITEM-0100](items/ITEM-0100-keep-concurrent-pipelines-from-running-the-runner.md) | Keep concurrent pipelines from running the runner out of memory | bug | in-progress | — |
-| [ITEM-0112](items/ITEM-0112-leader-election-by-a-postgresql-session-advisory-l.md) | Leader election by a PostgreSQL session advisory lock | feature | open | — |
-| [ITEM-0113](items/ITEM-0113-the-replicas-change-feed-polling-and-listen-and-no.md) | The replicas' change feed: polling, and LISTEN and NOTIFY | feature | open | ITEM-0112 |
+| [ITEM-0113](items/ITEM-0113-the-replicas-change-feed-polling-and-listen-and-no.md) | The replicas' change feed: polling, and LISTEN and NOTIFY | feature | open | — |
 | [ITEM-0114](items/ITEM-0114-every-replica-serves-the-api-and-status-from-the-d.md) | Every replica serves the API and status from the database | feature | open | ITEM-0113 |
 | [ITEM-0115](items/ITEM-0115-webhooks-on-any-replica-through-a-queue-in-the-dat.md) | Webhooks on any replica, through a queue in the database | feature | open | ITEM-0114 |
 | [ITEM-0116](items/ITEM-0116-the-takeover-tests-stopped-killed-and-cut-off-lead.md) | The takeover tests: stopped, killed and cut-off leaders | task | open | ITEM-0115 |
@@ -47,6 +46,7 @@
 | [ITEM-0109](items/ITEM-0109-design-m09-postgresql-and-ha.md) | Design M09: PostgreSQL and HA | task | done 2026-10-18 | — |
 | [ITEM-0110](items/ITEM-0110-the-store-on-postgresql-pgx-sqlc-s-postgresql-pack.md) | The store on PostgreSQL: pgx, sqlc's PostgreSQL package and tests on both | feature | done 2026-10-18 | — |
 | [ITEM-0111](items/ITEM-0111-database-url-for-postgresql-tls-the-url-as-a-secre.md) | database.url for PostgreSQL: TLS, the URL as a secret, and serve and the CLI on it | feature | done 2026-10-22 | — |
+| [ITEM-0112](items/ITEM-0112-leader-election-by-a-postgresql-session-advisory-l.md) | Leader election by a PostgreSQL session advisory lock | feature | done 2026-10-22 | — |
 | [ITEM-0118](items/ITEM-0118-update-go-to-1-27-3-for-go-2026-6809.md) | Update Go to 1.27.3 for GO-2026-6809 | debt | done 2026-10-22 | — |
 
 ## Open items in other milestones

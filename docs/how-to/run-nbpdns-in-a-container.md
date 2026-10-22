@@ -44,8 +44,9 @@ You need:
 
   With its state in PostgreSQL, it needs no volume, as
   [Run nbpdns on PostgreSQL](run-nbpdns-on-postgresql.md) describes.
-- Only one `serve` may use a database at a time. A second one refuses to
-  start, and names the first one's host and PID.
+- Only one `serve` may use a SQLite database at a time. A second one
+  refuses to start, and names the first one's host and PID. On PostgreSQL,
+  several can, as replicas, and one of them leads.
 - It logs JSON to standard error.
 - It trusts the CA certificates in the image, Debian's, and any `ca_file`
   you mount.
@@ -252,7 +253,9 @@ lists the image's settings.
    - **One replica, recreated:** only one `serve` may use the database, so
      an update stops the old pod before it starts the new one. A rolling
      update would wait forever for a new pod that can't start while the old
-     one holds the database. M09 adds instances that share the work.
+     one holds the database. On PostgreSQL, replicas share one database, as
+     [Run nbpdns on PostgreSQL](run-nbpdns-on-postgresql.md#run-more-than-one-serve)
+     describes.
    - **The database:** on the volume `nbpdns-data`, which `fsGroup` makes
      writable by group 65532. Use storage on a local disk, not NFS, which
      SQLite's locks don't trust.

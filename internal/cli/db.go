@@ -63,9 +63,9 @@ func newDBMigrateCmd(a *app) *cobra.Command {
 		Short: "Create the database, or apply the migrations it lacks",
 		Long: "Apply the migrations that the database at database.url lacks, each in its own\n" +
 			"transaction, and create a SQLite database if it doesn't exist. A PostgreSQL\n" +
-			"database must exist. It refuses while nbpdns serve runs on the database, since\n" +
-			"serve applies them itself when it starts, and on a database that a newer\n" +
-			"nbpdns has migrated.",
+			"database must exist. It refuses while nbpdns serve runs on the database, any\n" +
+			"of its replicas on PostgreSQL, since serve applies them itself when it starts,\n" +
+			"and on a database that a newer nbpdns has migrated.",
 		Args: usageArgs(cobra.NoArgs),
 	}
 	cmd.RunE = func(cmd *cobra.Command, _ []string) error {
@@ -125,11 +125,11 @@ func (s *session) createStore(ctx context.Context) (*store.Store, error) {
 }
 
 // openLocked opens the database at database.url with open, such as
-// createStore, under the lock that one nbpdns serve holds (ADR-0038), so
-// that no serve runs on it meanwhile. On SQLite, the lock comes first, so
-// that a second serve changes nothing. On PostgreSQL, it's taken on the open
-// database, on a connection of its own (ADR-0046). Close the lock before the
-// store.
+// createStore, under serve's lock (ADR-0038), so that no serve runs on it
+// meanwhile. On SQLite, the lock comes first, so that a second serve changes
+// nothing. On PostgreSQL, it's taken exclusively on the open database, on a
+// connection of its own (ADR-0046), and every replica of serve holds it
+// shared (ADR-0047). Close the lock before the store.
 func (s *session) openLocked(ctx context.Context, open func(context.Context) (*store.Store, error)) (*store.Store, *store.Lock, error) {
 	if path := s.cfg.Database.SQLitePath(); path != "" {
 		lock, err := store.Acquire(path)

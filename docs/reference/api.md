@@ -39,7 +39,7 @@ explains its conventions.
 
 Get the service's status. Operation `getStatus`.
 
-Returns the service's build, uptime, readiness and liveness, the refresh schedule and how the last refresh went, NetBox's state, and where spans are exported. Each server group's state is a resource of its own, under `/server-groups`.
+Returns the service's build, uptime, readiness and liveness, the refresh schedule and how the last refresh went, NetBox's state, where spans are exported, and which replica answers and which one leads. Each server group's state is a resource of its own, under `/server-groups`.
 
 | Parameter | In | Type | Description |
 |---|---|---|---|
@@ -255,12 +255,36 @@ The nbpdns service's state.
 | `started` | `string` (`date-time`) | When the service started. |
 | `uptime_seconds` | `number` (`double`) | The time since the service started. |
 | `ready` | `boolean` | Whether the service has restored the reports it kept before it restarted, or, with none to restore, whether its first refresh has finished, whatever its outcome, as `/readyz` reports. |
-| `live` | `boolean` | Whether a refresh has started within `drift.interval` + `drift.timeout` + 1 minute, as `/livez` reports. |
+| `live` | `boolean` | On the leader, whether a refresh has started within `drift.interval` + `drift.timeout` + 1 minute, or since it took over. On a follower, whether it has tried for the leader's lock within the last minute. As `/livez` reports. |
 | `schedule` | [`Schedule`](#schedule) | The refreshes' schedule, and how they went. |
 | `netbox` | [`NetBoxState`](#netboxstate) | NetBox's state, as of the last refresh. |
 | `tracing` | [`Tracing`](#tracing) | Where the service's spans are exported. |
 | `webhooks` | [`Webhooks`](#webhooks) | The state of NetBox's webhooks, which refresh the zones they name. |
 | `database` | [`Database`](#database) | The database that the service keeps its state in. |
+| `replica` | [`Replica`](#replica) | This replica of the service, one of those on its database. On PostgreSQL, several can run, and one of them leads: it refreshes and prunes. On SQLite, one runs, and it always leads. |
+| `leader` | [`Leader`](#leader), or null | The replica that leads, as this replica last knew it: from the database, which it reads every 5 seconds, on a follower. Null if it knows of none, before a replica first leads the database, or just after this one stepped down. |
+
+### `Replica`
+
+This replica of the service, one of those on its database. On PostgreSQL, several can run, and one of them leads: it refreshes and prunes. On SQLite, one runs, and it always leads.
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | `string` | The replica's host name. |
+| `id` | `string` | A random ID, new at each start, which tells apart two replicas on one host. |
+| `role` | `string` | `leader` if this replica holds the leader's lock, and so refreshes and prunes; `follower` if it doesn't. |
+
+### `Leader`
+
+The replica that leads, which refreshes and prunes.
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | `string` | The leader's host name. |
+| `id` | `string` | The leader's random ID, from its start. |
+| `since` | `string` (`date-time`) | When it took over. On SQLite, when the service started. |
+| `last_seen` | `string` (`date-time`) | When it last confirmed that it led, which it does every 5 seconds. On SQLite, now. |
+| `next_refresh` | `string` (`date-time`), or null | When its next refresh starts, as of `last_seen`, or null while one runs. |
 
 ### `Database`
 
