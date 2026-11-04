@@ -31,7 +31,7 @@ the database's port published.
 - [x] Lists come in the same byte order on both databases, whatever the collation.
 - [x] Replicas migrating one database at once apply each migration once.
 - [x] `make lab-up` creates the `nbpdns` role and database on an existing volume, and does nothing when they exist.
-- [ ] The integration job's peak memory on the first pipeline is recorded here, for ITEM-0100.
+- [x] The integration job's peak memory on the first pipeline is recorded here, for ITEM-0100.
 
 ## Notes
 
@@ -118,3 +118,14 @@ the database's port published.
   whether its integration job passes without a retry, here and in
   ITEM-0100. Everything else is done: `make check` and `make
   test-integration` pass.
+- 2026-11-04: Pipeline 845 (f8e728a), the first with this item's commit,
+  ran its integration job, 4678, to the end on its 2Gi request, and its
+  services on their 1536 MiB, without an OOM kill or a retry, in 1406 s:
+  11 minutes for the lab to come up, then 12 minutes of tests. GitLab
+  doesn't report the job's peak, so this records that it stayed inside
+  the request, rather than a figure; the local peak above stands. The
+  job failed, on two tests, `TestServeOnPostgres` and
+  `TestStoreLock/postgres`: the runner's 50-character host name cuts the
+  PID off a lock holder's `application_name`, which PostgreSQL truncates
+  to 63 bytes. That's ITEM-0120's bug, not memory. The unit-test job
+  passed in 752 s.

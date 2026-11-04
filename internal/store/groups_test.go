@@ -78,8 +78,8 @@ func TestMirrorFileGroups(t *testing.T) {
 			if err != nil || len(events) != step.events {
 				t.Fatalf("%s: MirrorFileGroups() = %d events, %v, want %d", step.name, len(events), err, step.events)
 			}
-			if v, _ := s.GroupsVersion(ctx); v != step.version {
-				t.Errorf("%s: version %d, want %d", step.name, v, step.version)
+			if v, _ := s.Versions(ctx); v.Groups != step.version {
+				t.Errorf("%s: version %d, want %d", step.name, v.Groups, step.version)
 			}
 		}
 		got, version, err := s.Groups(ctx)
@@ -163,8 +163,8 @@ func TestCLIGroups(t *testing.T) {
 		if fields, err := s.SetGroup(ctx, cur, changed, sealer(k, "key-2"), Change{Actor: jordan.Actor, Reason: "rotated", Check: CheckSkipped}); err != nil || !reflect.DeepEqual(fields, []string{"primary.api_key"}) {
 			t.Errorf("SetGroup() of the key = %v, %v", fields, err)
 		}
-		if v, _ := s.GroupsVersion(ctx); v != 4 {
-			t.Errorf("version %d, want 4: the mirror, the add and two changes", v)
+		if v, _ := s.Versions(ctx); v.Groups != 4 {
+			t.Errorf("version %d, want 4: the mirror, the add and two changes", v.Groups)
 		}
 
 		// A file group isn't the CLI's.

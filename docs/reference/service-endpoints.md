@@ -268,7 +268,7 @@ be read:
 | `replica.name` | string | This replica's host name. On PostgreSQL, several replicas can run on one database, and one of them leads: it refreshes and prunes. On SQLite, one runs. |
 | `replica.id` | string | A random ID, new at each start, which tells apart two replicas on one host. |
 | `replica.role` | string | `leader` if this replica holds the leader's lock, and so refreshes and prunes, or `follower`. On SQLite, always `leader`. |
-| `leader` | object or null | The replica that leads, as this one last knew it: a follower reads it from the database every 5 seconds. `null` if it knows of none: before a replica first leads the database, or just after this one stepped down. |
+| `leader` | object or null | The replica that leads, as this one last knew it: a follower reads it from the database every `database.poll_interval`, 5 seconds by default, or as soon as it hears of a change, with `database.listen`. `null` if it knows of none: before a replica first leads the database, or just after this one stepped down. |
 | `leader.name` | string | The leader's host name. |
 | `leader.id` | string | The leader's random ID, from its start. |
 | `leader.since` | time | When it took over. On SQLite, when the service started. |

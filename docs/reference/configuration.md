@@ -43,7 +43,9 @@ a secret's value.
 | Key | Kind | Type | Default |
 |---|---|---|---|
 | [`audit.retention_days`](#auditretention_days) | runtime | integer, 1 to 36500 | `2557` |
+| [`database.listen`](#databaselisten) | bootstrap | `true` or `false` | `false` |
 | [`database.master_key`](#databasemaster_key) | bootstrap | string, secret | none |
+| [`database.poll_interval`](#databasepoll_interval) | bootstrap | duration, from `100ms` to `30s` | `5s` |
 | [`database.url`](#databaseurl) | bootstrap | a `sqlite:`, `postgres://` or `postgresql://` URL, secret | `sqlite:///var/lib/nbpdns/nbpdns.db` |
 | [`drift.group_concurrency`](#driftgroup_concurrency) | runtime | integer, 1 to 32 | `4` |
 | [`drift.history_retention_days`](#drifthistory_retention_days) | runtime | integer, 1 to 36500 | `400` |
@@ -87,6 +89,26 @@ is built to support. PCI DSS asks for one year.
 > A shorter retention may fall short of your compliance obligations. Copy the
 > trail elsewhere before you shorten it: the events it deletes are gone.
 
+## `database.listen`
+
+Whether `nbpdns serve` also listens for the database's changes, with
+PostgreSQL's `LISTEN`, so that it applies them at once, rather than at its next
+check. Each change to the database sends `NOTIFY nbpdns`. With this on, `serve`
+listens on a connection of its own, and checks the database as soon as it hears
+of a change: a setting or a server group changed with the command line, or a
+leader that stops, whose lock a follower then takes. It still checks every
+`database.poll_interval`, so a notification that's lost, such as while its
+connection reconnects, costs at most one interval. It costs each `serve` one
+more connection, and works wherever nbpdns does: directly, or through a pooler
+in session mode. Only PostgreSQL has it, so nbpdns refuses it with a SQLite
+`database.url`.
+
+- **Kind:** bootstrap
+- **Type:** `true` or `false`
+- **Default:** `false`
+- **Environment variable:** `NBPDNS_DATABASE_LISTEN`
+- **Flag:** `--database-listen`
+
 ## `database.master_key`
 
 The master key that seals the secrets the database stores, such as a
@@ -106,6 +128,23 @@ secrets that it can't open. `nbpdns secrets rotate-master-key` replaces it.
 > [!WARNING]
 > Keep the master key apart from the database, and back it up: without it, the
 > secrets that the database stores are lost. Anyone with both can read them.
+
+## `database.poll_interval`
+
+How often `nbpdns serve` checks the database for the changes that it follows:
+the runtime settings, the server groups and, on PostgreSQL, the leader. A
+change made with `nbpdns settings` or `nbpdns groups` reaches every `serve`
+within this long, or at once with `database.listen`. On PostgreSQL, a follower
+also tries for the leader's lock at each check, so it takes over within this
+long of the leader stopping, and of PostgreSQL freeing a lost leader's lock,
+about 30 seconds after the loss. Each check is one small read. Write it with a
+unit, such as `5s`.
+
+- **Kind:** bootstrap
+- **Type:** duration, from `100ms` to `30s`
+- **Default:** `5s`
+- **Environment variable:** `NBPDNS_DATABASE_POLL_INTERVAL`
+- **Flag:** `--database-poll-interval`
 
 ## `database.url`
 
@@ -508,6 +547,8 @@ Every key with its default, except the secrets that have none:
 audit:
   retention_days: 2557
 database:
+  listen: false
+  poll_interval: 5s
   url: sqlite:///var/lib/nbpdns/nbpdns.db
 drift:
   group_concurrency: 4

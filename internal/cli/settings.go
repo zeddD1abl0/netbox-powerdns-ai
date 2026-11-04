@@ -18,9 +18,6 @@ import (
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/store"
 )
 
-// settingsPoll is how often serve checks whether the settings changed.
-const settingsPoll = 5 * time.Second
-
 func newSettingsCmd(a *app) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "settings",
@@ -279,7 +276,7 @@ func (s *session) changeSetting(ctx context.Context, out io.Writer, c store.Sett
 		fmt.Fprintf(out, "%s pins %s, so nbpdns uses its value until it's unset there.\n", pin, c.Key)
 		return nil
 	}
-	fmt.Fprintf(out, "A running nbpdns serve applies it within %s.\n", settingsPoll)
+	fmt.Fprintf(out, "A running nbpdns serve applies it within %s.\n", s.cfg.Database.PollInterval)
 	return nil
 }
 

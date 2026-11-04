@@ -84,6 +84,9 @@ type dialect struct {
 	// first in it, and waits for the other writes to end.
 	write      *sql.TxOptions
 	lockWrites func(ctx context.Context, tx *sql.Tx) error
+	// notify, if set, runs last in each write transaction, to tell the
+	// replicas of its change (ADR-0048).
+	notify string
 }
 
 // readOptions is how a read transaction begins: it reads one snapshot of

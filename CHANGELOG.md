@@ -38,6 +38,17 @@ All notable changes to this project are recorded here. The format follows
   say which replica leads; and each takeover is a `service.leader_acquired`
   audit event. On SQLite, `serve` always leads. For now, only the leader
   serves its refreshes.
+- `nbpdns serve` checks its database for changes every
+  `database.poll_interval`, 5 seconds by default: the runtime settings and
+  server groups that the command line changed, and, on PostgreSQL, the
+  leader, whose lock each follower tries for at each check. On PostgreSQL,
+  each change sends `NOTIFY nbpdns`, and with `database.listen: true`,
+  `serve` listens for it on a connection of its own, and acts at once,
+  reconnecting if the connection is lost; the checks go on either way. A
+  leader that stops releases its lock and notifies, so a follower that
+  listens takes over at once. `database.listen` is refused with a SQLite
+  `database.url`. `nbpdns settings` and `nbpdns groups` say that a running
+  `serve` applies a change within `database.poll_interval`.
 
 ### Changed
 

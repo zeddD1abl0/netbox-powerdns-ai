@@ -262,7 +262,7 @@ The nbpdns service's state.
 | `webhooks` | [`Webhooks`](#webhooks) | The state of NetBox's webhooks, which refresh the zones they name. |
 | `database` | [`Database`](#database) | The database that the service keeps its state in. |
 | `replica` | [`Replica`](#replica) | This replica of the service, one of those on its database. On PostgreSQL, several can run, and one of them leads: it refreshes and prunes. On SQLite, one runs, and it always leads. |
-| `leader` | [`Leader`](#leader), or null | The replica that leads, as this replica last knew it: from the database, which it reads every 5 seconds, on a follower. Null if it knows of none, before a replica first leads the database, or just after this one stepped down. |
+| `leader` | [`Leader`](#leader), or null | The replica that leads, as this replica last knew it: from the database, on a follower, which reads it every `database.poll_interval`, 5 seconds by default, or as soon as it hears of a change, with `database.listen`. Null if it knows of none, before a replica first leads the database, or just after this one stepped down. |
 
 ### `Replica`
 

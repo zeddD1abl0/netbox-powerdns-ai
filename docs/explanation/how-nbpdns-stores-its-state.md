@@ -17,7 +17,7 @@ flowchart LR
     file[Config file] -->|its server groups, at each start| serve[nbpdns serve]
     cli[nbpdns settings, groups, secrets] -->|each change, with its audit event| db[(Database)]
     serve -->|refreshes, history, audit events| db
-    db -->|changed settings and groups, within 5 seconds| serve
+    db -->|changed settings and groups, at each poll| serve
 ```
 
 [ADR-0038](../adr/0038-an-embedded-sqlite-store-with-goose-and-sqlc.md),
@@ -72,6 +72,10 @@ refreshes and prunes:
 - A refresh's history and the prune check, as they write, that the
   writer still holds the leader's lock. A leader that lost it, but hasn't
   noticed, such as a process that resumes after a pause, can't write.
+- Each follower tries for the lock at each of its polls, every
+  `database.poll_interval`. A leader that stops releases the lock, and
+  sends a notification, so that a follower that listens takes over at
+  once, and one that doesn't at its next poll.
 
 [ADR-0046](../adr/0046-the-store-on-postgresql-18-with-pgx-and-a-second-s.md)
 and [ADR-0047](../adr/0047-elect-the-leader-with-a-postgresql-session-advisor.md)
@@ -102,7 +106,8 @@ stored in the database. A bootstrap key isn't, because changing it while
 turn it against you:
 
 - `database.url` and `database.master_key` open the database and its
-  secrets, so they can't be inside it.
+  secrets, and `database.poll_interval` and `database.listen` say how
+  `serve` follows it, so they can't be inside it.
 - `server.*`, `log.format` and `otlp.*` set up the listener, the log, and
   the traces, which `serve` makes once, as it starts.
 - `netbox.url` and `netbox.ca_file` decide where nbpdns sends its NetBox
@@ -114,8 +119,11 @@ turn it against you:
 explains how the database fits among the sources, and what it means for a
 runtime key to be pinned by the file, the environment, or a flag.
 
-Each change to the settings raises their version. `serve` checks the version
-every 5 seconds, and applies the keys that changed:
+Each change to the settings raises their version. `serve` polls the
+database for it every `database.poll_interval`, 5 seconds by default. On
+PostgreSQL, each change also sends a notification, with `NOTIFY`, and a
+`serve` with `database.listen` on polls as soon as it hears one. It applies
+the keys that changed:
 
 - the log level, the schedule (`drift.interval`, `drift.timeout` and
   `drift.webhook_delay`), and whether NetBox's webhooks are on, at once;

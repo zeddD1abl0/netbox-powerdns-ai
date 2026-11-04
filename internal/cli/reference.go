@@ -104,8 +104,9 @@ func flagTable(b *strings.Builder, fs *pflag.FlagSet) {
 		if f.Shorthand != "" {
 			name = "`-" + f.Shorthand + "`, " + name
 		}
+		// A switch's false is no default, but a boolean key's is.
 		def := "none"
-		if f.DefValue != "" && f.DefValue != "false" {
+		if f.DefValue != "" && (f.DefValue != "false" || f.Value.Type() == "boolean") {
 			def = "`" + f.DefValue + "`"
 		}
 		usage := f.Usage

@@ -176,6 +176,7 @@ func TestServeFailures(t *testing.T) {
 	noDir := configFile(t, twoGroups)
 	missing := filepath.Join(t.TempDir(), "missing")
 	noDir["NBPDNS_DATABASE_URL"] = "sqlite://" + filepath.Join(missing, "nbpdns.db")
+	listen := with(two, "NBPDNS_DATABASE_LISTEN", "true")
 	for _, tt := range []struct {
 		name string
 		env  map[string]string
@@ -183,6 +184,8 @@ func TestServeFailures(t *testing.T) {
 	}{
 		{"an address in use", two, "server.listen: listen tcp " + inUse.Addr().String()},
 		{"no database directory", noDir, "the database's directory, " + missing + ", doesn't exist"},
+		{"database.listen on SQLite", listen, "database.listen (from env NBPDNS_DATABASE_LISTEN): only PostgreSQL has LISTEN and NOTIFY, " +
+			"and database.url (from env NBPDNS_DATABASE_URL) names a SQLite database"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			code, _, stderr := run(t, tt.env, "serve")

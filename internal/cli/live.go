@@ -7,7 +7,6 @@ import (
 	"reflect"
 	"slices"
 	"sync/atomic"
-	"time"
 
 	"go.opentelemetry.io/otel/trace"
 
@@ -220,7 +219,8 @@ func diffGroups(prev, next []servedGroup) groupChanges {
 }
 
 // A watcher applies the settings and the groups that the database stores to
-// a running serve, when their versions move on (ADR-0040).
+// a running serve, when the change feed finds that their versions have moved
+// on (ADR-0040, ADR-0048).
 type watcher struct {
 	s    *session
 	st   *store.Store
@@ -234,39 +234,17 @@ type watcher struct {
 	settingsVersion, groupsVersion int64
 }
 
-// run checks the settings' and the groups' versions every settingsPoll,
-// until ctx is done, and when one has moved on, reads them again and
-// applies them. Settings or groups that can't be applied are logged, and
-// serve keeps those it has, and tries again at the next check.
-func (w *watcher) run(ctx context.Context) {
-	t := time.NewTicker(settingsPoll)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-		}
-		if v, ok := w.version(ctx, "settings", w.st.SettingsVersion); ok && v != w.settingsVersion && w.reloadSettings(ctx) {
-			w.settingsVersion = v
-		}
-		if v, ok := w.version(ctx, "server groups", w.st.GroupsVersion); ok && v != w.groupsVersion && w.reloadGroups(ctx) {
-			w.groupsVersion = v
-		}
+// apply reads the settings, or the groups, again, and applies them, if their
+// versions in v have moved on from those applied. Settings or groups that
+// can't be applied are logged, and serve keeps those it has, and tries again
+// at the feed's next check.
+func (w *watcher) apply(ctx context.Context, v store.Versions) {
+	if v.Settings != w.settingsVersion && w.reloadSettings(ctx) {
+		w.settingsVersion = v.Settings
 	}
-}
-
-// version returns a version, read by read, or logs why it couldn't be.
-func (w *watcher) version(ctx context.Context, what string, read func(context.Context) (int64, error)) (int64, bool) {
-	v, err := read(ctx)
-	if err != nil {
-		if ctx.Err() == nil {
-			w.s.log.WarnContext(ctx, "couldn't check whether the database's configuration changed; serve checks again soon",
-				"of", what, "err", err)
-		}
-		return 0, false
+	if v.Groups != w.groupsVersion && w.reloadGroups(ctx) {
+		w.groupsVersion = v.Groups
 	}
-	return v, true
 }
 
 // reloadSettings reads the settings that the database stores, and applies

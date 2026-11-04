@@ -107,3 +107,9 @@ tag no longer fails main.
   commit, 951cb7c, isn't pushed yet, so its pipeline, the first to run the
   store's tests on PostgreSQL, is still to come. The item still waits for a
   merge and its tag.
+- 2026-11-04: Pipeline 845 (f8e728a), the first to run the store's tests
+  on PostgreSQL, ran every job without a retry. Its integration job got
+  its 2Gi request and its services their 1536 MiB, and ran to the end in
+  1406 s without an OOM kill, but failed two tests on a long host name
+  (ITEM-0120), so it doesn't count as a pass. The item still waits for a
+  merge and its tag.

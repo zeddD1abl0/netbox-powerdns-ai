@@ -115,12 +115,12 @@ func TestCLIOnPostgres(t *testing.T) {
 // either runs; and that the follower takes over when the leader stops, which
 // the audit trail records (ADR-0047).
 func TestServeOnPostgres(t *testing.T) {
-	shortenElection(t)
 	where := lab.NewPostgresDatabase(t)
 	shown := strings.Replace(where, lab.PostgresPassword, "xxxxx", 1)
 	env := configFile(t, twoGroups)
 	env["NBPDNS_NETBOX_URL"], env["NBPDNS_NETBOX_TOKEN"] = "http://127.0.0.1:1", "nbt_abc.def"
 	env["NBPDNS_DATABASE_URL"] = where
+	env["NBPDNS_DATABASE_POLL_INTERVAL"] = "100ms"
 	first := startServe(t, env)
 	first.waitReady(30 * time.Second)
 	id := loggedDatabaseID(t, first.stderr.String())
@@ -269,7 +269,11 @@ func TestLeaderStepsDown(t *testing.T) {
 	svc := service.New(service.Options{Replica: me, Elected: true, Log: s.log, Tracer: s.tracer, Metrics: s.metrics,
 		Interval: time.Hour, Timeout: time.Minute})
 	led, stopped := make(chan struct{}), make(chan time.Time, 1)
-	e := &election{s: s, st: st, svc: svc, me: me, ss: ss, lead: func(ctx context.Context) {
+	// One check, at which the replica leads: it doesn't try again once it
+	// steps down, so that another replica can take the lock.
+	polls := make(chan poll, 1)
+	polls <- poll{read: true}
+	e := &election{s: s, st: st, svc: svc, me: me, ss: ss, polls: polls, lead: func(ctx context.Context) {
 		close(led)
 		<-ctx.Done()
 		stopped <- time.Now()
@@ -340,14 +344,6 @@ func TestLeaderStepsDown(t *testing.T) {
 	if tb, err := b.TryLead(t.Context(), time.Time{}); err != nil || tb == nil || tb.Previous == nil || tb.Previous.ID != "A" {
 		t.Errorf("another replica's TryLead() after the step-down = %+v, %v, want a takeover from A", tb, err)
 	}
-}
-
-// shortenElection has followers poll every 100 milliseconds, for the test.
-func shortenElection(t *testing.T) {
-	t.Helper()
-	poll := leaderPoll
-	leaderPoll = 100 * time.Millisecond
-	t.Cleanup(func() { leaderPoll = poll })
 }
 
 // statusWhen polls the service's /status until cond holds of it, for up to

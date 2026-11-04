@@ -200,9 +200,10 @@ the same, in its `database` section:
 
 Several `serve`s can run on one PostgreSQL database, as replicas. One of
 them leads: it refreshes and prunes. The others follow, and one of them
-takes over if the leader stops, dies or is cut off: at once if it stops, and
-within about 30 seconds otherwise. `/status` names the replica that answers,
-its role, and the leader, as does the `nbpdns_leader` metric, and each
+takes over if the leader stops, dies or is cut off: within
+`database.poll_interval`, 5 seconds by default, if it stops, and within
+about 30 seconds otherwise. `/status` names the replica that answers, its
+role, and the leader, as does the `nbpdns_leader` metric, and each
 takeover is a `service.leader_acquired` event in the audit trail.
 
 > [!WARNING]
@@ -225,6 +226,26 @@ PostgreSQL releases a replica's locks when its session ends, however it
 ends: when the replica stops, or within about 30 seconds of its host
 dying, its network failing, or its process hanging.
 
+## Have the replicas hear of changes at once
+
+Each replica checks the database for changes every
+`database.poll_interval`: the runtime settings and server groups that
+`nbpdns settings` and `nbpdns groups` change, and the leader. Each change
+also sends a notification, with PostgreSQL's `NOTIFY`. Turn on
+`database.listen`, on every replica, for each to listen for them on a
+connection of its own, and act on a change at once:
+
+```yaml
+database:
+  listen: true
+```
+
+A follower then takes over from a leader that stops at once, too. Each
+replica still checks every `database.poll_interval`, so a notification
+that's lost, such as while its connection reconnects, costs at most one
+interval. Each replica logs `listening for the database's changes` once
+it listens, and a warning if its connection is lost, then listens again.
+
 ## Connect through a pooler
 
 nbpdns keeps a few connections open, and needs its sessions to itself: its
@@ -241,4 +262,5 @@ PostgreSQL, or through a pooler in session mode, such as PgBouncer with
   the secrets that the database stores are sealed, on PostgreSQL as on
   SQLite.
 - The [configuration reference](../reference/configuration.md#databaseurl)
-  describes `database.url`.
+  describes `database.url`, `database.poll_interval` and
+  `database.listen`.

@@ -185,16 +185,6 @@ func listGroups(ctx context.Context, q sqlite.Querier) ([]sqlite.ServerGroup, er
 	return rows, err
 }
 
-// GroupsVersion returns the groups' version, which each change bumps, so
-// that serve can tell, cheaply, when to read them again.
-func (s *Store) GroupsVersion(ctx context.Context) (int64, error) {
-	v, err := s.q.SequenceValue(ctx, seqGroupsVersion)
-	if err != nil {
-		return 0, fmt.Errorf("reading the server groups' version: %w", err)
-	}
-	return v, nil
-}
-
 // Group returns the group named name, or a *NoGroupError.
 func (s *Store) Group(ctx context.Context, name string) (StoredGroup, error) {
 	r, err := s.q.GetGroup(ctx, name)

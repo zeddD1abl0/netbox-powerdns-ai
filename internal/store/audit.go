@@ -27,8 +27,9 @@ type Tx struct {
 
 // InTx runs fn in a write transaction, which it commits if fn returns nil,
 // and rolls back otherwise. Write transactions run one at a time, on either
-// database. It returns the audit events that fn appended, once they're
-// committed.
+// database. On PostgreSQL, each notifies the replicas of its change, as it
+// commits (ADR-0048). It returns the audit events that fn appended, once
+// they're committed.
 func (s *Store) InTx(ctx context.Context, fn func(tx *Tx) error) ([]audit.Event, error) {
 	sqlTx, err := s.db.BeginTx(ctx, s.dialect.write)
 	if err != nil {
@@ -43,6 +44,11 @@ func (s *Store) InTx(ctx context.Context, fn func(tx *Tx) error) ([]audit.Event,
 	tx := &Tx{tx: sqlTx, q: s.dialect.queries(sqlTx)}
 	if err := fn(tx); err != nil {
 		return nil, err
+	}
+	if s.dialect.notify != "" {
+		if _, err := sqlTx.ExecContext(ctx, s.dialect.notify); err != nil {
+			return nil, fmt.Errorf("notifying the change: %w", err)
+		}
 	}
 	if err := sqlTx.Commit(); err != nil {
 		return nil, fmt.Errorf("committing a transaction: %w", err)

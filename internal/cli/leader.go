@@ -8,29 +8,25 @@ import (
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/store"
 )
 
-// The election's timing (ADR-0047). They're variables so that tests can
-// shorten them.
-var (
-	// leaderPoll is how often a follower tries for the leader's lock, and
-	// reads the leader's row.
-	leaderPoll = 5 * time.Second
-	// heartbeatInterval is how often the leader confirms that it leads, and
-	// heartbeatTimeout how long it waits for that before it steps down: it
-	// steps down within 10 seconds of its last heartbeat, before PostgreSQL
-	// can end a lost leader's session, about 25 seconds, and free its lock.
+// The leader's heartbeat (ADR-0047): heartbeatInterval is how often the
+// leader confirms that it leads, and heartbeatTimeout how long it waits for
+// that before it steps down. It steps down within 10 seconds of its last
+// heartbeat, before PostgreSQL can end a lost leader's session, about 25
+// seconds, and free its lock.
+const (
 	heartbeatInterval = 5 * time.Second
 	heartbeatTimeout  = 5 * time.Second
 )
 
-// electionTimeout bounds each of a follower's steps: joining, trying for the
-// lock, which may write the takeover, and reading the leader's row.
+// electionTimeout bounds each of the election's steps: joining, trying for
+// the lock, which may write the takeover, and releasing it.
 const electionTimeout = 10 * time.Second
 
 // An election is serve's part in choosing the leader of the replicas on a
 // PostgreSQL database (ADR-0047). As a follower, it tries for the leader's
-// lock at each poll. As the leader, it runs lead, the refreshes and the
-// prune, and confirms that it leads at each heartbeat, until it misses one:
-// then it steps down, and follows.
+// lock at each of the change feed's checks (ADR-0048). As the leader, it
+// runs lead, the refreshes and the prune, and confirms that it leads at each
+// heartbeat, until it misses one: then it steps down, and follows.
 type election struct {
 	s   *session
 	st  *store.Store
@@ -45,14 +41,26 @@ type election struct {
 	// the ID of the last leader it saw, for nbpdns_leader_changes_total.
 	leader *store.Leader
 	seen   string
+	// polls are the change feed's checks.
+	polls <-chan poll
 }
 
-// run takes part in the election until ctx is canceled. Then it ends the
-// replica's session, which releases the leader's lock, if it holds it, once
-// the leader's work has stopped.
+// run takes part in the election until ctx is canceled: at each of the
+// feed's checks, it follows the leader that the check read, and tries for
+// the leader's lock. Then it ends the replica's session, which releases the
+// leader's lock, if it holds it, once the leader's work has stopped.
 func (e *election) run(ctx context.Context) {
 	defer e.leave()
 	for {
+		var p poll
+		select {
+		case <-ctx.Done():
+			return
+		case p = <-e.polls:
+		}
+		if p.read {
+			e.saw(p.leader)
+		}
 		if e.ss == nil {
 			e.join(ctx)
 		}
@@ -61,12 +69,20 @@ func (e *election) run(ctx context.Context) {
 				e.leadUntil(ctx, t)
 			}
 		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(leaderPoll):
-		}
 	}
+}
+
+// saw records l, the leader's row as the feed read it, or nil if no replica
+// has led the database, for the next Follow.
+func (e *election) saw(l *store.Leader) {
+	if l != nil && e.seen != "" && l.ID != e.seen {
+		e.s.metrics.LeaderChanged()
+	}
+	if l != nil {
+		e.seen = l.ID
+		e.s.metrics.Leader(false, l.Since)
+	}
+	e.leader = l
 }
 
 // join opens a session for the replica again, after its last one ended.
@@ -93,7 +109,7 @@ func (e *election) leave() {
 }
 
 // try tries for the leader's lock, and returns the takeover if it took it.
-// Otherwise, it reads the leader's row, and follows. If the session fails,
+// Otherwise, it follows the leader that it last saw. If the session fails,
 // it ends it, for join to replace.
 func (e *election) try(ctx context.Context) *store.Takeover {
 	tctx, cancel := context.WithTimeout(ctx, electionTimeout)
@@ -108,25 +124,22 @@ func (e *election) try(ctx context.Context) *store.Takeover {
 		e.leave()
 	case t != nil:
 		return t
-	default:
-		l, err := e.st.Leader(tctx)
-		if err != nil {
-			if ctx.Err() == nil {
-				e.s.log.WarnContext(ctx, "couldn't read which replica leads", "err", err)
-			}
-			break
-		}
-		if l != nil && e.seen != "" && l.ID != e.seen {
-			e.s.metrics.LeaderChanged()
-		}
-		if l != nil {
-			e.seen = l.ID
-			e.s.metrics.Leader(false, l.Since)
-		}
-		e.leader = l
 	}
 	e.svc.Follow(e.leader)
 	return nil
+}
+
+// release releases the leader's lock as serve stops, and notifies the other
+// replicas, so that one of them takes over at once if it listens, or at its
+// next poll (ADR-0048). If it can't, the lock goes as the session ends.
+func (e *election) release(ctx context.Context) {
+	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), electionTimeout)
+	defer cancel()
+	if err := e.ss.Release(rctx); err != nil {
+		e.s.log.WarnContext(ctx, "couldn't release the leader's lock, so it goes as this replica's session ends", "err", err)
+		return
+	}
+	e.s.log.InfoContext(ctx, "released the leader's lock, for another replica to take")
 }
 
 // leadUntil runs the leader's work, from takeover t, and confirms at each
@@ -175,6 +188,7 @@ func (e *election) leadUntil(ctx context.Context, t *store.Takeover) {
 			// work stops at once.
 			stop()
 			<-done
+			e.release(ctx)
 			e.leave()
 			return
 		case err != nil:
@@ -186,6 +200,11 @@ func (e *election) leadUntil(ctx context.Context, t *store.Takeover) {
 			e.leader = nil
 			e.s.metrics.Leader(false, time.Time{})
 			e.svc.Follow(nil)
+			// A check from while it led names it: the next one follows.
+			select {
+			case <-e.polls:
+			default:
+			}
 			return
 		}
 		e.leader.LastSeen, e.leader.NextRefresh = seen, e.svc.NextRefresh()

@@ -920,7 +920,7 @@ type Status struct {
 	// Database The database that the service keeps its state in.
 	Database Database `json:"database"`
 
-	// Leader The replica that leads, as this replica last knew it: from the database, which it reads every 5 seconds, on a follower. Null if it knows of none, before a replica first leads the database, or just after this one stepped down.
+	// Leader The replica that leads, as this replica last knew it: from the database, on a follower, which reads it every `database.poll_interval`, 5 seconds by default, or as soon as it hears of a change, with `database.listen`. Null if it knows of none, before a replica first leads the database, or just after this one stepped down.
 	Leader *Leader `json:"leader"`
 
 	// Live On the leader, whether a refresh has started within `drift.interval` + `drift.timeout` + 1 minute, or since it took over. On a follower, whether it has tried for the leader's lock within the last minute. As `/livez` reports.

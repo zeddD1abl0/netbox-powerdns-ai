@@ -75,6 +75,7 @@ var postgresDialect = &dialect{
 	// statement after the lock sees the writes that committed before it.
 	write:      &sql.TxOptions{Isolation: sql.LevelReadCommitted},
 	lockWrites: lockWrites,
+	notify:     notify,
 }
 
 // OpenPostgres opens the PostgreSQL database that url names, in libpq's

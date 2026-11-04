@@ -28,8 +28,10 @@ in the [configuration reference](configuration.md).
 |---|---|---|---|
 | `--audit-retention-days` | `integer` | `2557` | How many days the audit trail keeps an event. |
 | `--config` | `string` | none | The YAML config file to read, instead of `$NBPDNS_CONFIG`. |
+| `--database-listen` | `boolean` | `false` | Whether `nbpdns serve` also listens for the database's changes, with PostgreSQL's `LISTEN`, so that it applies them at once, rather than at its next check. |
 | `--database-master-key` | `string` | none | The master key that seals the secrets the database stores, such as a `netbox.token` that `nbpdns settings set` stores: 32 random bytes, in base64. |
 | `--database-master-key-file` | `path` | none | Read `database.master_key` from this file. |
+| `--database-poll-interval` | `duration` | `5s` | How often `nbpdns serve` checks the database for the changes that it follows: the runtime settings, the server groups and, on PostgreSQL, the leader. |
 | `--database-url` | `url` | `sqlite:///var/lib/nbpdns/nbpdns.db` | Where `nbpdns serve` keeps its state: a SQLite file, such as `sqlite:///var/lib/nbpdns/nbpdns.db`, or a PostgreSQL database, such as `postgres://nbpdns@db.example.com/nbpdns?sslmode=verify-full`. |
 | `--database-url-file` | `path` | none | Read `database.url` from this file. |
 | `--drift-group-concurrency` | `integer` | `4` | How many server groups are read and compared at once. |
@@ -598,8 +600,9 @@ the leader, refreshes and prunes, and another takes over within about 30
 seconds if it stops, dies or is cut off.
 
 It compares the config file's server groups, which it mirrors into the
-database at start, and those that nbpdns groups added, whose changes it
-applies within seconds, as it applies the runtime settings.
+database at start, and those that nbpdns groups added. It checks the
+database every database.poll_interval, or at once with database.listen on
+PostgreSQL, and applies the changed groups and runtime settings.
 
 With netbox.webhook_secret set, NetBox's signed webhooks at /api/netbox-events
 refresh the zones they name, once they stop coming for drift.webhook_delay.

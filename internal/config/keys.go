@@ -55,6 +55,11 @@ type DatabaseConfig struct {
 	// MasterKey seals the secrets that the database stores (ADR-0041), in
 	// base64.
 	MasterKey Secret
+	// PollInterval is how often serve polls the database for the changes
+	// that it follows, and Listen whether it also listens for them, on
+	// PostgreSQL (ADR-0048).
+	PollInterval time.Duration
+	Listen       bool
 }
 
 // SQLitePath returns the file that URL names, or nothing if it names a
@@ -169,6 +174,30 @@ func keys(c *Config) []Key {
 			_, err := secrets.ParseMasterKey(s)
 			return err
 		}),
+		boolKey(&c.Database.Listen, Key{
+			Name: "database.listen",
+			Summary: "Whether `nbpdns serve` also listens for the database's changes, with PostgreSQL's `LISTEN`, " +
+				"so that it applies them at once, rather than at its next check.",
+			Details: "Each change to the database sends `NOTIFY nbpdns`. With this on, `serve` listens on a connection of its own, " +
+				"and checks the database as soon as it hears of a change: a setting or a server group changed with the command line, " +
+				"or a leader that stops, whose lock a follower then takes. " +
+				"It still checks every `database.poll_interval`, so a notification that's lost, such as while its connection reconnects, " +
+				"costs at most one interval. " +
+				"It costs each `serve` one more connection, and works wherever nbpdns does: directly, or through a pooler in session mode. " +
+				"Only PostgreSQL has it, so nbpdns refuses it with a SQLite `database.url`.",
+			Default: "false",
+		}),
+		durationKeyWithin(&c.Database.PollInterval, Key{
+			Name: "database.poll_interval",
+			Summary: "How often `nbpdns serve` checks the database for the changes that it follows: " +
+				"the runtime settings, the server groups and, on PostgreSQL, the leader.",
+			Details: "A change made with `nbpdns settings` or `nbpdns groups` reaches every `serve` within this long, " +
+				"or at once with `database.listen`. " +
+				"On PostgreSQL, a follower also tries for the leader's lock at each check, so it takes over within this long of the leader stopping, " +
+				"and of PostgreSQL freeing a lost leader's lock, about 30 seconds after the loss. " +
+				"Each check is one small read. Write it with a unit, such as `5s`.",
+			Default: "5s",
+		}, 100*time.Millisecond, 30*time.Second),
 		databaseURLKey(&c.Database.URL, Key{
 			Name: "database.url",
 			Summary: "Where `nbpdns serve` keeps its state: a SQLite file, such as `sqlite:///var/lib/nbpdns/nbpdns.db`, " +

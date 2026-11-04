@@ -200,6 +200,31 @@ func intKey(dst *int, k Key, hi int) Key {
 	return k
 }
 
+// boolKey declares a boolean key stored in dst, written true or false.
+func boolKey(dst *bool, k Key) Key {
+	k.typ, k.flagType = "`true` or `false`", "boolean"
+	k.parse = func(raw any) error {
+		switch v := raw.(type) {
+		case bool:
+			*dst = v
+		case string:
+			switch strings.TrimSpace(v) {
+			case "true":
+				*dst = true
+			case "false":
+				*dst = false
+			default:
+				return fmt.Errorf("%q isn't true or false", v)
+			}
+		default:
+			return fmt.Errorf("want true or false, not %s", describe(raw))
+		}
+		return nil
+	}
+	k.show = func() string { return strconv.FormatBool(*dst) }
+	return k
+}
+
 // durationKey declares a positive duration key stored in dst, written the
 // way time.ParseDuration reads it, such as 30s.
 func durationKey(dst *time.Duration, k Key) Key {

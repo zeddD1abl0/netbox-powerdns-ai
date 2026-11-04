@@ -922,9 +922,11 @@ components:
         leader:
           description: >-
             The replica that leads, as this replica last knew it: from the
-            database, which it reads every 5 seconds, on a follower. Null if
-            it knows of none, before a replica first leads the database, or
-            just after this one stepped down.
+            database, on a follower, which reads it every
+            `database.poll_interval`, 5 seconds by default, or as soon as it
+            hears of a change, with `database.listen`. Null if it knows of
+            none, before a replica first leads the database, or just after
+            this one stepped down.
           oneOf:
             - $ref: "#/components/schemas/Leader"
             - type: "null"

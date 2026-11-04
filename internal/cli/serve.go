@@ -55,8 +55,9 @@ func newServeCmd(a *app) *cobra.Command {
 			"the leader, refreshes and prunes, and another takes over within about 30\n" +
 			"seconds if it stops, dies or is cut off.\n\n" +
 			"It compares the config file's server groups, which it mirrors into the\n" +
-			"database at start, and those that nbpdns groups added, whose changes it\n" +
-			"applies within seconds, as it applies the runtime settings.\n\n" +
+			"database at start, and those that nbpdns groups added. It checks the\n" +
+			"database every database.poll_interval, or at once with database.listen on\n" +
+			"PostgreSQL, and applies the changed groups and runtime settings.\n\n" +
 			"With netbox.webhook_secret set, NetBox's signed webhooks at /api/netbox-events\n" +
 			"refresh the zones they name, once they stop coming for drift.webhook_delay.\n\n" +
 			"Each refresh is its own trace, exported if otlp.endpoint is set. nbpdns only\n" +
@@ -130,15 +131,24 @@ func newServeCmd(a *app) *cobra.Command {
 				svc.Run(ctx)
 				prune.Wait()
 			}
+			// The change feed (ADR-0048) and its watcher run beside the
+			// refreshes, which change the session's configuration, so they
+			// have their own copy of the session. They read only the
+			// database.* keys from its configuration, bootstrap keys, which
+			// don't change while serve runs.
+			ws := *s
+			w := &watcher{s: &ws, st: st, svc: svc, live: &live, file: file, settings: s.settings, groups: groups,
+				settingsVersion: settingsVersion, groupsVersion: groupsVersion}
+			f := newFeed(&ws, st, w, ss != nil)
 			// On SQLite, serve leads, under its flock. On PostgreSQL, the
-			// replicas elect the leader.
+			// replicas elect the leader, at the feed's checks.
 			run := lead
 			if ss != nil {
-				run = (&election{s: s, st: st, svc: svc, me: me, ss: ss, lead: lead}).run
+				run = (&election{s: s, st: st, svc: svc, me: me, ss: ss, lead: lead, polls: f.polls}).run
 			} else {
 				s.metrics.Leader(true, time.Now())
 			}
-			// The watcher uses the database, so it stops before closeStore
+			// The feed uses the database, so it stops before closeStore
 			// records serve's stop and closes it.
 			bgCtx, stopBackground := context.WithCancel(ctx)
 			var background sync.WaitGroup
@@ -146,14 +156,10 @@ func newServeCmd(a *app) *cobra.Command {
 				stopBackground()
 				background.Wait()
 			}()
-			// The watcher runs beside the refreshes, which change the
-			// session's configuration, so it has its own copy of the session.
-			// It reads only database.master_key from its configuration, a
-			// bootstrap key, which doesn't change while serve runs.
-			ws := *s
-			w := &watcher{s: &ws, st: st, svc: svc, live: &live, file: file, settings: s.settings, groups: groups,
-				settingsVersion: settingsVersion, groupsVersion: groupsVersion}
-			background.Go(func() { w.run(bgCtx) })
+			background.Go(func() { f.run(bgCtx) })
+			if s.cfg.Database.Listen {
+				background.Go(func() { f.listen(bgCtx) })
+			}
 			return serve(ctx, s, svc, st, func() config.Secret { return live.Load().NetBox.WebhookSecret }, run)
 		})
 	}

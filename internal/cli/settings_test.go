@@ -19,11 +19,12 @@ func TestServeAppliesSettings(t *testing.T) {
 	env := configFile(t, twoGroups)
 	env["NBPDNS_NETBOX_URL"], env["NBPDNS_NETBOX_TOKEN"] = "http://127.0.0.1:1", "nbt_abc.def"
 	env["NBPDNS_DATABASE_URL"] = "sqlite://" + filepath.Join(t.TempDir(), "nbpdns.db")
+	env["NBPDNS_DATABASE_POLL_INTERVAL"] = "100ms"
 	s := startServe(t, env)
-	dbEnv := map[string]string{"NBPDNS_DATABASE_URL": env["NBPDNS_DATABASE_URL"]}
+	dbEnv := map[string]string{"NBPDNS_DATABASE_URL": env["NBPDNS_DATABASE_URL"], "NBPDNS_DATABASE_POLL_INTERVAL": "100ms"}
 
 	code, stdout, stderr := run(t, dbEnv, "settings", "set", "drift.interval", "15s", "--reason", "a test")
-	if code != exitOK || stdout != "Stored 15s for drift.interval.\nA running nbpdns serve applies it within 5s.\n" {
+	if code != exitOK || stdout != "Stored 15s for drift.interval.\nA running nbpdns serve applies it within 100ms.\n" {
 		t.Fatalf("settings set: exit %d: %q\n%s", code, stdout, stderr)
 	}
 	if code, _, stderr := run(t, dbEnv, "settings", "set", "drift.webhook_delay", "2s"); code != exitOK {
@@ -114,6 +115,7 @@ func TestServeRetriesAFailedReload(t *testing.T) {
 	env["NBPDNS_NETBOX_URL"], env["NBPDNS_NETBOX_TOKEN"] = "http://127.0.0.1:1", "nbt_abc.def"
 	db := filepath.Join(t.TempDir(), "nbpdns.db")
 	env["NBPDNS_DATABASE_URL"] = "sqlite://" + db
+	env["NBPDNS_DATABASE_POLL_INTERVAL"] = "100ms"
 	s := startServe(t, env)
 	raw, err := sql.Open("sqlite", db)
 	if err != nil {

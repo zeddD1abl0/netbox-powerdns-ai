@@ -219,8 +219,12 @@ func (ss *Session) Close() {
 
 // Leader returns the leader's row, or nil if no replica has led the
 // database.
-func (s *Store) Leader(ctx context.Context) (*Leader, error) {
-	r, err := s.q.GetLeader(ctx)
+func (s *Store) Leader(ctx context.Context) (*Leader, error) { return readLeader(ctx, s.q) }
+
+// readLeader reads the leader's row with q, or returns nil if no replica has
+// led the database.
+func readLeader(ctx context.Context, q sqlite.Querier) (*Leader, error) {
+	r, err := q.GetLeader(ctx)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		return nil, nil

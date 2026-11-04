@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -86,7 +87,7 @@ func TestLoadDefaults(t *testing.T) {
 	}
 	want := Config{
 		Audit:    AuditConfig{RetentionDays: 2557},
-		Database: DatabaseConfig{URL: NewSecret("sqlite:///var/lib/nbpdns/nbpdns.db")},
+		Database: DatabaseConfig{URL: NewSecret("sqlite:///var/lib/nbpdns/nbpdns.db"), PollInterval: 5 * time.Second},
 		Log:      LogConfig{Level: "info", Format: "json"},
 		NetBox:   NetBoxConfig{Timeout: 30 * time.Second, PageSize: 500, Concurrency: 4},
 		PowerDNS: PowerDNSConfig{Timeout: 30 * time.Second, Concurrency: 4},
@@ -265,6 +266,16 @@ func TestLoadErrors(t *testing.T) {
 			[]string{"mustn't have credentials, a query or a fragment"}},
 		{"a database URL naming a directory", "", map[string]string{"NBPDNS_DATABASE_URL": "sqlite:///var/lib/nbpdns/"}, nil,
 			[]string{"doesn't name a file"}},
+		{"database.listen on SQLite", "database:\n  listen: true\n", nil, nil,
+			[]string{"database.listen (from file", "only PostgreSQL has LISTEN and NOTIFY, and database.url (from default) names a SQLite database"}},
+		{"database.listen that isn't a boolean", "", map[string]string{"NBPDNS_DATABASE_LISTEN": "yes"}, nil,
+			[]string{"database.listen (from env NBPDNS_DATABASE_LISTEN)", `"yes" isn't true or false`}},
+		{"database.listen as a number", "database:\n  listen: 1\n", nil, nil,
+			[]string{"database.listen (from file", "want true or false, not 1"}},
+		{"too short a poll", "", nil, []string{"--database-poll-interval", "10ms"},
+			[]string{"database.poll_interval (from flag --database-poll-interval): 10ms is shorter than 100ms"}},
+		{"too long a poll", "", map[string]string{"NBPDNS_DATABASE_POLL_INTERVAL": "1m"}, nil,
+			[]string{"database.poll_interval (from env NBPDNS_DATABASE_POLL_INTERVAL): 1m0s is longer than 30s"}},
 		{"a mapping for a string", "netbox:\n  url:\n    host: x\n", nil, nil,
 			[]string{"netbox.url (from file", "want a string, not a mapping"}},
 		{
@@ -300,11 +311,50 @@ func TestLoadAcceptsGoodValues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
+	if d := cfg.Database; d.Listen || d.PollInterval != 5*time.Second {
+		t.Errorf("Load().Database = %+v, want the defaults", d)
+	}
 	n := cfg.NetBox
 	if cfg.Log.Format != "text" || n.URL != "http://netbox.lab:8047" || n.PageSize != 1000 ||
 		n.Timeout != 2*time.Minute || n.CAFile != "/etc/ssl/netbox.pem" || n.Concurrency != 32 ||
 		n.WebhookSecret.Reveal() != "0123456789abcdef" {
 		t.Errorf("Load() = %+v", *cfg)
+	}
+}
+
+// TestDatabaseListen checks that database.listen and database.poll_interval
+// take their values from each source, with a PostgreSQL database.url.
+func TestDatabaseListen(t *testing.T) {
+	const url = "postgres://nbpdns@db.example.com/nbpdns"
+	tests := []struct {
+		name string
+		file string
+		env  map[string]string
+		args []string
+		want DatabaseConfig
+	}{
+		{"the defaults", "", map[string]string{"NBPDNS_DATABASE_URL": url}, nil, DatabaseConfig{PollInterval: 5 * time.Second}},
+		{"the file", "database:\n  url: " + url + "\n  listen: true\n  poll_interval: 30s\n", nil, nil,
+			DatabaseConfig{Listen: true, PollInterval: 30 * time.Second}},
+		{"the environment", "", map[string]string{"NBPDNS_DATABASE_URL": url, "NBPDNS_DATABASE_LISTEN": " true ",
+			"NBPDNS_DATABASE_POLL_INTERVAL": "100ms"}, nil, DatabaseConfig{Listen: true, PollInterval: 100 * time.Millisecond}},
+		{"flags, over the file", "database:\n  url: " + url + "\n  listen: true\n", nil,
+			[]string{"--database-listen", "false", "--database-poll-interval=2s"}, DatabaseConfig{PollInterval: 2 * time.Second}},
+		{"off, on SQLite", "", map[string]string{"NBPDNS_DATABASE_LISTEN": "false"}, nil, DatabaseConfig{PollInterval: 5 * time.Second}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, settings, err := load(t, tt.file, tt.env, tt.args...)
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+			if d := cfg.Database; d.Listen != tt.want.Listen || d.PollInterval != tt.want.PollInterval {
+				t.Errorf("Load().Database = %+v, want %+v", d, tt.want)
+			}
+			if st := setting(t, settings, "database.listen"); st.Value != strconv.FormatBool(tt.want.Listen) {
+				t.Errorf("database.listen's setting = %+v", st)
+			}
+		})
 	}
 }
 

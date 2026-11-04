@@ -58,16 +58,6 @@ func (s *Store) Settings(ctx context.Context) (map[string]StoredSetting, int64, 
 	return out, version, nil
 }
 
-// SettingsVersion returns the settings' version, which each change bumps, so
-// that serve can tell, cheaply, when to read them again.
-func (s *Store) SettingsVersion(ctx context.Context) (int64, error) {
-	v, err := s.q.SequenceValue(ctx, seqSettings)
-	if err != nil {
-		return 0, fmt.Errorf("reading the settings' version: %w", err)
-	}
-	return v, nil
-}
-
 // SettingPlace is where a setting's sealed value belongs, which the seal
 // binds it to.
 func SettingPlace(key string) string { return "setting:" + key }

@@ -42,8 +42,8 @@ func TestChangeSetting(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if v, _ := s.SettingsVersion(ctx); version != step.version || v != step.version {
-				t.Errorf("%s: version %d and %d, want %d", step.name, version, v, step.version)
+			if v, _ := s.Versions(ctx); version != step.version || v.Settings != step.version {
+				t.Errorf("%s: version %d and %d, want %d", step.name, version, v.Settings, step.version)
 			}
 			got, ok := stored[step.c.Key]
 			if step.stored == "" && ok || step.stored != "" && (got.Value != step.stored || got.UpdatedBy != "os-user:jordan") {
