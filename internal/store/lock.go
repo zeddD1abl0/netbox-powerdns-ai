@@ -96,7 +96,7 @@ func Acquire(path string) (*Lock, error) {
 		}
 		return nil, fmt.Errorf("locking the database, %s: %w", lp, err)
 	}
-	host, _ := os.Hostname()
+	host, _ := hostname()
 	holder := fmt.Sprintf("host %s, PID %d, since %s", host, os.Getpid(), time.Now().UTC().Format(time.RFC3339))
 	// The holder's name only helps the error another process gets; the lock
 	// holds without it.
@@ -138,11 +138,42 @@ func (s *Store) Lock(ctx context.Context) (*Lock, error) {
 	return &Lock{conn: conn}, nil
 }
 
+// maxApplicationName is how much of application_name PostgreSQL keeps:
+// NAMEDATALEN - 1 bytes.
+const maxApplicationName = 63
+
+// hostname returns the host's name, for the names of the process's
+// sessions. A test may replace it.
+var hostname = os.Hostname
+
 // holderName is the application_name of a session that holds the serve
-// lock, which names the process. PostgreSQL keeps 63 bytes of it.
+// lock, or the leader's lock, or listens, which names the process.
 func holderName() string {
-	host, _ := os.Hostname()
-	return fmt.Sprintf("nbpdns: host %s, PID %d", host, os.Getpid())
+	host, _ := hostname()
+	return applicationName(host, os.Getpid())
+}
+
+// applicationName returns the application_name that names the process with
+// PID pid on host. PostgreSQL keeps 63 bytes of it, so a host name too long
+// to fit beside the PID is cut short in its middle, at "...", which says
+// so: a pod's or a runner's name tells it apart at its end, and a domain
+// name at its start. PostgreSQL takes only printable ASCII in it, and
+// escapes the rest, which would lengthen it, so any other character is "?".
+func applicationName(host string, pid int) string {
+	host = strings.Map(func(r rune) rune {
+		if r < ' ' || r > '~' {
+			return '?'
+		}
+		return r
+	}, host)
+	prefix, suffix := "nbpdns: host ", fmt.Sprintf(", PID %d", pid)
+	if room := maxApplicationName - len(prefix) - len(suffix); len(host) > room {
+		const cut = "..."
+		keep := room - len(cut)
+		head := (keep + 1) / 2
+		host = host[:head] + cut + host[len(host)-(keep-head):]
+	}
+	return prefix + host + suffix
 }
 
 // lockedError returns the error for the serve lock that conn couldn't take,

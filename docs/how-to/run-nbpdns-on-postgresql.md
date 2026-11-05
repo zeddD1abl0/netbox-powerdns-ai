@@ -232,6 +232,11 @@ replica runs, and a replica refuses to start while one of them runs:
 2 other nbpdns processes hold the database's lock: host nbpdns-0, PID 1, since 2026-10-22T09:15:27Z; host nbpdns-1, PID 1, since 2026-10-22T09:15:31Z; stop them first, or give this one another database.url
 ```
 
+Each replica's sessions are named so in `pg_stat_activity`'s
+`application_name`. PostgreSQL keeps 63 bytes of it, so a host name too long
+to fit beside the PID, as a GitLab runner's can be, is cut short in its
+middle, at `...`.
+
 PostgreSQL releases a replica's locks when its session ends, however it
 ends: when the replica stops, or within about 30 seconds of its host
 dying, its network failing, or its process hanging.

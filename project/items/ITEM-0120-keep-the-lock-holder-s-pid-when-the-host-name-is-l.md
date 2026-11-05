@@ -2,12 +2,12 @@
 id: ITEM-0120
 title: Keep the lock holder's PID when the host name is long
 type: bug # feature | bug | debt | task
-status: open # open | in-progress | blocked | done | wontfix
+status: done # open | in-progress | blocked | done | wontfix
 milestone: M09
 requirements: [REQ-033]
 depends_on: []
 created: 2026-11-04
-closed:
+closed: 2026-11-05
 ---
 
 # ITEM-0120: Keep the lock holder's PID when the host name is long
@@ -26,8 +26,8 @@ the PID.
 
 ## Acceptance criteria
 
-- [ ] A lock holder's name fits in 63 bytes and keeps its PID, with a host name of any length; a host name that's cut short says so.
-- [ ] A test names a holder with a host name of 64 characters or more, on PostgreSQL.
+- [x] A lock holder's name fits in 63 bytes and keeps its PID, with a host name of any length; a host name that's cut short says so.
+- [x] A test names a holder with a host name of 64 characters or more, on PostgreSQL.
 - [ ] `make test-integration` passes, and the branch's next pipeline passes its integration job.
 
 ## Notes
@@ -42,3 +42,23 @@ the PID.
   TestSessionSettings, TestReplicasShareTheServeLock and
   TestStoreLock/postgres. Each shows `host runner-…-6pxrh5d4,` with the PID
   cut off. Every pipeline fails on it until it's fixed.
+- 2026-11-05: Done. `applicationName(host, pid)` (`internal/store/lock.go`)
+  names a session `nbpdns: host <name>, PID <pid>` in at most 63 bytes: a
+  host name too long to fit beside the PID keeps both ends, cut in its
+  middle at `...` (a pod's or runner's name differs at its end, a domain
+  name at its start), and any character but printable ASCII is `?`, as
+  PostgreSQL would otherwise escape it and lengthen the name. The serve
+  lock, the replica's session and the listener all use `holderName`; the
+  SQLite lock file keeps the whole host name, having no limit. A
+  `hostname` variable lets a test set the host's name. Tests:
+  `TestApplicationName` (the runner's 50 characters, a 254-character name
+  with a 7-digit PID, exactly fitting, one over, non-ASCII), and
+  `TestLongHostName` on both databases, a 73-character host name, which
+  fails with the old format on PostgreSQL (checked). The five tests that
+  failed in pipeline 950 now take their expected name from `holderName`,
+  and the CLI's checks for the PID and the host's start. The PostgreSQL
+  how-to says that a long host name is cut short. No CHANGELOG line: the
+  bug was in PostgreSQL support, which isn't released yet. `make check`
+  passes; `make test-integration` passes in 2 min 32 s, its largest
+  process at 1.41 GiB. The last criterion's pipeline half waits for the
+  branch's next push, which ITEM-0100's notes record.

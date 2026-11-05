@@ -18,7 +18,7 @@
 | [M06](milestones/M06-rest-api.md) | REST API | done | 10 of 10 |
 | [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | done | 9 of 9 |
 | [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | done | 19 of 19 |
-| [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | in-progress | 8 of 15 |
+| [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | in-progress | 9 of 15 |
 | [M10](milestones/M10-authentication.md) | Authentication | planned | 1 of 2 |
 | [M11](milestones/M11-roles-and-permissions.md) | Roles and permissions | planned | 1 of 1 |
 | [M12](milestones/M12-sign-in.md) | Sign-in | planned | 1 of 1 |
@@ -40,7 +40,6 @@
 | [ITEM-0116](items/ITEM-0116-the-takeover-tests-stopped-killed-and-cut-off-lead.md) | The takeover tests: stopped, killed and cut-off leaders | task | open | ITEM-0115 |
 | [ITEM-0117](items/ITEM-0117-the-m09-docs-several-replicas-on-postgresql-and-ho.md) | The M09 docs: several replicas on PostgreSQL, and how the leader is chosen | task | open | ITEM-0116 |
 | [ITEM-0119](items/ITEM-0119-say-1-event-not-1-events-in-nbpdns-audit-verify.md) | Say "1 event", not "1 events", in nbpdns audit verify | bug | open | — |
-| [ITEM-0120](items/ITEM-0120-keep-the-lock-holder-s-pid-when-the-host-name-is-l.md) | Keep the lock holder's PID when the host name is long | bug | open | — |
 | [ITEM-0121](items/ITEM-0121-bump-the-api-spec-s-version-for-m09-s-additions.md) | Bump the API spec's version for M09's additions | debt | open | — |
 | [ITEM-0095](items/ITEM-0095-roadmap-m09-postgresql-and-ha.md) | Roadmap M09: PostgreSQL and HA | task | done 2026-10-09 | — |
 | [ITEM-0109](items/ITEM-0109-design-m09-postgresql-and-ha.md) | Design M09: PostgreSQL and HA | task | done 2026-10-18 | — |
@@ -50,6 +49,7 @@
 | [ITEM-0113](items/ITEM-0113-the-replicas-change-feed-polling-and-listen-and-no.md) | The replicas' change feed: polling, and LISTEN and NOTIFY | feature | done 2026-11-04 | — |
 | [ITEM-0114](items/ITEM-0114-every-replica-serves-the-api-and-status-from-the-d.md) | Every replica serves the API and status from the database | feature | done 2026-11-05 | — |
 | [ITEM-0118](items/ITEM-0118-update-go-to-1-27-3-for-go-2026-6809.md) | Update Go to 1.27.3 for GO-2026-6809 | debt | done 2026-10-22 | — |
+| [ITEM-0120](items/ITEM-0120-keep-the-lock-holder-s-pid-when-the-host-name-is-l.md) | Keep the lock holder's PID when the host name is long | bug | done 2026-11-05 | — |
 
 ## Open items in other milestones
 

@@ -92,6 +92,73 @@ func TestLockErrors(t *testing.T) {
 	}
 }
 
+// wantHolder returns how a lock's holder on db names this process: on
+// SQLite, by its host's whole name; on PostgreSQL, as its application_name
+// has it.
+func wantHolder(db backend) string {
+	if db.name == "sqlite" {
+		host, _ := hostname()
+		return fmt.Sprintf("host %s, PID %d, since ", host, os.Getpid())
+	}
+	return strings.TrimPrefix(holderName(), "nbpdns: ") + ", since "
+}
+
+// TestApplicationName checks that the name of a process's sessions keeps
+// its PID, in the 63 bytes that PostgreSQL keeps, whatever its host's name.
+func TestApplicationName(t *testing.T) {
+	runner := "runner-d7rzzl1zg-project-22-concurrent-0-6pxrh5d4"
+	tests := []struct {
+		name, host string
+		pid        int
+		want       string
+	}{
+		{"a short host name", "nbpdns-0", 1, "nbpdns: host nbpdns-0, PID 1"},
+		{"a host name that just fits", strings.Repeat("a", 40), 1234, "nbpdns: host " + strings.Repeat("a", 40) + ", PID 1234"},
+		{"one byte longer", strings.Repeat("a", 40) + "b", 1234, "nbpdns: host " + strings.Repeat("a", 19) + "..." + strings.Repeat("a", 17) + "b, PID 1234"},
+		{"a GitLab runner's", runner, 6368, "nbpdns: host runner-d7rzzl1zg-pr...current-0-6pxrh5d4, PID 6368"},
+		{"the longest, with the largest PID", strings.Repeat("h", 253) + "x", 4194304,
+			"nbpdns: host " + strings.Repeat("h", 17) + "..." + strings.Repeat("h", 16) + "x, PID 4194304"},
+		{"characters that PostgreSQL would escape", "hôst\x1b", 7, "nbpdns: host h?st?, PID 7"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := applicationName(tt.host, tt.pid)
+			if got != tt.want || len(got) > maxApplicationName {
+				t.Errorf("applicationName(%q, %d) = %q (%d bytes), want %q, at most %d bytes", tt.host, tt.pid, got, len(got), tt.want, maxApplicationName)
+			}
+		})
+	}
+}
+
+// TestLongHostName checks that a lock's holder on a host with a long name
+// names the host and its PID, on each database (ITEM-0120): PostgreSQL
+// keeps 63 bytes of a session's application_name.
+func TestLongHostName(t *testing.T) {
+	long := "nbpdns-" + strings.Repeat("0123456789", 6) + "-x2k4q"
+	hostname = func() (string, error) { return long, nil }
+	t.Cleanup(func() { hostname = os.Hostname })
+	onEach(t, func(t *testing.T, db backend) {
+		where := db.create(t)
+		l, err := db.connect(t, where).Lock(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer l.Close()
+		_, err = db.connect(t, where).Lock(t.Context())
+		var le *LockedError
+		if !errors.As(err, &le) {
+			t.Fatalf("a second Lock() error = %v, want a LockedError", err)
+		}
+		want := wantHolder(db)
+		if !strings.HasPrefix(le.Holder, want) || !strings.Contains(le.Holder, fmt.Sprintf(", PID %d, since ", os.Getpid())) {
+			t.Errorf("Holder = %q, want it to start %q, with the PID", le.Holder, want)
+		}
+		if db.name != "sqlite" && !strings.Contains(want, "...") {
+			t.Errorf("on PostgreSQL, the holder %q doesn't say that the host's name is cut short", want)
+		}
+	})
+}
+
 // TestStoreLock checks that one process at a time holds a database's lock,
 // on each database, and that Close releases it.
 func TestStoreLock(t *testing.T) {
@@ -108,8 +175,7 @@ func TestStoreLock(t *testing.T) {
 		if !errors.As(err, &le) {
 			t.Fatalf("a second Lock() error = %v, want a LockedError", err)
 		}
-		host, _ := os.Hostname()
-		if want := fmt.Sprintf("host %s, PID %d, since ", host, os.Getpid()); !strings.HasPrefix(le.Holder, want) {
+		if want := wantHolder(db); !strings.HasPrefix(le.Holder, want) {
 			t.Errorf("Holder = %q, want it to start %q", le.Holder, want)
 		}
 		if !strings.Contains(err.Error(), "another nbpdns holds the database's lock") {

@@ -189,8 +189,10 @@ func TestServeOnPostgres(t *testing.T) {
 	other := with(env, "NBPDNS_SERVER_LISTEN", "127.0.0.1:0")
 	host, _ := os.Hostname()
 	code, _, stderr := run(t, other, "db", "migrate")
-	want := fmt.Sprintf("2 other nbpdns processes hold the database's lock: host %s, PID %d, since ", host, os.Getpid())
-	if code != exitError || !strings.Contains(stderr, want) {
+	// A long host name is cut short in its middle, to keep the PID.
+	want := []string{"2 other nbpdns processes hold the database's lock: host " + host[:min(len(host), 20)],
+		fmt.Sprintf(", PID %d, since ", os.Getpid())}
+	if code != exitError || !containsAll(stderr, want) {
 		t.Errorf("db migrate while two serves run: exit %d, want %d with %q:\n%s", code, exitError, want, stderr)
 	}
 	pages.WriteString(stderr)

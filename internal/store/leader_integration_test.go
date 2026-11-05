@@ -7,8 +7,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -83,8 +81,7 @@ func TestReplicasShareTheServeLock(t *testing.T) {
 	if !errors.As(err, &le) {
 		t.Fatalf("Lock() while two replicas run: error = %v, want a LockedError", err)
 	}
-	host, _ := os.Hostname()
-	holder := fmt.Sprintf("host %s, PID %d, since ", host, os.Getpid())
+	holder := strings.TrimPrefix(holderName(), "nbpdns: ") + ", since "
 	if le.Holders != 2 || strings.Count(le.Holder, holder) != 2 ||
 		!strings.HasPrefix(err.Error(), "2 other nbpdns processes hold the database's lock: "+holder) {
 		t.Errorf("Lock() while two replicas run: %+v: %v", le, err)
