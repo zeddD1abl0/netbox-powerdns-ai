@@ -141,7 +141,7 @@ func TestRelease(t *testing.T) {
 	if err := wait(t, l, 5*time.Second); err != nil {
 		t.Errorf("Wait() after the release = %v, want its notification", err)
 	}
-	if _, _, err := stores[0].RecordRefresh(t.Context(), full(time.Now())); !errors.Is(err, ErrNotLeader) {
+	if _, err := stores[0].RecordRefresh(t.Context(), full(time.Now())); !errors.Is(err, ErrNotLeader) {
 		t.Errorf("a's RecordRefresh() after its release: error = %v, want ErrNotLeader", err)
 	}
 	if tb, err := b.TryLead(t.Context(), time.Time{}); err != nil || tb == nil || tb.Previous == nil || tb.Previous.ID != "A-ID" {

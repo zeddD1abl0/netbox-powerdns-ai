@@ -3,10 +3,12 @@ package store
 import (
 	"encoding/json"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/audit"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/dns"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/drift"
 )
 
@@ -65,10 +67,11 @@ func TestZoneHistory(t *testing.T) {
 			{"back, in sync, as a new zone", []drift.ZoneReport{a, zone("b.example.", drift.StateInSync)}, 1, nil},
 		}
 		for i, step := range steps {
-			rows, events, err := s.RecordRefresh(ctx, full(t0.Add(time.Duration(i)*time.Hour), group(step.zones...)))
+			w, err := s.RecordRefresh(ctx, full(t0.Add(time.Duration(i)*time.Hour), group(step.zones...)))
 			if err != nil {
 				t.Fatalf("%s: %v", step.name, err)
 			}
+			rows, events := w.ZoneRows, w.Events
 			var states []string
 			for _, e := range events {
 				if e.Action != audit.ZoneDriftChanged || e.Target != (audit.Target{Type: "zone", ID: "lab-a/b.example."}) {
@@ -111,14 +114,17 @@ func TestDigestIgnoresOrder(t *testing.T) {
 	}
 }
 
-func TestRestoreDrift(t *testing.T) {
+// TestLoadDrift records refreshes, and loads them back: the last full
+// refresh, whatever came after it, and each group's report and result.
+func TestLoadDrift(t *testing.T) {
 	onEach(t, func(t *testing.T, db backend) {
 		s := db.migrated(t)
 		mirror(t, s, "lab-a", "lab-b")
 		ctx := t.Context()
-		empty, err := s.RestoreDrift(ctx)
-		if err != nil || empty.Last != nil || len(empty.Groups) != 0 || !empty.LastComplete.IsZero() {
-			t.Fatalf("RestoreDrift() of a new database = %+v, %v, want nothing", empty, err)
+		empty, err := s.LoadDrift(ctx, 0)
+		if err != nil || empty.Version != 0 || empty.Last != nil || len(empty.Groups) != 0 || !empty.LastComplete.IsZero() ||
+			empty.NetBox.Status != "" || !empty.NetBox.ZonesAsOf.IsZero() || len(empty.NetBox.Zones) != 0 {
+			t.Fatalf("LoadDrift() of a new database = %+v, %v, want nothing", empty, err)
 		}
 
 		t0 := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
@@ -126,31 +132,177 @@ func TestRestoreDrift(t *testing.T) {
 		ga.Counts = drift.Counts{Drift: 1}
 		r := full(t0, ga)
 		r.Groups = append(r.Groups, GroupResult{Group: "lab-b", Status: drift.StatusFailed, Error: "connection refused"})
-		if _, _, err := s.RecordRefresh(ctx, r); err != nil {
+		first, err := s.RecordRefresh(ctx, r)
+		if err != nil {
 			t.Fatal(err)
 		}
-		// A failed refresh after it.
+		// A failed refresh after it, then a zone refresh, which isn't the
+		// last full refresh.
 		failed := RefreshRecord{Kind: RefreshFull, Cause: CauseWebhook, Started: t0.Add(time.Hour), Finished: t0.Add(time.Hour + time.Second),
-			Outcome: "failed", Error: "NetBox is down"}
-		if _, _, err := s.RecordRefresh(ctx, failed); err != nil {
+			Outcome: "failed", Error: "NetBox is down", NetBoxStatus: NetBoxDown, NetBoxError: "NetBox is down"}
+		if _, err := s.RecordRefresh(ctx, failed); err != nil {
 			t.Fatal(err)
+		}
+		zones := RefreshRecord{Kind: RefreshZones, Cause: CauseWebhook, Started: t0.Add(2 * time.Hour), Finished: t0.Add(2*time.Hour + time.Second),
+			Outcome: "complete", Zones: []string{"_default_/a.example."}}
+		last, err := s.RecordRefresh(ctx, zones)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if first.ID != 1 || last.ID != 3 {
+			t.Errorf("RecordRefresh() IDs = %d and %d, want 1 and 3", first.ID, last.ID)
 		}
 
-		got, err := s.RestoreDrift(ctx)
+		got, err := s.LoadDrift(ctx, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
 		wantLast := RefreshSummary{Kind: RefreshFull, Cause: CauseWebhook, Started: failed.Started, Finished: failed.Finished,
 			Outcome: "failed", Error: "NetBox is down"}
-		if got.Last == nil || *got.Last != wantLast || !got.LastComplete.Equal(t0) {
-			t.Errorf("RestoreDrift() last = %+v, last complete %v, want %+v and %v", got.Last, got.LastComplete, wantLast, t0)
+		if got.Version != 3 || got.Last == nil || *got.Last != wantLast || !got.LastComplete.Equal(t0) {
+			t.Errorf("LoadDrift() version %d, last = %+v, last complete %v, want 3, %+v and %v", got.Version, got.Last, got.LastComplete, wantLast, t0)
 		}
 		a := got.Groups["lab-a"]
 		if a.Report == nil || !reflect.DeepEqual(*a.Report, ga) || !a.LastSuccess.Equal(t0) || a.Status != drift.StatusOK {
-			t.Errorf("RestoreDrift() lab-a = %+v, want its report, with its warning's zone, from %v, ok", a, t0)
+			t.Errorf("LoadDrift() lab-a = %+v, want its report, with its warning's zone, from %v, ok", a, t0)
 		}
 		if b := got.Groups["lab-b"]; b.Report != nil || b.Status != drift.StatusFailed || b.Error != "connection refused" {
-			t.Errorf("RestoreDrift() lab-b = %+v, want no report, and failed", b)
+			t.Errorf("LoadDrift() lab-b = %+v, want no report, and failed", b)
+		}
+		// The zone refresh said nothing of NetBox, which stays down.
+		if nb := got.NetBox; nb.Status != NetBoxDown || nb.Error != "NetBox is down" {
+			t.Errorf("LoadDrift() NetBox = %+v, want down, as the failed refresh found it", nb)
+		}
+		if v, err := s.Versions(ctx); err != nil || v.Refreshes != 3 {
+			t.Errorf("Versions() refreshes = %d, %v, want 3", v.Refreshes, err)
+		}
+
+		// Since the version, there's nothing new to read.
+		same, err := s.LoadDrift(ctx, 3)
+		if err != nil || same.Version != 3 || same.Last != nil || len(same.Groups) != 0 {
+			t.Errorf("LoadDrift(3) = %+v, %v, want only the version", same, err)
+		}
+	})
+}
+
+// nbZone returns NetBox's active zone name in view _default_, with an A
+// record of value.
+func nbZone(name, value string) dns.Zone {
+	return dns.Zone{Name: name, View: "_default_", Status: "active", Active: true, SOASerial: 7, Nameservers: []string{"ns1.example."},
+		RRsets: []dns.RRset{{Name: "www." + name, Type: "A", TTL: 300, Records: []dns.Record{{Value: value, TTL: 300, Status: "active", Active: true}}}}}
+}
+
+// TestNetBoxZones records NetBox's zones with full and zone refreshes, and
+// checks that each writes the rows of the zones that changed only, and that
+// a replica that holds them as of a version loads only those written since.
+func TestNetBoxZones(t *testing.T) {
+	onEach(t, func(t *testing.T, db backend) {
+		s := db.migrated(t)
+		mirror(t, s, "lab-a")
+		ctx := t.Context()
+		t0 := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+		record := func(r RefreshRecord) Recorded {
+			t.Helper()
+			w, err := s.RecordRefresh(ctx, r)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return w
+		}
+		withZones := func(r RefreshRecord, sc *drift.Scope, zones ...dns.Zone) RefreshRecord {
+			r.NetBoxStatus, r.NetBoxZones = NetBoxUp, &NetBoxZones{Zones: zones, Scope: sc}
+			return r
+		}
+		a, b, c := nbZone("a.example.", "192.0.2.1"), nbZone("b.example.", "192.0.2.2"), nbZone("c.example.", "192.0.2.3")
+		other := nbZone("a.example.", "198.51.100.1")
+		other.View = "internal"
+
+		w := record(withZones(full(t0), nil, a, b, other))
+		if w.NetBoxZones != 3 {
+			t.Errorf("the first full refresh wrote %d of NetBox's zones, want 3", w.NetBoxZones)
+		}
+		got, err := s.LoadDrift(ctx, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		nb := got.NetBox
+		if nb.Status != NetBoxUp || !nb.ZonesAsOf.Equal(t0) || len(nb.Zones) != 3 || len(nb.Index["_default_"]) != 2 || len(nb.Index["internal"]) != 1 {
+			t.Fatalf("LoadDrift() NetBox = %+v, want up, as of %v, with 3 zones", nb, t0)
+		}
+		if i := slices.IndexFunc(nb.Zones, func(z dns.Zone) bool { return z.View == "_default_" && z.Name == "a.example." }); i < 0 ||
+			!reflect.DeepEqual(nb.Zones[i], a) {
+			t.Errorf("LoadDrift() a.example. = %+v, want %+v", nb.Zones, a)
+		}
+
+		// One zone changes, one goes, and one is new: three rows. The
+		// unchanged one keeps its row.
+		changed := nbZone("b.example.", "192.0.2.20")
+		w = record(withZones(full(t0.Add(time.Hour)), nil, a, changed, c))
+		if w.NetBoxZones != 3 {
+			t.Errorf("a full refresh that changed b.example., removed internal's zone and added c.example. wrote %d rows, want 3", w.NetBoxZones)
+		}
+		got, err = s.LoadDrift(ctx, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		names := func(zones []dns.Zone) []string {
+			var out []string
+			for _, z := range zones {
+				out = append(out, z.View+"/"+z.Name)
+			}
+			slices.Sort(out)
+			return out
+		}
+		if n := names(got.NetBox.Zones); !slices.Equal(n, []string{"_default_/b.example.", "_default_/c.example."}) {
+			t.Errorf("LoadDrift(1) zones = %v, want b.example. and c.example. only", n)
+		}
+		if ix := got.NetBox.Index; ix["_default_"]["a.example."] != 1 || ix["_default_"]["b.example."] != 2 || len(ix["internal"]) != 0 {
+			t.Errorf("LoadDrift(1) index = %v, want a.example. from refresh 1, b.example. from 2, and nothing in internal", ix)
+		}
+		if !got.NetBox.ZonesAsOf.Equal(t0.Add(time.Hour)) {
+			t.Errorf("zones as of %v, want the second full refresh's end", got.NetBox.ZonesAsOf)
+		}
+
+		// The same zones again write nothing.
+		if w := record(withZones(full(t0.Add(2*time.Hour)), nil, a, changed, c)); w.NetBoxZones != 0 {
+			t.Errorf("a full refresh with no change wrote %d rows, want 0", w.NetBoxZones)
+		}
+
+		// A zone refresh of a.example. and b.example. in _default_ changes
+		// a.example., finds b.example. gone, and leaves c.example. and the
+		// zones outside its views alone; its zones keep their time.
+		sc := &drift.Scope{Views: []string{"_default_"}, Names: []string{"a.example.", "b.example."}}
+		zr := RefreshRecord{Kind: RefreshZones, Cause: CauseWebhook, Started: t0.Add(3 * time.Hour), Finished: t0.Add(3*time.Hour + time.Second),
+			Outcome: "complete"}
+		elsewhere := nbZone("d.example.", "192.0.2.4")
+		elsewhere.View = "internal"
+		w = record(withZones(zr, sc, nbZone("a.example.", "192.0.2.10"), elsewhere))
+		if w.NetBoxZones != 2 {
+			t.Errorf("the zone refresh wrote %d rows, want 2: a.example.'s, and b.example.'s delete", w.NetBoxZones)
+		}
+		got, err = s.LoadDrift(ctx, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n := names(got.NetBox.Zones); !slices.Equal(n, []string{"_default_/a.example.", "_default_/c.example."}) {
+			t.Errorf("after the zone refresh, zones = %v, want a.example. and c.example.", n)
+		}
+		if !got.NetBox.ZonesAsOf.Equal(t0.Add(2 * time.Hour)) {
+			t.Errorf("after the zone refresh, zones as of %v, want the last full refresh's end", got.NetBox.ZonesAsOf)
+		}
+
+		// A refresh that says nothing of NetBox, as one that ran out of
+		// time, leaves its state; one that couldn't read it says so.
+		record(RefreshRecord{Kind: RefreshFull, Cause: CauseSchedule, Started: t0.Add(4 * time.Hour), Finished: t0.Add(4 * time.Hour), Outcome: "failed",
+			Error: "the refresh took longer than drift.timeout"})
+		if got, err := s.LoadDrift(ctx, 0); err != nil || got.NetBox.Status != NetBoxUp {
+			t.Errorf("after a timeout, NetBox = %+v, %v, want up still", got.NetBox, err)
+		}
+		record(RefreshRecord{Kind: RefreshFull, Cause: CauseSchedule, Started: t0.Add(5 * time.Hour), Finished: t0.Add(5 * time.Hour), Outcome: "failed",
+			Error: "connection refused", NetBoxStatus: NetBoxDown, NetBoxError: "connection refused"})
+		if got, err := s.LoadDrift(ctx, 0); err != nil || got.NetBox.Status != NetBoxDown || got.NetBox.Error != "connection refused" ||
+			len(got.NetBox.Zones) != 2 {
+			t.Errorf("after NetBox failed, NetBox = %+v, %v, want down, with its zones kept", got.NetBox, err)
 		}
 	})
 }
@@ -170,7 +322,7 @@ func TestPruneDriftHistory(t *testing.T) {
 			full(now, group(zone("a.example.", drift.StateInSync), zone("b.example.", drift.StateDrift, change("192.0.2.9")))),
 		}
 		for _, r := range steps {
-			if _, _, err := s.RecordRefresh(ctx, r); err != nil {
+			if _, err := s.RecordRefresh(ctx, r); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -226,7 +378,7 @@ func TestReadHistory(t *testing.T) {
 				Reports: []KeptReport{{Report: group(zone("b.example.", drift.StateInSync)), LastSuccess: t0.Add(time.Hour)}}},
 		}
 		for _, r := range records {
-			if _, _, err := s.RecordRefresh(ctx, r); err != nil {
+			if _, err := s.RecordRefresh(ctx, r); err != nil {
 				t.Fatal(err)
 			}
 		}

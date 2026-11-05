@@ -44,6 +44,9 @@ var (
 	pgGetAuditAnchorRow       = func(r postgres.GetAuditAnchorRow) sqlite.GetAuditAnchorRow { return sqlite.GetAuditAnchorRow(r) }
 	pgGetDatabaseInfoRow      = func(r postgres.GetDatabaseInfoRow) sqlite.GetDatabaseInfoRow { return sqlite.GetDatabaseInfoRow(r) }
 	pgGetLeaderRow            = func(r postgres.GetLeaderRow) sqlite.GetLeaderRow { return sqlite.GetLeaderRow(r) }
+	pgGetNetBoxStateRow       = func(r postgres.GetNetBoxStateRow) sqlite.GetNetBoxStateRow { return sqlite.GetNetBoxStateRow(r) }
+	pgNetBoxZoneIndexRow      = func(r postgres.NetBoxZoneIndexRow) sqlite.NetBoxZoneIndexRow { return sqlite.NetBoxZoneIndexRow(r) }
+	pgNetBoxZonesAfterRow     = func(r postgres.NetBoxZonesAfterRow) sqlite.NetBoxZonesAfterRow { return sqlite.NetBoxZonesAfterRow(r) }
 	pgServerGroup             = func(r postgres.ServerGroup) sqlite.ServerGroup { return sqlite.ServerGroup(r) }
 	pgSetting                 = func(r postgres.Setting) sqlite.Setting { return sqlite.Setting(r) }
 	pgGroupRefreshesRow       = func(r postgres.GroupRefreshesRow) sqlite.GroupRefreshesRow { return sqlite.GroupRefreshesRow(r) }
@@ -83,6 +86,10 @@ func (p pgQueries) DeleteGroupReport(ctx context.Context, groupName string) erro
 	return p.q.DeleteGroupReport(ctx, groupName)
 }
 
+func (p pgQueries) DeleteNetBoxZone(ctx context.Context, arg sqlite.DeleteNetBoxZoneParams) error {
+	return p.q.DeleteNetBoxZone(ctx, postgres.DeleteNetBoxZoneParams(arg))
+}
+
 func (p pgQueries) DeleteOrphanGroupReports(ctx context.Context) error {
 	return p.q.DeleteOrphanGroupReports(ctx)
 }
@@ -117,6 +124,10 @@ func (p pgQueries) GetDatabaseInfo(ctx context.Context) (sqlite.GetDatabaseInfoR
 
 func (p pgQueries) GetLeader(ctx context.Context) (sqlite.GetLeaderRow, error) {
 	return one(pgGetLeaderRow)(p.q.GetLeader(ctx))
+}
+
+func (p pgQueries) GetNetBoxState(ctx context.Context) (sqlite.GetNetBoxStateRow, error) {
+	return one(pgGetNetBoxStateRow)(p.q.GetNetBoxState(ctx))
 }
 
 func (p pgQueries) GetGroup(ctx context.Context, name string) (sqlite.ServerGroup, error) {
@@ -179,8 +190,8 @@ func (p pgQueries) LastGroupResults(ctx context.Context) ([]sqlite.DriftRefreshG
 	return all(pgDriftRefreshGroup)(p.q.LastGroupResults(ctx))
 }
 
-func (p pgQueries) LastRefresh(ctx context.Context) (sqlite.DriftRefresh, error) {
-	return one(pgDriftRefresh)(p.q.LastRefresh(ctx))
+func (p pgQueries) LastFullRefresh(ctx context.Context) (sqlite.DriftRefresh, error) {
+	return one(pgDriftRefresh)(p.q.LastFullRefresh(ctx))
 }
 
 func (p pgQueries) LatestZoneRows(ctx context.Context, groupName string) ([]sqlite.DriftZoneHistory, error) {
@@ -201,6 +212,14 @@ func (p pgQueries) ListGroups(ctx context.Context) ([]sqlite.ServerGroup, error)
 
 func (p pgQueries) ListSettings(ctx context.Context) ([]sqlite.Setting, error) {
 	return all(pgSetting)(p.q.ListSettings(ctx))
+}
+
+func (p pgQueries) NetBoxZoneIndex(ctx context.Context) ([]sqlite.NetBoxZoneIndexRow, error) {
+	return all(pgNetBoxZoneIndexRow)(p.q.NetBoxZoneIndex(ctx))
+}
+
+func (p pgQueries) NetBoxZonesAfter(ctx context.Context, after int64) ([]sqlite.NetBoxZonesAfterRow, error) {
+	return all(pgNetBoxZonesAfterRow)(p.q.NetBoxZonesAfter(ctx, after))
 }
 
 func (p pgQueries) NextIDs(ctx context.Context, arg sqlite.NextIDsParams) (int64, error) {
@@ -239,6 +258,14 @@ func (p pgQueries) SetAuditAnchor(ctx context.Context, arg sqlite.SetAuditAnchor
 	return p.q.SetAuditAnchor(ctx, postgres.SetAuditAnchorParams(arg))
 }
 
+func (p pgQueries) SetNetBoxStatus(ctx context.Context, arg sqlite.SetNetBoxStatusParams) error {
+	return p.q.SetNetBoxStatus(ctx, postgres.SetNetBoxStatusParams(arg))
+}
+
+func (p pgQueries) SetNetBoxZonesAsOf(ctx context.Context, zonesAsOf string) error {
+	return p.q.SetNetBoxZonesAsOf(ctx, zonesAsOf)
+}
+
 func (p pgQueries) SetLeader(ctx context.Context, arg sqlite.SetLeaderParams) error {
 	return p.q.SetLeader(ctx, postgres.SetLeaderParams(arg))
 }
@@ -257,6 +284,10 @@ func (p pgQueries) UpdateSealedSetting(ctx context.Context, arg sqlite.UpdateSea
 
 func (p pgQueries) UpsertGroupReport(ctx context.Context, arg sqlite.UpsertGroupReportParams) error {
 	return p.q.UpsertGroupReport(ctx, postgres.UpsertGroupReportParams(arg))
+}
+
+func (p pgQueries) UpsertNetBoxZone(ctx context.Context, arg sqlite.UpsertNetBoxZoneParams) error {
+	return p.q.UpsertNetBoxZone(ctx, postgres.UpsertNetBoxZoneParams(arg))
 }
 
 func (p pgQueries) UpsertSetting(ctx context.Context, arg sqlite.UpsertSettingParams) error {

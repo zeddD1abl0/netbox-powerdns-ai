@@ -6,7 +6,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/metrics"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/service"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/store"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/version"
 )
 
 // TestFeedCheck checks that each of the feed's checks reaches the election,
@@ -23,7 +26,8 @@ func TestFeedCheck(t *testing.T) {
 	s := testSession(t)
 	logs := &lockedBuffer{}
 	s.log = slog.New(slog.NewJSONHandler(logs, nil))
-	f := &feed{s: s, st: st, w: &watcher{s: s, st: st}, polls: make(chan poll, 1), wake: make(chan struct{}, 1)}
+	svc := service.New(service.Options{Log: s.log, Metrics: metrics.New(version.Get())})
+	f := &feed{s: s, st: st, w: &watcher{s: s, st: st, svc: svc}, polls: make(chan poll, 1), wake: make(chan struct{}, 1)}
 
 	f.check(t.Context())
 	f.check(t.Context())

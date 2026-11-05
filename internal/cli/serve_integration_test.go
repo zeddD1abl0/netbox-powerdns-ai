@@ -243,9 +243,20 @@ func TestServeRestarts(t *testing.T) {
 		return states, history.Items
 	}
 
+	// records returns the drifted zone's records, as the API serves them.
+	records := func(s *served) string {
+		t.Helper()
+		code, page := s.api("/api/server-groups/lab-a/zones/" + f.Drift + "/rrsets")
+		if code != http.StatusOK {
+			t.Fatalf("the drifted zone's records: %d:\n%s", code, page)
+		}
+		return strings.ReplaceAll(page, s.addr, "nbpdns")
+	}
+
 	s := startServe(t, env)
 	s.waitReady(2 * time.Minute)
 	states, history := reports(s)
+	rrsets := records(s)
 	if want := map[string]string{f.Drift: "drift", f.Missing: "missing", f.Parked: "inactive_in_netbox"}; !reflect.DeepEqual(states, want) {
 		t.Errorf("lab-a's drifted zones = %v, want %v", states, want)
 	}
@@ -287,6 +298,10 @@ func TestServeRestarts(t *testing.T) {
 	}
 	if got, h := reports(s); !reflect.DeepEqual(got, states) || !reflect.DeepEqual(h, history) {
 		t.Errorf("after a restart, lab-a's drifted zones = %v, and the history = %v; want %v and %v", got, h, states, history)
+	}
+	// NetBox's records are kept too (ADR-0048).
+	if got := records(s); got != rrsets {
+		t.Errorf("after a restart, the drifted zone's records = %s, want %s", got, rrsets)
 	}
 	dbEnv := map[string]string{"NBPDNS_DATABASE_URL": env["NBPDNS_DATABASE_URL"]}
 	code, stdout, stderr := run(t, dbEnv, "drift", "history", "--group", "lab-a", "--zone", f.Drift, "-o", "json")

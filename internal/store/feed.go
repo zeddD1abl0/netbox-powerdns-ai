@@ -25,6 +25,9 @@ type Versions struct {
 	// Settings and Groups are the settings' and the server groups'
 	// versions, which each change bumps.
 	Settings, Groups int64
+	// Refreshes is the refreshes' version, the last refresh's ID, which
+	// each refresh recorded moves.
+	Refreshes int64
 	// Leader is the leader's row, or nil if no replica has led the database,
 	// as on SQLite.
 	Leader *Leader
@@ -44,6 +47,9 @@ func (s *Store) Versions(ctx context.Context) (Versions, error) {
 	}
 	if v.Groups, err = q.SequenceValue(ctx, seqGroupsVersion); err != nil {
 		return Versions{}, fmt.Errorf("reading the server groups' version: %w", err)
+	}
+	if v.Refreshes, err = q.SequenceValue(ctx, seqRefreshes); err != nil {
+		return Versions{}, fmt.Errorf("reading the refreshes' version: %w", err)
 	}
 	if v.Leader, err = readLeader(ctx, q); err != nil {
 		return Versions{}, err

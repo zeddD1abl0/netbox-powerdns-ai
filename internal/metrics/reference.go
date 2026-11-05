@@ -20,6 +20,14 @@ func WriteReference(w io.Writer) error {
 	p("format, or in OpenMetrics if the scraper asks for it. The other commands\n")
 	p("expose none. They're nbpdns's own metrics: PowerDNS's statistics stay on\n")
 	p("PowerDNS's own `/metrics`.\n\n")
+	p("With several replicas on PostgreSQL, each replica sets the gauges of what\n")
+	p("it serves from the database: the `nbpdns_drift_*` gauges, but for\n")
+	p("`nbpdns_drift_pending_zones`, and `nbpdns_netbox_up` and\n")
+	p("`nbpdns_server_group_*`. Every replica shows the same values, so aggregate\n")
+	p("them with `max by`. The counters and histograms count each replica's own\n")
+	p("work, and only the leader refreshes, so sum those.\n")
+	p("[Monitor drift with Prometheus](../how-to/monitor-drift-with-prometheus.md)\n")
+	p("shows both.\n\n")
 	p("| Metric | Type | Labels | Description |\n|---|---|---|---|\n")
 	for _, d := range defs {
 		labels := "none"

@@ -2,84 +2,197 @@ package service
 
 import (
 	"context"
+	"errors"
 
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/dns"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/drift"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/metrics"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/store"
 )
 
-// Restore reads back, from the history, each group's last report and the
-// last refresh, so that the service serves them, and is ready, before its
-// first refresh finishes (ADR-0042). Only the configured groups are
-// restored. With nothing to restore, the service is ready once its first
-// refresh finishes. A failure is logged, and the service starts with
-// nothing. Call it before Run.
+// Restore loads what the history holds as serve starts, as Reload does, so
+// that the service serves it, and is ready, before a refresh of its own
+// finishes (ADR-0042, ADR-0048). With nothing to load, a leader is ready once
+// its first refresh is recorded, and a follower once it loads the leader's.
+// A failure is logged, and the service starts with nothing. Call it before
+// Run.
 func (s *Service) Restore(ctx context.Context) {
-	if s.o.History == nil {
-		return
+	if err := s.reload(ctx, true); err != nil {
+		s.o.Log.WarnContext(ctx, "couldn't load the last drift reports from the database, so the service is ready once it serves a refresh",
+			"err", err)
 	}
-	r, err := s.o.History.RestoreDrift(ctx)
-	if err != nil {
-		s.o.Log.WarnContext(ctx, "couldn't restore the last drift reports, so the service is ready once its first refresh finishes", "err", err)
-		return
-	}
-	m := s.o.Metrics
+}
+
+// Reload loads what the deployment's refreshes found from the history, so
+// that this replica serves what it holds (ADR-0048): the last full refresh,
+// each configured group's last report and result, and NetBox's state and
+// zones, of which it reads only those written since it last loaded them. It
+// sets the drift metrics from them. The change feed calls it whenever the
+// refreshes' version moves past the service's. A refresh that this replica
+// recorded is served already, so it loads nothing then. Once it has loaded
+// a full refresh, the service is ready.
+func (s *Service) Reload(ctx context.Context) error { return s.reload(ctx, false) }
+
+// Version returns the refreshes' version in the history that the service
+// serves, for the change feed to tell whether another refresh has been
+// recorded since (ADR-0048). It's 0 before the service serves one, and
+// without a history.
+func (s *Service) Version() int64 {
 	s.mu.Lock()
-	st := &s.st
-	var restored []drift.GroupReport
-	for _, g := range s.groups {
-		rg, ok := r.Groups[g.Name]
+	defer s.mu.Unlock()
+	return s.st.version
+}
+
+// reload loads what the history holds, as Reload does. At start, it records
+// that the service started from what it loaded, and logs it.
+func (s *Service) reload(ctx context.Context, start bool) error {
+	if s.o.History == nil {
+		return nil
+	}
+	s.mu.Lock()
+	since := s.st.version
+	s.mu.Unlock()
+	for {
+		d, err := s.o.History.LoadDrift(ctx, since)
+		if err != nil {
+			return err
+		}
+		s.mu.Lock()
+		// A refresh of this replica's own, or another reload, may have
+		// served as much meanwhile.
+		if d.Version <= s.st.version {
+			s.mu.Unlock()
+			return nil
+		}
+		nb, ok := loadedNetBox(s.st.netbox, d.NetBox, since)
 		if !ok {
+			s.mu.Unlock()
+			if since == 0 {
+				return errors.New("loading the drift report: the index of NetBox's zones names a zone that the database doesn't hold")
+			}
+			// The service doesn't hold the zones as of since, as it should:
+			// it loads them all.
+			since = 0
 			continue
 		}
-		gs := &groupState{up: rg.Status != drift.StatusFailed, lastError: rg.Error, drifted: map[[2]string]bool{}}
-		if rg.Report != nil {
-			gs.report, gs.lastSuccess, gs.drifted = *rg.Report, rg.LastSuccess, drifted(*rg.Report)
-			restored = append(restored, *rg.Report)
+		groups := s.load(d, nb, start)
+		ready, asOf := s.st.ready, s.st.restoredAsOf
+		s.mu.Unlock()
+		if start && ready {
+			s.o.Log.InfoContext(ctx, "loaded the last drift reports from the database, so the service is ready",
+				"groups", groups, "as_of", asOf, "age_seconds", s.o.now().Sub(asOf).Seconds())
+		} else {
+			s.o.Log.DebugContext(ctx, "loaded the drift reports that the database holds", "version", d.Version, "groups", groups)
+		}
+		return nil
+	}
+}
+
+// load makes d, which the history holds, with NetBox's zones nb, the
+// service's state, and sets the drift metrics from it. At start, it records
+// that the service started from it, if it holds a full refresh. It returns
+// how many of the configured groups have a report. It's called with s.mu
+// held.
+func (s *Service) load(d store.DriftState, nb NetBoxView, start bool) int {
+	m := s.o.Metrics
+	st := &s.st
+	old := st.groups
+	st.groups = map[string]*groupState{}
+	reports := 0
+	for _, g := range s.groups {
+		was := old[g.Name]
+		dg, ok := d.Groups[g.Name]
+		if !ok {
+			if was != nil {
+				m.DropGroup(g.Name)
+			}
+			continue
+		}
+		gs := &groupState{up: dg.Status != drift.StatusFailed, lastError: dg.Error, drifted: map[[2]string]bool{}}
+		if dg.Report != nil {
+			gs.report, gs.lastSuccess, gs.drifted = *dg.Report, dg.LastSuccess, drifted(*dg.Report)
+			reports++
 		}
 		st.groups[g.Name] = gs
-	}
-	if last := r.Last; last != nil {
-		st.lastStart, st.lastEndStart, st.lastEnd = last.Started, last.Started, last.Finished
-		st.lastOutcome, st.lastError = last.Outcome, last.Error
-		st.netboxUp = last.Outcome != metrics.OutcomeFailed
-		if !st.netboxUp {
-			st.netboxError = last.Error
+		if was != nil && !was.lastSuccess.IsZero() && gs.lastSuccess.IsZero() {
+			m.DropGroup(g.Name)
 		}
-		st.lastComplete = r.LastComplete
-	}
-	if len(restored) > 0 {
-		st.ready, st.restored = true, true
-		if r.Last != nil {
-			// The refresh that kept the reports read NetBox.
-			st.restoredAsOf, st.netboxRead = r.Last.Finished, true
+		var removed [][2]string
+		if was != nil {
+			for k := range was.drifted {
+				if !gs.drifted[k] {
+					removed = append(removed, k)
+				}
+			}
+		}
+		m.GroupUp.WithLabelValues(g.Name).Set(gauge(gs.up))
+		if !gs.lastSuccess.IsZero() {
+			m.GroupLastSuccess.WithLabelValues(g.Name).Set(unix(gs.lastSuccess))
+			setGroup(m, gs.report, gs.drifted, removed)
 		}
 	}
-	groups := make(map[string]groupState, len(st.groups))
-	for name, gs := range st.groups {
-		groups[name] = *gs
+	if last := d.Last; last != nil {
+		st.ready = true
+		st.lastEndStart, st.lastEnd, st.lastOutcome, st.lastError = last.Started, last.Finished, last.Outcome, last.Error
+		m.LastRefresh.WithLabelValues().Set(unix(last.Finished))
+		if start {
+			st.restored, st.restoredAsOf = true, last.Finished
+		}
 	}
-	ready, asOf := st.ready, st.restoredAsOf
-	s.mu.Unlock()
+	if !d.LastComplete.IsZero() {
+		st.lastComplete = d.LastComplete
+		m.LastCompleteRefresh.WithLabelValues().Set(unix(d.LastComplete))
+	}
+	switch d.NetBox.Status {
+	case store.NetBoxUp:
+		st.netboxRead, st.netboxUp, st.netboxError = true, true, ""
+	case store.NetBoxDown:
+		st.netboxRead, st.netboxUp, st.netboxError = true, false, d.NetBox.Error
+	default:
+		st.netboxRead, st.netboxUp, st.netboxError = false, false, ""
+	}
+	if st.netboxRead {
+		m.NetBoxUp.WithLabelValues().Set(gauge(st.netboxUp))
+	}
+	st.netbox, st.version = nb, d.Version
+	return reports
+}
 
-	for name, gs := range groups {
-		publishState(m, name, gs)
+// loadedNetBox returns NetBox's zones as n, which the history holds, has
+// them: those that it read, and, of the rest, which were written no later
+// than the version since, old's. It reports false if old lacks one of those,
+// as it can't if it's as of since. old isn't changed, nor any map it shares
+// with what the API holds.
+func loadedNetBox(old NetBoxView, n store.NetBoxState, since int64) (NetBoxView, bool) {
+	// Before a full refresh reads them, there are none.
+	if n.ZonesAsOf.IsZero() && len(n.Index) == 0 {
+		return NetBoxView{}, true
 	}
-	if !ready {
-		return
+	read := map[[2]string]dns.Zone{}
+	for _, z := range n.Zones {
+		read[[2]string{z.View, z.Name}] = z
 	}
-	if r.Last != nil {
-		m.NetBoxUp.WithLabelValues().Set(gauge(r.Last.Outcome != metrics.OutcomeFailed))
-		m.LastRefresh.WithLabelValues().Set(unix(r.Last.Finished))
+	v := NetBoxView{AsOf: n.ZonesAsOf, Zones: map[string]map[string]dns.Zone{}}
+	for view, names := range n.Index {
+		in := make(map[string]dns.Zone, len(names))
+		for name := range names {
+			z, ok := read[[2]string{view, name}]
+			if !ok {
+				if z, ok = old.Zones[view][name]; !ok || since == 0 {
+					return NetBoxView{}, false
+				}
+			}
+			in[name] = z
+		}
+		if len(in) > 0 {
+			v.Zones[view] = in
+		}
 	}
-	if !r.LastComplete.IsZero() {
-		m.LastCompleteRefresh.WithLabelValues().Set(unix(r.LastComplete))
-	}
-	s.o.Log.InfoContext(ctx, "restored the last drift reports, so the service is ready; its first refresh starts now",
-		"groups", len(restored), "as_of", asOf, "age_seconds", s.o.now().Sub(asOf).Seconds())
+	return v, true
 }
 
 // publishState sets the metrics of the group named name from its kept
-// state, gs, as restored at start, or moved by a rename.
+// state, gs, as a rename moves it.
 func publishState(m *metrics.Metrics, name string, gs groupState) {
 	m.GroupUp.WithLabelValues(name).Set(gauge(gs.up))
 	if !gs.lastSuccess.IsZero() {

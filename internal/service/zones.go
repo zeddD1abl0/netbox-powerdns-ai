@@ -252,8 +252,8 @@ func (s *Service) take() batch {
 }
 
 // refreshZones runs b's zone refresh, as its own trace, linked to the
-// webhooks that asked for it, and records it. A refresh cut short by ctx's
-// cancellation isn't recorded.
+// webhooks that asked for it, and serves it once it's recorded (ADR-0048).
+// A refresh cut short by ctx's cancellation isn't recorded.
 func (s *Service) refreshZones(ctx context.Context, start time.Time, b batch) {
 	log := s.o.Log.With("netbox_request_ids", b.requestIDs())
 	rctx := logging.WithRequestID(ctx, rand.Text())
@@ -277,57 +277,53 @@ func (s *Service) refreshZones(ctx context.Context, start time.Time, b batch) {
 		span.SetStatus(codes.Error, err.Error())
 	}
 	end := s.o.now()
-	outcome, changes := s.recordZones(rctx, log, r, err, start, end)
-	s.noteWebhookRefresh(b, false, start, end, outcome, err)
-	s.keep(rctx, log, store.RefreshRecord{Kind: store.RefreshZones, Cause: store.CauseWebhook, Started: start, Finished: end,
-		Outcome: outcome, Error: errText(err), Zones: b.names(), NetBoxRequestIDs: b.requestIDs()}, changes)
+	res := s.foundZones(rctx, log, r, err, start, end)
+	if !s.commit(rctx, log, res, store.RefreshRecord{Kind: store.RefreshZones, Cause: store.CauseWebhook, Started: start, Finished: end,
+		Outcome: res.outcome, Error: errText(err), Zones: b.names(), NetBoxRequestIDs: b.requestIDs()}) {
+		return
+	}
+	s.noteWebhookRefresh(b, false, start, end, res.outcome, err)
 }
 
-// recordZones keeps what a zone refresh found, merged into the last-known
-// state, sets the metrics, and logs it, as record does for a full refresh,
-// and returns its outcome, and what it kept. A zone refresh merges only into what a full
-// refresh has kept: a group with no report, or NetBox's records before
-// NetBox was first read, wait for the next full refresh.
-func (s *Service) recordZones(ctx context.Context, log *slog.Logger, r drift.Report, err error, start, end time.Time) (string, []change) {
+// foundZones returns what a zone refresh found, r, or err, merged into the
+// last-known state, as the service would keep it, without keeping it yet,
+// as found does for a full refresh; counts it; and logs what it found. A
+// zone refresh merges only into what a full refresh has kept: a group with
+// no report, or NetBox's records before NetBox was first read, wait for the
+// next full refresh.
+func (s *Service) foundZones(ctx context.Context, log *slog.Logger, r drift.Report, err error, start, end time.Time) result {
 	m := s.o.Metrics
-	outcome := outcomeOf(r, err)
-	m.ZoneRefreshes.WithLabelValues(outcome).Inc()
+	m.ZoneRefreshes.WithLabelValues(outcomeOf(r, err)).Inc()
 	m.ZoneRefreshDuration.Observe(end.Sub(start).Seconds())
+	start, end = s.kept(start), s.kept(end)
+	res := result{start: start, end: end, outcome: outcomeOf(r, err), err: err}
 	var te *TimeoutError
 	if errors.As(err, &te) {
 		log.WarnContext(ctx, "the zone refresh took longer than drift.timeout, so it was stopped; its zones wait for the next scheduled refresh",
 			"timeout_seconds", te.Timeout.Seconds())
-		return outcome, nil
+		return res
 	}
 	if err != nil {
-		s.mu.Lock()
-		s.st.netboxRead, s.st.netboxUp, s.st.netboxError = true, false, err.Error()
-		s.mu.Unlock()
-		m.NetBoxUp.WithLabelValues().Set(0)
+		res.netbox = store.NetBoxDown
 		log.WarnContext(ctx, "the zone refresh couldn't read NetBox; its zones wait for the next scheduled refresh", "err", err)
-		return outcome, nil
+		return res
+	}
+	// With no group serving its zones, the zone refresh read nothing.
+	if len(r.Groups) > 0 {
+		res.netbox = store.NetBoxUp
 	}
 	s.mu.Lock()
-	st := &s.st
-	// With no group serving its zones, the zone refresh read nothing.
-	read := len(r.Groups) > 0
-	if read {
-		st.netboxRead, st.netboxUp, st.netboxError = true, true, ""
+	if r.NetBoxErr == nil && r.NetBox != nil && r.Scope != nil && !s.st.netbox.AsOf.IsZero() {
+		res.zones = &store.NetBoxZones{Zones: r.NetBox, Scope: r.Scope}
 	}
-	switch {
-	case r.NetBoxErr != nil:
+	res.changes = s.changes(r.Groups, end, true)
+	s.mu.Unlock()
+	if r.NetBoxErr != nil {
 		log.WarnContext(ctx, "couldn't read the records of NetBox's zones that aren't compared, so the API keeps NetBox's last records",
 			"err", r.NetBoxErr)
-	case r.NetBox != nil && r.Scope != nil && !st.netbox.AsOf.IsZero():
-		st.netbox = mergeNetBox(st.netbox, r.NetBox, r.Scope)
 	}
-	changes := s.apply(r.Groups, end, true)
-	s.mu.Unlock()
-	if read {
-		m.NetBoxUp.WithLabelValues().Set(1)
-	}
-	s.publish(ctx, log, changes, end)
-	return outcome, changes
+	logChanges(ctx, log, res.changes)
+	return res
 }
 
 // outcomeOf returns a refresh's outcome, one of metrics.Outcomes.

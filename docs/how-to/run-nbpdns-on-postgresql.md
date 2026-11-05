@@ -206,11 +206,21 @@ about 30 seconds otherwise. `/status` names the replica that answers, its
 role, and the leader, as does the `nbpdns_leader` metric, and each
 takeover is a `service.leader_acquired` event in the audit trail.
 
+Every replica serves the same API answers, NetBox's records included, and
+the same deployment status, so a load balancer can send requests to any of
+them. The leader writes each refresh to the database before it serves it,
+and each follower loads it at its next check of the database, every
+`database.poll_interval`, or at once with
+[`database.listen`](#have-the-replicas-hear-of-changes-at-once). A
+follower is ready once it has loaded a refresh: at once if the database
+holds one, and otherwise once the leader's first is written. `/status`
+also has facts of each replica's own, such as the refreshes it ran; the
+[service endpoints reference](../reference/service-endpoints.md#status)
+says which are which.
+
 > [!WARNING]
-> For now, a follower serves the reports it restored when it started, and
-> only the leader's API and `/status` show its refreshes. The rest of M09
-> has every replica serve what the database holds, and webhooks reach the
-> leader through any replica. Until then, send the API's requests and
+> For now, a webhook from NetBox is refreshed only if it reaches the
+> leader. The rest of M09 has any replica take them. Until then, send
 > NetBox's webhooks to the leader.
 
 Each replica holds a lock in the database, a PostgreSQL session advisory

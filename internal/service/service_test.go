@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -23,6 +24,7 @@ import (
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/drift"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/logging"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/metrics"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/store"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/tracing"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/version"
 )
@@ -86,6 +88,23 @@ func group(name string, states ...string) drift.GroupReport {
 		}
 	}
 	return g
+}
+
+// record keeps what a full refresh from start to end found, r, or err, as
+// refresh does.
+func (s *Service) record(ctx context.Context, log *slog.Logger, r drift.Report, err error, start, end time.Time) {
+	res := s.found(ctx, log, r, err, start, end)
+	s.commit(ctx, log, res, store.RefreshRecord{Kind: store.RefreshFull, Cause: store.CauseSchedule, Started: start, Finished: end,
+		Outcome: res.outcome, Error: errText(err)})
+}
+
+// recordZones keeps what a zone refresh found, as refreshZones does, and
+// returns its outcome.
+func (s *Service) recordZones(ctx context.Context, log *slog.Logger, r drift.Report, err error, start, end time.Time) string {
+	res := s.foundZones(ctx, log, r, err, start, end)
+	s.commit(ctx, log, res, store.RefreshRecord{Kind: store.RefreshZones, Cause: store.CauseWebhook, Started: start, Finished: end,
+		Outcome: res.outcome, Error: errText(err)})
+	return res.outcome
 }
 
 func failedGroup(name string) drift.GroupReport {

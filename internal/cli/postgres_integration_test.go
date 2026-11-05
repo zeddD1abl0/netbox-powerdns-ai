@@ -162,8 +162,13 @@ func TestServeOnPostgres(t *testing.T) {
 		follower.Replica.ID == leader.Replica.ID || follower.Replica.Name != leader.Replica.Name {
 		t.Errorf("the second serve: replica %+v, leader %+v, want a follower of %+v", follower.Replica, follower.Leader, leader.Replica)
 	}
-	if follower.Schedule.LastRefresh != nil || follower.Schedule.Refreshes != (service.Refreshes{}) || follower.Schedule.NextRefresh != nil {
-		t.Errorf("the follower refreshed, or scheduled a refresh: %+v", follower.Schedule)
+	// The follower runs no refresh, and serves the leader's (ADR-0048).
+	if follower.Schedule.Refreshes != (service.Refreshes{}) {
+		t.Errorf("the follower refreshed: %+v", follower.Schedule)
+	}
+	if lr := second.statusWhen(t, func(st service.Status) bool { return st.Schedule.LastRefresh != nil }).Schedule.LastRefresh; lr.Outcome != "failed" ||
+		!lr.Finished.Equal(first.statusWhen(t, func(service.Status) bool { return true }).Schedule.LastRefresh.Finished) {
+		t.Errorf("the follower's last refresh = %+v, want the leader's", lr)
 	}
 	for _, r := range []struct {
 		s    *served
@@ -237,6 +242,114 @@ func TestServeOnPostgres(t *testing.T) {
 	}
 	if !strings.Contains(first.stderr.String(), "the connection to PostgreSQL isn't encrypted") {
 		t.Errorf("serve didn't warn of the unencrypted connection:\n%s", first.stderr)
+	}
+}
+
+// TestReplicasServeTheSameAnswers runs two replicas on PostgreSQL, with the
+// lab's NetBox and PowerDNS, and checks that the follower, once it has
+// polled, serves what the leader does: the API's answers, NetBox's records
+// included, the deployment's status, and the drift gauges (ADR-0048). A
+// follower that starts once the leader has refreshed is ready at once, and
+// a refresh after that reaches it at its next poll.
+func TestReplicasServeTheSameAnswers(t *testing.T) {
+	nb, p := lab.NetBoxes[0], lab.PowerDNSes[0]
+	f := lab.NewDriftFixture(t, nb, p)
+	_, keyPath := keyFile(t)
+	env := with(configFile(t, "powerdns:\n  groups:\n"+labGroup(f, p.Group, p.URL())),
+		"NBPDNS_NETBOX_URL", nb.URL(), "NBPDNS_NETBOX_TOKEN", f.ReaderToken, "NBPDNS_DATABASE_URL", lab.NewPostgresDatabase(t),
+		"NBPDNS_DATABASE_POLL_INTERVAL", "100ms", "NBPDNS_DATABASE_MASTER_KEY_FILE", keyPath)
+	leader := startServe(t, env)
+	leader.waitReady(2 * time.Minute)
+	follower := startServe(t, env)
+	if code, body := follower.get("/readyz"); code != http.StatusOK {
+		t.Errorf("a follower that starts after the leader's refresh: /readyz = %d %q, want 200 at once", code, body)
+	}
+
+	paths := []string{"/api/server-groups"}
+	of := func(group string) {
+		paths = append(paths, "/api/server-groups/"+group+"/zones", "/api/server-groups/"+group+"/refreshes")
+		for _, z := range []string{f.Drift, f.Missing, f.Parked} {
+			zone := "/api/server-groups/" + group + "/zones/" + z
+			paths = append(paths, zone, zone+"/changes", zone+"/rrsets", zone+"/history")
+		}
+	}
+	of("lab-a")
+	// answers returns what s serves of the deployment: each path's answer,
+	// with its links on one host, the deployment's facts in its status, and
+	// its drift gauges.
+	answers := func(s *served) string {
+		var b strings.Builder
+		for _, path := range paths {
+			code, body := s.get(path)
+			fmt.Fprintf(&b, "%s: %d %s\n", path, code, strings.ReplaceAll(body, s.addr, "nbpdns"))
+		}
+		_, page := s.get("/status?json=1")
+		var st service.Status
+		if err := json.Unmarshal([]byte(page), &st); err != nil {
+			t.Fatalf("/status?json=1: %v:\n%s", err, page)
+		}
+		facts, err := json.Marshal([]any{st.Schedule.LastRefresh, st.Schedule.LastCompleteRefresh, st.Schedule.NextRefresh, st.NetBox, st.Groups})
+		if err != nil {
+			t.Fatal(err)
+		}
+		fmt.Fprintf(&b, "status: %s\n", facts)
+		_, metrics := s.get("/metrics")
+		for line := range strings.Lines(metrics) {
+			for _, gauge := range []string{"nbpdns_drift_zones{", "nbpdns_drift_zone_drifted{", "nbpdns_drift_rrset_changes{",
+				"nbpdns_server_group_up{", "nbpdns_server_group_last_success_timestamp_seconds{", "nbpdns_netbox_up ",
+				"nbpdns_drift_last_refresh_timestamp_seconds ", "nbpdns_drift_last_complete_refresh_timestamp_seconds "} {
+				if strings.HasPrefix(line, gauge) {
+					b.WriteString(line)
+				}
+			}
+		}
+		return b.String()
+	}
+	// same waits until the follower serves what the leader does. The
+	// follower polls every 100ms, and the leader's row has its next refresh
+	// within a heartbeat, 5 seconds.
+	same := func(step, group string) {
+		t.Helper()
+		deadline := time.Now().Add(10 * time.Second)
+		for {
+			want, got := answers(leader), answers(follower)
+			if got == want {
+				if !strings.Contains(want, "/"+group+"/zones/"+f.Drift+"/rrsets: 200") ||
+					!strings.Contains(want, `nbpdns_drift_zone_drifted{group="`+group+`"`) {
+					t.Errorf("%s: the leader serves no records, or no drift, of %s:\n%s", step, group, want)
+				}
+				// The follower's answers are the API's, as its spec has them.
+				for _, path := range paths {
+					follower.api(path)
+				}
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("%s: the follower serves\n%s\nwant the leader's\n%s", step, got, want)
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+	same("the leader's first refresh", "lab-a")
+
+	// A group added with the command line has the leader refresh at once,
+	// which the follower then serves too.
+	apiKey := filepath.Join(t.TempDir(), "api-key")
+	if err := os.WriteFile(apiKey, []byte(lab.PowerDNSAPIKey+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, stderr := run(t, env, "groups", "add", "lab-cli", "--url", p.URL(), "--views", f.View,
+		"--zone-policies", strings.TrimSuffix(f.Ignored, ".")+"=ignore", "--api-key-file", apiKey, "--reason", "a test"); code != exitOK {
+		t.Fatalf("groups add: exit %d:\n%s", code, stderr)
+	}
+	leader.statusWhen(t, func(st service.Status) bool {
+		return len(st.Groups) == 2 && st.Groups[1].Name == "lab-cli" && st.Groups[1].Status == "ok"
+	})
+	of("lab-cli")
+	same("the refresh of the group added", "lab-cli")
+	if st := follower.statusWhen(t, func(service.Status) bool { return true }); st.Replica.Role != service.RoleFollower ||
+		st.Schedule.Refreshes != (service.Refreshes{}) {
+		t.Errorf("the follower: replica %+v, refreshes %+v, want a follower that ran none", st.Replica, st.Schedule.Refreshes)
 	}
 }
 
@@ -325,7 +438,7 @@ func TestLeaderStepsDown(t *testing.T) {
 			t.Fatal("the replica didn't follow after it stepped down")
 		}
 	}
-	if _, _, err := st.RecordRefresh(t.Context(), store.RefreshRecord{Kind: store.RefreshFull, Cause: store.CauseSchedule,
+	if _, err := st.RecordRefresh(t.Context(), store.RefreshRecord{Kind: store.RefreshFull, Cause: store.CauseSchedule,
 		Started: time.Now(), Finished: time.Now(), Outcome: "complete"}); !errors.Is(err, store.ErrNotLeader) {
 		t.Errorf("a refresh's write after the step-down: error = %v, want ErrNotLeader", err)
 	}

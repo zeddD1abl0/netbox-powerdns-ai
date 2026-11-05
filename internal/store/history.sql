@@ -36,8 +36,8 @@ ON CONFLICT (group_name) DO UPDATE SET
 -- name: GroupReports :many
 SELECT * FROM drift_group_reports;
 
--- name: LastRefresh :one
-SELECT * FROM drift_refreshes ORDER BY id DESC LIMIT 1;
+-- name: LastFullRefresh :one
+SELECT * FROM drift_refreshes WHERE kind = 'full' ORDER BY id DESC LIMIT 1;
 
 -- name: LastCompleteRefresh :one
 SELECT finished_at FROM drift_refreshes WHERE kind = 'full' AND outcome = 'complete' ORDER BY id DESC LIMIT 1;

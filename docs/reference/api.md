@@ -246,7 +246,7 @@ An error, as RFC 9457 describes it.
 
 ### `Status`
 
-The nbpdns service's state.
+The nbpdns service's state. Its facts are of two kinds. The deployment's come from the database, and every replica shows the same, within `database.poll_interval`, 5 seconds by default, or as soon as it hears of a change, with `database.listen`: the schedule's interval and timeout, and its last and next refresh; `netbox`; `leader`; and the server groups, which `/api/server-groups` serves. The rest are this replica's own: its build, uptime, readiness and liveness, the refreshes it ran, `tracing`, `webhooks`, `database` and `replica`.
 
 | Field | Type | Description |
 |---|---|---|
@@ -254,13 +254,13 @@ The nbpdns service's state.
 | `revision` | `string` | The build's Git commit. |
 | `started` | `string` (`date-time`) | When the service started. |
 | `uptime_seconds` | `number` (`double`) | The time since the service started. |
-| `ready` | `boolean` | Whether the service has restored the reports it kept before it restarted, or, with none to restore, whether its first refresh has finished, whatever its outcome, as `/readyz` reports. |
+| `ready` | `boolean` | Whether this replica serves a full refresh that finished, whatever its outcome, as `/readyz` reports: its own, once the database has it, or one that it loaded from the database, as it started, or from the leader. |
 | `live` | `boolean` | On the leader, whether a refresh has started within `drift.interval` + `drift.timeout` + 1 minute, or since it took over. On a follower, whether it has tried for the leader's lock within the last minute. As `/livez` reports. |
-| `schedule` | [`Schedule`](#schedule) | The refreshes' schedule, and how they went. |
-| `netbox` | [`NetBoxState`](#netboxstate) | NetBox's state, as of the last refresh. |
+| `schedule` | [`Schedule`](#schedule) | The refreshes' schedule, and how they went: the deployment's, but for `refreshes`, which counts this replica's own. |
+| `netbox` | [`NetBoxState`](#netboxstate) | NetBox's state, as the last refresh that tried it found it, which the database holds. |
 | `tracing` | [`Tracing`](#tracing) | Where the service's spans are exported. |
-| `webhooks` | [`Webhooks`](#webhooks) | The state of NetBox's webhooks, which refresh the zones they name. |
-| `database` | [`Database`](#database) | The database that the service keeps its state in. |
+| `webhooks` | [`Webhooks`](#webhooks) | The state of NetBox's webhooks, which refresh the zones they name: those that this replica received, and the refreshes it ran for them. |
+| `database` | [`Database`](#database) | The database that the service keeps its state in, as this replica connects to it. |
 | `replica` | [`Replica`](#replica) | This replica of the service, one of those on its database. On PostgreSQL, several can run, and one of them leads: it refreshes and prunes. On SQLite, one runs, and it always leads. |
 | `leader` | [`Leader`](#leader), or null | The replica that leads, as this replica last knew it: from the database, on a follower, which reads it every `database.poll_interval`, 5 seconds by default, or as soon as it hears of a change, with `database.listen`. Null if it knows of none, before a replica first leads the database, or just after this one stepped down. |
 
@@ -288,7 +288,7 @@ The replica that leads, which refreshes and prunes.
 
 ### `Database`
 
-The database that the service keeps its state in.
+The database that the service keeps its state in, as this replica connects to it.
 
 | Field | Type | Description |
 |---|---|---|
@@ -296,24 +296,24 @@ The database that the service keeps its state in.
 | `url` | `string` | `database.url`, with each password in it, the URL's own and the values of its `password` and `sslpassword` parameters, masked as `xxxxx`. |
 | `path` | `string` | SQLite's file, from `database.url`, or empty on PostgreSQL. |
 | `tls` | `boolean`, or null | Whether the connection to PostgreSQL uses TLS, as it did when the service started, or null on SQLite. With `sslmode` at `prefer`, libpq's default, it may not. |
-| `restored` | `boolean` | Whether the service started from the reports it kept before it restarted, which it serves until its first refresh replaces them. |
-| `restored_as_of` | `string` (`date-time`), or null | When the refresh before the restart finished, or null if nothing was restored. |
-| `history_write_failures` | `integer` (`int64`) | The refreshes that couldn't be written to the drift history since the service started. Each is still served. |
+| `restored` | `boolean` | Whether this replica started from a refresh that the database held, which it served at once, until a later refresh replaced it. |
+| `restored_as_of` | `string` (`date-time`), or null | When that refresh finished, or null if the database held none. |
+| `history_write_failures` | `integer` (`int64`) | The refreshes that this replica couldn't write to the drift history since it started. No replica serves them: the last refresh that was written is served until another is. |
 | `last_write_failure` | `string` (`date-time`), or null | When the last of them was, or null. |
 | `last_write_error` | `string`, or null | Its error, or null. |
 
 ### `Schedule`
 
-The refreshes' schedule, and how they went.
+The refreshes' schedule, and how they went: the deployment's, but for `refreshes`, which counts this replica's own.
 
 | Field | Type | Description |
 |---|---|---|
 | `interval_seconds` | `number` (`double`) | The time from the start of one refresh to the start of the next, `drift.interval`. |
 | `timeout_seconds` | `number` (`double`) | How long a refresh may take, `drift.timeout`. |
-| `last_refresh` | [`Refresh`](#refresh), or null | The last refresh that finished, or null before the first. |
+| `last_refresh` | [`Refresh`](#refresh), or null | The last full refresh that finished, as the database holds it, or null before the first. A refresh that couldn't be written isn't there. |
 | `last_complete_refresh` | `string` (`date-time`), or null | When the last complete refresh finished, or null. |
-| `next_refresh` | `string` (`date-time`), or null | When the next refresh starts, or null while one runs. |
-| `refreshes` | [`RefreshCounts`](#refreshcounts) | The refreshes that finished since the service started, by outcome. |
+| `next_refresh` | `string` (`date-time`), or null | When the leader's next refresh starts, or null while one runs. On a follower, as the leader's row in the database had it at the leader's last heartbeat, or null if it knows no leader. |
+| `refreshes` | [`RefreshCounts`](#refreshcounts) | The refreshes that this replica ran, and that finished, since it started, by outcome, whether they could be written or not. A follower runs none. |
 
 ### `Refresh`
 
@@ -329,7 +329,7 @@ A refresh that finished.
 
 ### `RefreshCounts`
 
-The refreshes that finished since the service started, by outcome.
+The refreshes that this replica ran, and that finished, since it started, by outcome, whether they could be written or not. A follower runs none.
 
 | Field | Type | Description |
 |---|---|---|
@@ -339,7 +339,7 @@ The refreshes that finished since the service started, by outcome.
 
 ### `NetBoxState`
 
-NetBox's state, as of the last refresh.
+NetBox's state, as the last refresh that tried it found it, which the database holds.
 
 | Field | Type | Description |
 |---|---|---|
@@ -359,7 +359,7 @@ Where the service's spans are exported.
 
 ### `Webhooks`
 
-The state of NetBox's webhooks, which refresh the zones they name.
+The state of NetBox's webhooks, which refresh the zones they name: those that this replica received, and the refreshes it ran for them.
 
 | Field | Type | Description |
 |---|---|---|
@@ -430,7 +430,7 @@ One of `enforce`, `report`, or `ignore`.
 
 ### `ServerGroup`
 
-A PowerDNS server group, with its last-known state. The counts are as of `last_success`.
+A PowerDNS server group, with its last-known state, as the database holds it, which every replica serves alike. The counts are as of `last_success`.
 
 | Field | Type | Description |
 |---|---|---|

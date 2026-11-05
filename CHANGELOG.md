@@ -36,8 +36,7 @@ All notable changes to this project are recorded here. The format follows
   and `leader`; the metrics `nbpdns_leader`,
   `nbpdns_leader_since_timestamp_seconds` and `nbpdns_leader_changes_total`
   say which replica leads; and each takeover is a `service.leader_acquired`
-  audit event. On SQLite, `serve` always leads. For now, only the leader
-  serves its refreshes.
+  audit event. On SQLite, `serve` always leads.
 - `nbpdns serve` checks its database for changes every
   `database.poll_interval`, 5 seconds by default: the runtime settings and
   server groups that the command line changed, and, on PostgreSQL, the
@@ -49,13 +48,39 @@ All notable changes to this project are recorded here. The format follows
   listens takes over at once. `database.listen` is refused with a SQLite
   `database.url`. `nbpdns settings` and `nbpdns groups` say that a running
   `serve` applies a change within `database.poll_interval`.
+- Every replica on one PostgreSQL database serves the same API answers,
+  NetBox's records included, and the same deployment status: the leader
+  writes each refresh to the database, and each follower loads it at its
+  next check, or at once with `database.listen`. A follower is ready once
+  it has loaded a refresh. `/status` and the API's spec say which facts
+  are the deployment's, the same on every replica, and which are each
+  replica's own, such as the refreshes it ran; on a follower,
+  `schedule.next_refresh` is the leader's. Every replica sets the drift
+  gauges from the database, which
+  [Monitor drift with Prometheus](docs/how-to/monitor-drift-with-prometheus.md#monitor-several-replicas)
+  aggregates with `max by`.
+- The database keeps NetBox's zones, with their records, writing a zone's
+  row only when the zone changed, so that a restarted `serve` serves the
+  API's `…/rrsets` at once, rather than after its first refresh.
 
 ### Changed
 
+- `nbpdns serve` serves a refresh only once its database has it, on SQLite
+  too: a refresh that can't be written is served by no replica, which
+  keeps serving the last one written, and is counted in
+  `nbpdns_db_write_failures_total` and on `/status`, as before. `/readyz`
+  answers 200 once `serve` serves a refresh that finished, whatever its
+  outcome: its own, or one from the database.
 - `make release-check` and `make release` build one architecture at a
   time, which lowers their peak memory by a third, and GitLab's
   memory-heavy jobs request memory from the Kubernetes runner, so that
   each runs only on a node with room for it.
+
+### Fixed
+
+- After a restart, `/status`'s `schedule.last_refresh` is the last full
+  refresh, as it was before the restart, not a zone refresh from NetBox's
+  webhooks that came after it.
 
 ### Security
 

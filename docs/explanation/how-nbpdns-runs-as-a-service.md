@@ -111,21 +111,25 @@ should still be firing. Keeping it, with `up` at 0 and the time of the last
 success beside it, says both things at once: here's the last known drift,
 and it's getting old.
 
-nbpdns keeps this state in its database too, with each refresh, and each
-zone's history ([ADR-0042](../adr/0042-drift-history.md)), as
-[How nbpdns stores its state](how-nbpdns-stores-its-state.md) explains. When
-it starts, it restores each group's last report from there, and serves it
-until its first refresh replaces it, so a restart hides nothing that nbpdns
-knew. Each group's last success still says
-how old its report is.
+nbpdns keeps this state in its database too, with each refresh, NetBox's
+zones, and each zone's history ([ADR-0042](../adr/0042-drift-history.md)),
+as [How nbpdns stores its state](how-nbpdns-stores-its-state.md) explains.
+It serves a refresh only once the database has it, so that what it serves
+is always what the database holds. When it starts, it loads each group's
+last report from there, and serves it until its next refresh replaces it,
+so a restart hides nothing that nbpdns knew. Each group's last success
+still says how old its report is. With several replicas, each follower
+loads the leader's refreshes the same way, as they're written
+([ADR-0048](../adr/0048-replicas-share-their-state-through-the-database.md)).
 
 ## Ready and live
 
 Two endpoints tell an orchestrator, such as Kubernetes, how nbpdns is.
 
-- **`/readyz`** answers 200 once nbpdns has restored the reports it kept
-  before it restarted, or, with none to restore, once its first refresh has
-  finished, whatever its outcome. Before that, nbpdns has nothing to report.
+- **`/readyz`** answers 200 once nbpdns serves a full refresh that
+  finished, whatever its outcome: one that the database held when it
+  started, or else its first, once the database has it, or, on a follower,
+  the leader's first. Before that, nbpdns has nothing to report.
 - **`/livez`** answers 200 unless no refresh has started for
   `drift.interval` + `drift.timeout` + 1 minute. Since every refresh is
   bounded by its timeout, that only happens if the refresh loop itself is

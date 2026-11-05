@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/audit"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/dns"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/drift"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/store/sqlite"
 )
@@ -63,6 +64,41 @@ type RefreshRecord struct {
 	// Reports are the reports kept for the groups that were read: for a
 	// zone refresh, merged into the last.
 	Reports []KeptReport
+	// NetBoxStatus is NetBoxUp or NetBoxDown, as the refresh found NetBox,
+	// with NetBoxError why it was down, or empty if the refresh says nothing
+	// of NetBox, as one that ran out of time, or compared no group, doesn't.
+	NetBoxStatus, NetBoxError string
+	// NetBoxZones are NetBox's zones as the refresh read them, for the API's
+	// records, or nil if it read none to keep.
+	NetBoxZones *NetBoxZones
+}
+
+// What a refresh found of NetBox.
+const (
+	NetBoxUp   = "up"
+	NetBoxDown = "down"
+)
+
+// NetBoxZones are NetBox's zones as a refresh read them (ADR-0048).
+type NetBoxZones struct {
+	Zones []dns.Zone
+	// Scope is nil for a full refresh's zones, which are every zone in the
+	// groups' views. For a zone refresh's, it's what the refresh listed: in
+	// each of its views, the zones with its names are those of Zones in that
+	// view, and no others.
+	Scope *drift.Scope
+}
+
+// Recorded is what RecordRefresh wrote.
+type Recorded struct {
+	// ID is the refresh's, which is also the refreshes' version that
+	// Versions reads, once it's committed.
+	ID int64
+	// ZoneRows counts the zones' history rows written, and NetBoxZones the
+	// rows of NetBox's zones written or deleted.
+	ZoneRows, NetBoxZones int
+	// Events are the audit events recorded.
+	Events []audit.Event
 }
 
 // A GroupResult is how a refresh went for a group.
@@ -81,16 +117,18 @@ type KeptReport struct {
 // RecordRefresh writes r to the drift history, in one transaction: the
 // refresh and each group's result; a row for each zone in r's reports whose
 // state, or the digest of its changes, differs from its last row, and a
-// removed row for each zone that has left its group's report; and each
-// group's report, replacing its last. Each zone's change of state is also a
+// removed row for each zone that has left its group's report; each group's
+// report, replacing its last; and what it found of NetBox, with a row for
+// each of NetBox's zones whose digest differs from its last, and none for a
+// zone that has left (ADR-0048). Each zone's change of state is also a
 // zone.drift_changed event (ADR-0008, ADR-0039), with ctx's trace and request
 // IDs, as is a new zone's, if it drifted. Only the groups that the database
 // stores are written. It's a leader-only write, which fails with
-// ErrNotLeader on a replica that doesn't lead (ADR-0047). It returns how many
-// zone rows it wrote, and the events.
-func (s *Store) RecordRefresh(ctx context.Context, r RefreshRecord) (int, []audit.Event, error) {
-	rows := 0
+// ErrNotLeader on a replica that doesn't lead (ADR-0047).
+func (s *Store) RecordRefresh(ctx context.Context, r RefreshRecord) (Recorded, error) {
+	var out Recorded
 	events, err := s.leaderTx(ctx, func(tx *Tx) error {
+		out.ZoneRows, out.NetBoxZones = 0, 0
 		names, err := tx.q.GroupNames(ctx)
 		if err != nil {
 			return err
@@ -102,6 +140,7 @@ func (s *Store) RecordRefresh(ctx context.Context, r RefreshRecord) (int, []audi
 		if err != nil {
 			return err
 		}
+		out.ID = id
 		zones, err := jsonText(nonNil(r.Zones))
 		if err != nil {
 			return err
@@ -139,7 +178,7 @@ func (s *Store) RecordRefresh(ctx context.Context, r RefreshRecord) (int, []audi
 			if err != nil {
 				return err
 			}
-			rows += n
+			out.ZoneRows += n
 			report, err := encodeReport(k.Report)
 			if err != nil {
 				return err
@@ -151,12 +190,28 @@ func (s *Store) RecordRefresh(ctx context.Context, r RefreshRecord) (int, []audi
 				return err
 			}
 		}
+		if r.NetBoxStatus != "" {
+			if err := tx.q.SetNetBoxStatus(ctx, sqlite.SetNetBoxStatusParams{Status: r.NetBoxStatus, Error: r.NetBoxError}); err != nil {
+				return err
+			}
+		}
+		if nz := r.NetBoxZones; nz != nil {
+			if out.NetBoxZones, err = tx.recordNetBoxZones(ctx, id, *nz); err != nil {
+				return err
+			}
+			if nz.Scope == nil {
+				if err := tx.q.SetNetBoxZonesAsOf(ctx, finished); err != nil {
+					return err
+				}
+			}
+		}
 		return nil
 	})
 	if err != nil {
-		return 0, nil, fmt.Errorf("writing the refresh to the drift history: %w", err)
+		return Recorded{}, fmt.Errorf("writing the refresh to the drift history: %w", err)
 	}
-	return rows, events, nil
+	out.Events = events
+	return out, nil
 }
 
 // A zoneRow is a zone's history row, to be written.
@@ -322,27 +377,32 @@ func decodeReport(s string) (drift.GroupReport, error) {
 	return g, nil
 }
 
-// A RefreshSummary is a refresh, as Restore reads it back.
+// A RefreshSummary is a refresh, as LoadDrift reads it back.
 type RefreshSummary struct {
 	Kind, Cause       string
 	Started, Finished time.Time
 	Outcome, Error    string
 }
 
-// Restored is the drift state that the history kept, for serve to start
-// from.
-type Restored struct {
-	// Last is the last refresh, or nil if there's none.
+// DriftState is what the refreshes found, as the database holds it, for
+// each replica to serve (ADR-0042, ADR-0048).
+type DriftState struct {
+	// Version is the refreshes' version, as Versions reads it, that the
+	// state is as of.
+	Version int64
+	// Last is the last full refresh, or nil if there's none.
 	Last *RefreshSummary
 	// LastComplete is when the last complete full refresh finished, or
 	// zero.
 	LastComplete time.Time
 	// Groups holds each group's state, by name.
-	Groups map[string]RestoredGroup
+	Groups map[string]GroupDrift
+	// NetBox is what the refreshes found of NetBox.
+	NetBox NetBoxState
 }
 
-// A RestoredGroup is a group's last-known state.
-type RestoredGroup struct {
+// A GroupDrift is a group's last-known state.
+type GroupDrift struct {
 	// Report is its last report, if it has one.
 	Report *drift.GroupReport
 	// LastSuccess is when it was last compared in full, if it ever was.
@@ -351,18 +411,43 @@ type RestoredGroup struct {
 	Status, Error string
 }
 
-// RestoreDrift reads back the last refresh, and each group's last report and
-// result, in one read transaction.
-func (s *Store) RestoreDrift(ctx context.Context) (Restored, error) {
-	out := Restored{Groups: map[string]RestoredGroup{}}
+// NetBoxState is what the refreshes found of NetBox.
+type NetBoxState struct {
+	// Status is NetBoxUp or NetBoxDown, as the last refresh that tried
+	// NetBox found it, with Error why it was down, or empty before one did.
+	Status, Error string
+	// ZonesAsOf is when a full refresh last read NetBox's zones, or zero
+	// before one did.
+	ZonesAsOf time.Time
+	// Zones are the zones written since the version that LoadDrift was
+	// given, or every zone for 0.
+	Zones []dns.Zone
+	// Index holds every zone that the database holds, by view, then by
+	// name, with the ID of the refresh that wrote it last.
+	Index map[string]map[string]int64
+}
+
+// LoadDrift reads back what the refreshes found, in one read transaction:
+// the last full refresh, each group's last report and result, and NetBox's
+// state and zones, of which only those written after the version since,
+// for a replica that holds the rest as of it. If the version hasn't moved
+// past since, it reads nothing more, and returns only the version.
+func (s *Store) LoadDrift(ctx context.Context, since int64) (DriftState, error) {
+	out := DriftState{Groups: map[string]GroupDrift{}}
 	sqlTx, q, err := s.readTx(ctx)
 	if err != nil {
-		return out, fmt.Errorf("restoring the drift report: %w", err)
+		return out, fmt.Errorf("loading the drift report: %w", err)
 	}
 	defer func() { _ = sqlTx.Rollback() }()
-	fail := func(err error) (Restored, error) { return out, fmt.Errorf("restoring the drift report: %w", err) }
+	fail := func(err error) (DriftState, error) { return out, fmt.Errorf("loading the drift report: %w", err) }
 
-	switch r, err := q.LastRefresh(ctx); {
+	if out.Version, err = q.SequenceValue(ctx, seqRefreshes); err != nil {
+		return fail(err)
+	}
+	if since > 0 && out.Version <= since {
+		return out, nil
+	}
+	switch r, err := q.LastFullRefresh(ctx); {
 	case err == nil:
 		sum := RefreshSummary{Kind: r.Kind, Cause: r.Cause, Outcome: r.Outcome, Error: r.Error}
 		if sum.Started, err = time.Parse(TimeLayout, r.StartedAt); err != nil {
@@ -392,11 +477,13 @@ func (s *Store) RestoreDrift(ctx context.Context) (Restored, error) {
 		if err != nil {
 			return fail(fmt.Errorf("group %s's report: %w", r.GroupName, err))
 		}
+		// A rename moves the report, whose JSON keeps the old name.
+		g.Group = r.GroupName
 		last, err := time.Parse(TimeLayout, r.LastSuccess)
 		if err != nil {
 			return fail(err)
 		}
-		out.Groups[r.GroupName] = RestoredGroup{Report: &g, LastSuccess: last}
+		out.Groups[r.GroupName] = GroupDrift{Report: &g, LastSuccess: last}
 	}
 	results, err := q.LastGroupResults(ctx)
 	if err != nil {
@@ -406,6 +493,9 @@ func (s *Store) RestoreDrift(ctx context.Context) (Restored, error) {
 		rg := out.Groups[r.GroupName]
 		rg.Status, rg.Error = r.Status, r.Error
 		out.Groups[r.GroupName] = rg
+	}
+	if out.NetBox, err = loadNetBox(ctx, q, since); err != nil {
+		return fail(err)
 	}
 	return out, nil
 }

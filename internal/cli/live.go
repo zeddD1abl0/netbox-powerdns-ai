@@ -220,7 +220,8 @@ func diffGroups(prev, next []servedGroup) groupChanges {
 
 // A watcher applies the settings and the groups that the database stores to
 // a running serve, when the change feed finds that their versions have moved
-// on (ADR-0040, ADR-0048).
+// on (ADR-0040, ADR-0048), and has the service load the refreshes that
+// another replica recorded.
 type watcher struct {
 	s    *session
 	st   *store.Store
@@ -235,15 +236,33 @@ type watcher struct {
 }
 
 // apply reads the settings, or the groups, again, and applies them, if their
-// versions in v have moved on from those applied. Settings or groups that
-// can't be applied are logged, and serve keeps those it has, and tries again
-// at the feed's next check.
+// versions in v have moved on from those applied, then has the service load
+// the refreshes, if theirs has moved on from what it serves. The groups come
+// first, so that the service loads the reports of the groups it compares.
+// What can't be applied, or loaded, is logged, and serve keeps what it has,
+// and tries again at the feed's next check.
 func (w *watcher) apply(ctx context.Context, v store.Versions) {
 	if v.Settings != w.settingsVersion && w.reloadSettings(ctx) {
 		w.settingsVersion = v.Settings
 	}
 	if v.Groups != w.groupsVersion && w.reloadGroups(ctx) {
 		w.groupsVersion = v.Groups
+	}
+	if v.Refreshes != w.svc.Version() {
+		w.reloadDrift(ctx)
+	}
+}
+
+// reloadDrift has the service load what the refreshes found, as the
+// database holds it (ADR-0048). Each reload is its own trace.
+func (w *watcher) reloadDrift(ctx context.Context) {
+	s := w.s
+	ctx, span := s.tracer.Start(logging.WithRequestID(ctx, rand.Text()), "drift reload", trace.WithNewRoot())
+	defer span.End()
+	if err := w.svc.Reload(ctx); err != nil && ctx.Err() == nil {
+		span.RecordError(err)
+		s.log.WarnContext(ctx, "couldn't load the drift reports that the database holds, so serve serves those it has, and tries again soon",
+			"err", err)
 	}
 }
 

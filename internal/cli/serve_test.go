@@ -50,6 +50,9 @@ type served struct {
 	stderr *lockedBuffer
 	cancel context.CancelFunc
 	done   chan int
+	// checker checks the API's answers against its spec, once api has made
+	// it: parsing the spec is slow.
+	checker *contract.Checker
 }
 
 // startServe runs `nbpdns serve` with env, listening on a free port of
@@ -116,9 +119,12 @@ func (s *served) get(path string) (int, string) {
 // OpenAPI document, and returns its status and body.
 func (s *served) api(path string) (int, string) {
 	s.t.Helper()
-	checker, err := contract.New(api.Spec(), "/api")
-	if err != nil {
-		s.t.Fatal(err)
+	if s.checker == nil {
+		checker, err := contract.New(api.Spec(), "/api")
+		if err != nil {
+			s.t.Fatal(err)
+		}
+		s.checker = checker
 	}
 	req, err := http.NewRequestWithContext(s.t.Context(), http.MethodGet, "http://"+s.addr+path, http.NoBody)
 	if err != nil {
@@ -129,7 +135,7 @@ func (s *served) api(path string) (int, string) {
 		s.t.Fatalf("GET %s: %v", path, err)
 	}
 	defer resp.Body.Close()
-	checker.Check(s.t, req, resp)
+	s.checker.Check(s.t, req, resp)
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		s.t.Fatal(err)

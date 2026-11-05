@@ -251,9 +251,15 @@ func (s *Service) Status() Status {
 	if !st.lastComplete.IsZero() {
 		out.Schedule.LastCompleteRefresh = utc(st.lastComplete)
 	}
-	// While a refresh runs, the next one isn't scheduled yet.
-	if !st.next.IsZero() && !st.lastStart.After(st.lastEnd) {
-		out.Schedule.NextRefresh = utc(st.next)
+	// While a refresh runs, the next one isn't scheduled yet. A follower
+	// has it from the leader's row (ADR-0048).
+	switch l := st.leader; {
+	case st.leads:
+		if !st.next.IsZero() && !st.lastStart.After(st.lastEnd) {
+			out.Schedule.NextRefresh = utc(st.next)
+		}
+	case l != nil && !l.NextRefresh.IsZero():
+		out.Schedule.NextRefresh = utc(l.NextRefresh)
 	}
 	for _, g := range s.groups {
 		out.Groups = append(out.Groups, groupInfo(g, st.groups[g.Name]))

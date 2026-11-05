@@ -109,7 +109,7 @@ You need:
    - **`NbpdnsNoCompleteRefresh`** uses `3 * 300`, three times the default
      `drift.interval` of 5 minutes, in seconds. Change it with the interval.
    - Before nbpdns's first refresh finishes, `nbpdns_netbox_up` and the
-     refresh times have no value, unless nbpdns restored them from its
+     refresh times have no value, unless nbpdns loaded them from its
      database, so these rules don't fire while it starts.
      `NbpdnsDown` covers an nbpdns that never answers.
 
@@ -133,6 +133,43 @@ You need:
 
 The rules appear at **Alerts** in Prometheus's web UI. Route them to people
 with Alertmanager, as for any other alert.
+
+## Monitor several replicas
+
+With [several replicas](run-nbpdns-on-postgresql.md#run-more-than-one-serve)
+on PostgreSQL, scrape each one, as a target of its own. Each replica sets
+the drift gauges from what the database holds, so each shows the same
+values, within `database.poll_interval`, and a rule on a gauge would fire
+once for each replica. Aggregate the gauges with `max by`, by the labels
+that the alert names, so that each alert fires once:
+
+```yaml
+- alert: NbpdnsZoneDrifted
+  expr: max by (group, zone, state) (nbpdns_drift_zone_drifted) == 1
+- alert: NbpdnsServerGroupDown
+  expr: max by (group) (nbpdns_server_group_up) == 0
+- alert: NbpdnsNetBoxDown
+  expr: max(nbpdns_netbox_up) == 0
+- alert: NbpdnsNoCompleteRefresh
+  expr: time() - max(nbpdns_drift_last_complete_refresh_timestamp_seconds) > 3 * 300
+```
+
+Keep the rest of each rule as `nbpdns-rules.yml` has it. Query the zones by state the
+same way:
+
+```text
+max by (group, state) (nbpdns_drift_zones)
+```
+
+The counters and histograms, such as `nbpdns_drift_refreshes_total`, count
+each replica's own work, and only the leader refreshes, so sum them:
+
+```text
+sum(rate(nbpdns_drift_refreshes_total[15m]))
+```
+
+`NbpdnsDown` stays as it is: it fires for each replica that Prometheus
+can't scrape.
 
 ## See also
 

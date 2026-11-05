@@ -15,6 +15,7 @@ type Querier interface {
 	DeleteAuditEventsThrough(ctx context.Context, seq int64) (int64, error)
 	DeleteGroup(ctx context.Context, id int64) error
 	DeleteGroupReport(ctx context.Context, groupName string) error
+	DeleteNetBoxZone(ctx context.Context, arg DeleteNetBoxZoneParams) error
 	DeleteOrphanGroupReports(ctx context.Context) error
 	DeleteRefreshGroupsBefore(ctx context.Context, cutoff string) error
 	DeleteRefreshesBefore(ctx context.Context, cutoff string) (int64, error)
@@ -25,6 +26,7 @@ type Querier interface {
 	GetDatabaseInfo(ctx context.Context) (GetDatabaseInfoRow, error)
 	GetGroup(ctx context.Context, name string) (ServerGroup, error)
 	GetLeader(ctx context.Context) (GetLeaderRow, error)
+	GetNetBoxState(ctx context.Context) (GetNetBoxStateRow, error)
 	GetSetting(ctx context.Context, key string) (Setting, error)
 	GroupNames(ctx context.Context) ([]string, error)
 	GroupRefreshes(ctx context.Context, arg GroupRefreshesParams) ([]GroupRefreshesRow, error)
@@ -41,8 +43,8 @@ type Querier interface {
 	// with a later time, as a refresh's do, which carry its end's time.
 	LastAuditEventBefore(ctx context.Context, cutoff string) (LastAuditEventBeforeRow, error)
 	LastCompleteRefresh(ctx context.Context) (string, error)
+	LastFullRefresh(ctx context.Context) (DriftRefresh, error)
 	LastGroupResults(ctx context.Context) ([]DriftRefreshGroup, error)
-	LastRefresh(ctx context.Context) (DriftRefresh, error)
 	LatestZoneRows(ctx context.Context, groupName string) ([]DriftZoneHistory, error)
 	LeaderHeartbeat(ctx context.Context, arg LeaderHeartbeatParams) (int64, error)
 	// Each filter is optional: NULL selects everything. The casts give
@@ -52,6 +54,8 @@ type Querier interface {
 	// come in one order on either database, whatever its collation (ADR-0046).
 	ListGroups(ctx context.Context) ([]ServerGroup, error)
 	ListSettings(ctx context.Context) ([]Setting, error)
+	NetBoxZoneIndex(ctx context.Context) ([]NetBoxZoneIndexRow, error)
+	NetBoxZonesAfter(ctx context.Context, after int64) ([]NetBoxZonesAfterRow, error)
 	NextIDs(ctx context.Context, arg NextIDsParams) (int64, error)
 	RenameGroup(ctx context.Context, arg RenameGroupParams) error
 	RenameGroupReport(ctx context.Context, arg RenameGroupReportParams) error
@@ -63,10 +67,13 @@ type Querier interface {
 	SequenceValue(ctx context.Context, name string) (int64, error)
 	SetAuditAnchor(ctx context.Context, arg SetAuditAnchorParams) error
 	SetLeader(ctx context.Context, arg SetLeaderParams) error
+	SetNetBoxStatus(ctx context.Context, arg SetNetBoxStatusParams) error
+	SetNetBoxZonesAsOf(ctx context.Context, zonesAsOf string) error
 	UpdateGroup(ctx context.Context, arg UpdateGroupParams) error
 	UpdateGroupKey(ctx context.Context, arg UpdateGroupKeyParams) error
 	UpdateSealedSetting(ctx context.Context, arg UpdateSealedSettingParams) error
 	UpsertGroupReport(ctx context.Context, arg UpsertGroupReportParams) error
+	UpsertNetBoxZone(ctx context.Context, arg UpsertNetBoxZoneParams) error
 	UpsertSetting(ctx context.Context, arg UpsertSettingParams) error
 	ZoneHistory(ctx context.Context, arg ZoneHistoryParams) ([]DriftZoneHistory, error)
 }

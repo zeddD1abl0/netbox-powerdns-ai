@@ -13,7 +13,7 @@ func TestJoinOnSQLite(t *testing.T) {
 	if _, err := s.Join(t.Context(), Replica{Name: "host-a", ID: "AAAA"}); err == nil || !strings.Contains(err.Error(), "only PostgreSQL has them") {
 		t.Errorf("Join() on SQLite: error = %v", err)
 	}
-	if _, _, err := s.RecordRefresh(t.Context(), full(time.Now())); err != nil {
+	if _, err := s.RecordRefresh(t.Context(), full(time.Now())); err != nil {
 		t.Errorf("RecordRefresh() on SQLite: %v", err)
 	}
 }

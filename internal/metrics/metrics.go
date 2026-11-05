@@ -108,13 +108,13 @@ var (
 var (
 	defRefreshes = def{name: "nbpdns_drift_refreshes_total", kind: counter, labels: []string{"outcome"},
 		values: map[string][]string{"outcome": Outcomes},
-		help:   "Drift refreshes finished, by outcome. A refresh is incomplete if a server group couldn't be read, and failed if NetBox couldn't be read."}
+		help:   "Drift refreshes that this replica ran, which finished, by outcome. A refresh is incomplete if a server group couldn't be read, and failed if NetBox couldn't be read."}
 	defRefreshDuration = def{name: "nbpdns_drift_refresh_duration_seconds", kind: histogram,
 		buckets: []float64{1, 5, 10, 30, 60, 120, 300, 600, 1200},
 		help:    "How long each drift refresh took."}
 	defZoneRefreshes = def{name: "nbpdns_drift_zone_refreshes_total", kind: counter, labels: []string{"outcome"},
 		values: map[string][]string{"outcome": Outcomes},
-		help: "Zone refreshes finished, by outcome: refreshes of only the zones that NetBox's webhooks named. " +
+		help: "Zone refreshes that this replica ran, which finished, by outcome: refreshes of only the zones that NetBox's webhooks named. " +
 			"Incomplete if a server group couldn't be read, and failed if NetBox couldn't be read. " +
 			"A webhook that asks for a full refresh is counted in `nbpdns_drift_refreshes_total`."}
 	defZoneRefreshDuration = def{name: "nbpdns_drift_zone_refresh_duration_seconds", kind: histogram,
@@ -124,9 +124,9 @@ var (
 		help: "The zones that NetBox's webhooks named, waiting for their refresh. " +
 			"Once a full refresh waits instead, for a view or past 100 zones, no more are added."}
 	defLastRefresh = def{name: "nbpdns_drift_last_refresh_timestamp_seconds", kind: gauge,
-		help: "When the last drift refresh finished, whatever its outcome, as a Unix time. It has no value before the first."}
+		help: "When the last full drift refresh that the database holds finished, whatever its outcome, as a Unix time. It has no value before the first."}
 	defLastComplete = def{name: "nbpdns_drift_last_complete_refresh_timestamp_seconds", kind: gauge,
-		help: "When the last complete drift refresh finished, as a Unix time. It has no value before the first."}
+		help: "When the last complete full drift refresh that the database holds finished, as a Unix time. It has no value before the first."}
 	defZones = def{name: "nbpdns_drift_zones", kind: gauge, labels: []string{"group", "state"},
 		values: map[string][]string{"state": zoneStates},
 		help:   "The server group's zones, by state, as of its primary's last successful read."}
@@ -177,7 +177,7 @@ var (
 		values: map[string][]string{"op": WriteOps},
 		help: "Writes to the database that failed, by what they wrote: `history`, a refresh, to the drift history; " +
 			"`audit`, an audit event of serve's own, such as its stop; and `prune`, the daily prune of the audit trail and the drift history. " +
-			"A refresh whose history couldn't be written is still served."}
+			"A refresh whose history couldn't be written isn't served by any replica."}
 	defSettingsReloads = def{name: "nbpdns_settings_reloads_total", kind: counter, labels: []string{"outcome"},
 		values: map[string][]string{"outcome": ReloadOutcomes},
 		help: "Reloads of the runtime settings or the server groups, after `nbpdns settings` or `nbpdns groups` changed them, by outcome: " +

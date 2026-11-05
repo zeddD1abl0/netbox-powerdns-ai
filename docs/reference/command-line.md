@@ -586,23 +586,25 @@ or NetBox, can't be read. Serve, at server.listen:
 
   /livez    200 unless no refresh has started for longer than one can take,
             or, on a follower, it hasn't tried to lead for a minute
-  /readyz   200 once it has restored its last reports, or, with none, once
-            the first refresh has finished
+  /readyz   200 once it serves a refresh that finished: one from the
+            database, or else the first, once the database has it
   /status   the service's state, as text, or as JSON with ?json=1
   /metrics  the drift, refresh and request metrics, for Prometheus
 
 It keeps its state in the database at database.url, which it creates, and
-migrates, when it starts: the audit trail, each refresh, and each zone's
-drift history. It restores its last reports from it at start, and serves
-them until its first refresh replaces them. On SQLite, only one serve may use
-a database at a time. On PostgreSQL, several can, as replicas: one of them,
-the leader, refreshes and prunes, and another takes over within about 30
-seconds if it stops, dies or is cut off.
+migrates, when it starts: the audit trail, each refresh, each zone's drift
+history, and NetBox's zones. It serves a refresh once the database has it,
+and loads the last one from it at start, which it serves until its next
+refresh replaces it. On SQLite, only one serve may use a database at a time.
+On PostgreSQL, several can, as replicas: one of them, the leader, refreshes
+and prunes, and another takes over within about 30 seconds if it stops, dies
+or is cut off. Every replica serves the refreshes that the database holds.
 
 It compares the config file's server groups, which it mirrors into the
 database at start, and those that nbpdns groups added. It checks the
 database every database.poll_interval, or at once with database.listen on
-PostgreSQL, and applies the changed groups and runtime settings.
+PostgreSQL, and applies the changed groups and runtime settings, and loads
+the leader's refreshes.
 
 With netbox.webhook_secret set, NetBox's signed webhooks at /api/netbox-events
 refresh the zones they name, once they stop coming for drift.webhook_delay.

@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -15,6 +17,7 @@ import (
 
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/audit"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/config"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/dns"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/drift"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/store"
 )
@@ -58,7 +61,7 @@ func TestRefreshesAreKept(t *testing.T) {
 	r = report(group("site-a", drift.StateDrift), group("site-b", drift.StateInSync))
 	s.refresh(ctx, t0.Add(time.Minute), batch{})
 
-	got, err := st.RestoreDrift(ctx)
+	got, err := st.LoadDrift(ctx, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +132,7 @@ func TestRestore(t *testing.T) {
 	if v := testutil.ToFloat64(m.GroupUp.WithLabelValues("site-a")); v != 1 {
 		t.Errorf("after Restore, nbpdns_server_group_up for site-a = %v, want 1", v)
 	}
-	if !strings.Contains(logs.String(), `"msg":"restored the last drift reports, so the service is ready; its first refresh starts now"`) {
+	if !strings.Contains(logs.String(), `"msg":"loaded the last drift reports from the database, so the service is ready"`) {
 		t.Errorf("no log of the restore:\n%s", logs)
 	}
 }
@@ -146,36 +149,48 @@ func TestRestoreWithNothingToRestore(t *testing.T) {
 // failingHistory is a history whose writes fail, as a full disk's would.
 type failingHistory struct{}
 
-func (failingHistory) RecordRefresh(context.Context, store.RefreshRecord) (int, []audit.Event, error) {
-	return 0, nil, errors.New("disk I/O error")
+func (failingHistory) RecordRefresh(context.Context, store.RefreshRecord) (store.Recorded, error) {
+	return store.Recorded{}, errors.New("disk I/O error")
 }
 
-func (failingHistory) RestoreDrift(context.Context) (store.Restored, error) {
-	return store.Restored{}, errors.New("disk I/O error")
+func (failingHistory) LoadDrift(context.Context, int64) (store.DriftState, error) {
+	return store.DriftState{}, errors.New("disk I/O error")
 }
 
 // TestHistoryWriteFailure checks that a refresh whose history can't be
-// written is still served, and the failure counted, logged and shown.
+// written isn't served, and that the failure is counted, logged and shown
+// (ADR-0048).
 func TestHistoryWriteFailure(t *testing.T) {
 	s, logs, _ := testService(t, Options{Groups: twoGroups, History: failingHistory{}, Database: DatabaseInfo{Backend: "sqlite", Path: "/x/nbpdns.db"},
 		Refresh: returning(report(group("site-a", drift.StateDrift), group("site-b", drift.StateInSync)))})
 	s.Restore(t.Context())
 	s.refresh(t.Context(), time.Now(), batch{})
 	status := s.Status()
-	if !status.Ready || status.Groups[0].Counts.Drift != 1 {
-		t.Errorf("status = %+v, want the refresh served", status)
+	if status.Ready || status.Groups[0].Status != statusUnknown || status.Schedule.LastRefresh != nil || status.NetBox.Up != nil {
+		t.Errorf("status = %+v, want nothing served", status)
+	}
+	if status.Schedule.Refreshes.Complete != 1 {
+		t.Errorf("refreshes = %+v, want the one that ran counted", status.Schedule.Refreshes)
 	}
 	d := status.Database
 	if d.HistoryWriteFailures != 1 || d.LastWriteFailure == nil || !strings.Contains(d.LastWriteError, "disk I/O error") {
 		t.Errorf("database = %+v, want one failure, with its error", d)
 	}
-	if m := metricsText(t, s); !strings.Contains(m, `nbpdns_db_write_failures_total{op="history"} 1`) {
+	m := metricsText(t, s)
+	if !strings.Contains(m, `nbpdns_db_write_failures_total{op="history"} 1`) {
 		t.Errorf("the metrics don't count the failure:\n%s", m)
 	}
-	for _, want := range []string{"couldn't restore the last drift reports", "couldn't write the refresh to the drift history"} {
+	if strings.Contains(m, "nbpdns_drift_zones{") || strings.Contains(m, "nbpdns_drift_last_refresh_timestamp_seconds ") {
+		t.Errorf("the metrics show the refresh that wasn't written:\n%s", m)
+	}
+	for _, want := range []string{"couldn't load the last drift reports from the database",
+		"couldn't write the refresh to the drift history, so no replica serves it"} {
 		if !strings.Contains(logs.String(), want) {
 			t.Errorf("no %q in the logs:\n%s", want, logs)
 		}
+	}
+	if code, body := get(t, s, http.MethodGet, "/readyz"); code != http.StatusServiceUnavailable || !strings.Contains(body, "could be written") {
+		t.Errorf("/readyz = %d %q, want 503, saying that no refresh could be written", code, body)
 	}
 	var page strings.Builder
 	if err := writeStatus(&page, status); err != nil {
@@ -184,6 +199,247 @@ func TestHistoryWriteFailure(t *testing.T) {
 	if !strings.Contains(page.String(), "write failures: 1 refreshes couldn't be written to the drift history") {
 		t.Errorf("the status page doesn't show the failure:\n%s", page.String())
 	}
+}
+
+// flakyHistory is a store whose refreshes can't be written while failing
+// is set.
+type flakyHistory struct {
+	*store.Store
+	failing atomic.Bool
+}
+
+func (f *flakyHistory) RecordRefresh(ctx context.Context, r store.RefreshRecord) (store.Recorded, error) {
+	if f.failing.Load() {
+		return store.Recorded{}, errors.New("disk I/O error")
+	}
+	return f.Store.RecordRefresh(ctx, r)
+}
+
+// deployment returns the facts of st that are the deployment's, which
+// every replica shows alike (ADR-0048).
+func deployment(st Status) any {
+	return struct {
+		LastRefresh  *Refresh
+		LastComplete *time.Time
+		NetBox       NetBox
+		Groups       []GroupInfo
+	}{st.Schedule.LastRefresh, st.Schedule.LastCompleteRefresh, st.NetBox, st.Groups}
+}
+
+// servedBy returns what s serves of its deployment, as JSON: the
+// deployment's facts in its status, each group's report, NetBox's zones, and
+// the drift metrics.
+func servedBy(t *testing.T, s *Service) string {
+	t.Helper()
+	b, err := json.MarshalIndent(struct {
+		Status  any
+		Reports []*drift.GroupReport
+		NetBox  NetBoxView
+		Metrics []string
+	}{deployment(s.Status()), reports(s), s.NetBox(), driftMetrics(t, s)}, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func reports(s *Service) []*drift.GroupReport {
+	var out []*drift.GroupReport
+	for _, g := range s.Groups() {
+		out = append(out, g.Report)
+	}
+	return out
+}
+
+// driftGauges are the metrics that every replica sets from what it serves
+// (ADR-0048).
+var driftGauges = []string{
+	"nbpdns_drift_last_refresh_timestamp_seconds", "nbpdns_drift_last_complete_refresh_timestamp_seconds",
+	"nbpdns_drift_zones", "nbpdns_drift_rrset_changes", "nbpdns_drift_zone_drifted", "nbpdns_drift_problems",
+	"nbpdns_drift_warnings", "nbpdns_netbox_up", "nbpdns_server_group_up", "nbpdns_server_group_last_success_timestamp_seconds",
+}
+
+// driftMetrics returns the series of s's drift gauges.
+func driftMetrics(t *testing.T, s *Service) []string {
+	t.Helper()
+	var out []string
+	for line := range strings.Lines(metricsText(t, s)) {
+		name, _, _ := strings.Cut(strings.TrimSpace(line), "{")
+		name, _, _ = strings.Cut(name, " ")
+		if slices.Contains(driftGauges, name) {
+			out = append(out, line)
+		}
+	}
+	return out
+}
+
+// TestFollowerServesTheLeadersRefreshes runs refreshes on a leader, and
+// checks after each that a follower on the same database, once it reloads,
+// serves the same: the same status, reports, NetBox's records and drift
+// metrics (ADR-0048).
+func TestFollowerServesTheLeadersRefreshes(t *testing.T) {
+	st := testStore(t)
+	ctx := t.Context()
+	groups := []Group{{Name: "site-a", URL: "https://a", Views: []string{"v"}}, {Name: "site-b", URL: "https://b", Views: []string{"v"}}}
+	var r drift.Report
+	var rerr error
+	leader, _, _ := testService(t, Options{Groups: groups, History: st, Refresh: func(context.Context, []drift.ZoneRef) (drift.Report, error) {
+		return r, rerr
+	}})
+	follower, _, _ := testService(t, Options{Groups: groups, History: st, Elected: true, Refresh: returning(report())})
+	follower.Restore(ctx)
+	if code, body := get(t, follower, http.MethodGet, "/readyz"); code != http.StatusServiceUnavailable || !strings.Contains(body, "follower") {
+		t.Errorf("a follower on an empty database: /readyz = %d %q, want 503", code, body)
+	}
+
+	t0 := time.Date(2026, 11, 5, 1, 0, 0, 0, time.UTC)
+	steps := []struct {
+		name string
+		run  func(at time.Time)
+	}{
+		{"a full refresh", func(at time.Time) {
+			r = realistic(report(group("site-a", drift.StateDrift, drift.StateInSync), failedGroup("site-b")))
+			r.NetBox = []dns.Zone{netboxZone("a.example.", "192.0.2.1"), netboxZone("b.example.", "192.0.2.2")}
+			leader.refresh(ctx, at, batch{})
+		}},
+		{"a zone refresh", func(at time.Time) {
+			// a.example. is back in sync, with a changed record.
+			zg := drift.GroupReport{Group: "site-a", Status: drift.StatusOK, Compared: []string{"a.example."},
+				Zones: []drift.ZoneReport{{Zone: "a.example.", State: drift.StateInSync}}}
+			r = realistic(drift.Report{Complete: true, Groups: []drift.GroupReport{zg}})
+			r.NetBox, r.Scope = []dns.Zone{netboxZone("a.example.", "192.0.2.10")}, &drift.Scope{Views: []string{"v"}, Names: []string{"a.example."}}
+			leader.refreshZones(ctx, at, batch{events: 1, zones: map[drift.ZoneRef]bool{{View: "v", Name: "a.example."}: true}})
+		}},
+		{"NetBox can't be read", func(at time.Time) {
+			r, rerr = drift.Report{}, errors.New("NetBox isn't reachable")
+			leader.refresh(ctx, at, batch{})
+			rerr = nil
+		}},
+		{"every group in sync, with a zone gone from NetBox", func(at time.Time) {
+			r = realistic(report(group("site-a", drift.StateInSync), group("site-b", drift.StateInSync)))
+			r.NetBox = []dns.Zone{netboxZone("a.example.", "192.0.2.10")}
+			leader.refresh(ctx, at, batch{})
+		}},
+	}
+	for i, step := range steps {
+		step.run(t0.Add(time.Duration(i) * time.Minute))
+		if leader.Version() != int64(i+1) {
+			t.Errorf("%s: the leader's version = %d, want %d", step.name, leader.Version(), i+1)
+		}
+		if err := follower.Reload(ctx); err != nil {
+			t.Fatalf("%s: Reload() = %v", step.name, err)
+		}
+		if want, got := servedBy(t, leader), servedBy(t, follower); got != want {
+			t.Errorf("%s: the follower serves\n%s\nwant the leader's\n%s", step.name, got, want)
+		}
+		if follower.Version() != leader.Version() {
+			t.Errorf("%s: the follower's version = %d, want the leader's, %d", step.name, follower.Version(), leader.Version())
+		}
+	}
+	if code, _ := get(t, follower, http.MethodGet, "/readyz"); code != http.StatusOK {
+		t.Errorf("a follower that has loaded the reports: /readyz = %d, want 200", code)
+	}
+	// The leader serves what it recorded, so it has nothing to reload.
+	if err := leader.Reload(ctx); err != nil || leader.Version() != 4 {
+		t.Errorf("the leader's Reload() = %v, version %d, want nothing new", err, leader.Version())
+	}
+}
+
+// TestUnwrittenRefreshIsServedByNoReplica fails a refresh's write, and
+// checks that neither the leader nor a follower serves it, and that the
+// next refresh that's written is served by both (ADR-0048).
+func TestUnwrittenRefreshIsServedByNoReplica(t *testing.T) {
+	h := &flakyHistory{Store: testStore(t)}
+	ctx := t.Context()
+	var r drift.Report
+	leader, _, _ := testService(t, Options{Groups: twoGroups, History: h, Refresh: func(context.Context, []drift.ZoneRef) (drift.Report, error) {
+		return r, nil
+	}})
+	follower, _, _ := testService(t, Options{Groups: twoGroups, History: h, Elected: true, Refresh: returning(report())})
+	t0 := time.Date(2026, 11, 5, 1, 0, 0, 0, time.UTC)
+
+	r = realistic(report(group("site-a", drift.StateInSync), group("site-b", drift.StateInSync)))
+	leader.refresh(ctx, t0, batch{})
+	before := servedBy(t, leader)
+
+	h.failing.Store(true)
+	r = realistic(report(group("site-a", drift.StateDrift), group("site-b", drift.StateMissing)))
+	leader.refresh(ctx, t0.Add(time.Minute), batch{})
+	h.failing.Store(false)
+	if got := servedBy(t, leader); got != before {
+		t.Errorf("the leader serves the refresh it couldn't write:\n%s\nwant\n%s", got, before)
+	}
+	if err := follower.Reload(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := servedBy(t, follower); got != before {
+		t.Errorf("the follower serves\n%s\nwant the last refresh written\n%s", got, before)
+	}
+	if st := leader.Status(); st.Database.HistoryWriteFailures != 1 || st.Schedule.Refreshes.Complete != 2 {
+		t.Errorf("the leader's database %+v, refreshes %+v, want one write failure, and two refreshes run", st.Database, st.Schedule.Refreshes)
+	}
+
+	leader.refresh(ctx, t0.Add(2*time.Minute), batch{})
+	if err := follower.Reload(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := servedBy(t, follower), servedBy(t, leader); got != want || got == before {
+		t.Errorf("after the next refresh, the follower serves\n%s\nwant the leader's new one\n%s", got, want)
+	}
+}
+
+// TestRestartServesNetBoxsRecords checks that a service that starts on a
+// database that a refresh wrote serves NetBox's records at once (ADR-0048).
+func TestRestartServesNetBoxsRecords(t *testing.T) {
+	st := testStore(t)
+	ctx := t.Context()
+	r := realistic(report(group("site-a", drift.StateInSync)))
+	r.NetBox = []dns.Zone{netboxZone("a.example.", "192.0.2.1")}
+	first, _, _ := testService(t, Options{Groups: twoGroups, History: st, Refresh: returning(r)})
+	t0 := time.Date(2026, 11, 5, 1, 0, 0, 0, time.UTC)
+	first.refresh(ctx, t0, batch{})
+
+	s, _, _ := testService(t, Options{Groups: twoGroups, History: st, Refresh: returning(report())})
+	s.Restore(ctx)
+	nb := s.NetBox()
+	z, ok := nb.In([]string{"v"})("a.example.")
+	if want := first.NetBox().AsOf; !nb.AsOf.Equal(want) || !ok || len(z.RRsets) != 1 || z.RRsets[0].Records[0].Value != "192.0.2.1" {
+		t.Errorf("after a restart, NetBox's zones = %+v, want a.example.'s records as of %v", nb, want)
+	}
+	if st := s.Status(); st.NetBox.Up == nil || !*st.NetBox.Up {
+		t.Errorf("after a restart, NetBox = %+v, want up", st.NetBox)
+	}
+}
+
+// realistic returns r with each group's slices set, as drift.Compare sets
+// them.
+func realistic(r drift.Report) drift.Report {
+	for i := range r.Groups {
+		g := &r.Groups[i]
+		if g.Status != drift.StatusOK {
+			continue
+		}
+		if g.Zones == nil {
+			g.Zones = []drift.ZoneReport{}
+		}
+		if g.Unmanaged == nil {
+			g.Unmanaged = []string{}
+		}
+		if g.Problems == nil {
+			g.Problems = []dns.Problem{}
+		}
+		if g.Warnings == nil {
+			g.Warnings = []drift.Warning{}
+		}
+	}
+	return r
+}
+
+// netboxZone returns NetBox's active zone name in view v, with an A record
+// of value.
+func netboxZone(name, value string) dns.Zone {
+	return dns.Zone{Name: name, View: "v", Status: "active", Active: true, SOASerial: 1, Nameservers: []string{"ns1.example."},
+		RRsets: []dns.RRset{{Name: "www." + name, Type: "A", TTL: 300, Records: []dns.Record{{Value: value, TTL: 300, Status: "active", Active: true}}}}}
 }
 
 // metricsText returns the service's metrics, as /metrics serves them.

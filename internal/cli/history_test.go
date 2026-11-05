@@ -40,7 +40,7 @@ func historyDB(t *testing.T) string {
 		at := t0.Add(time.Duration(i) * time.Hour)
 		g := drift.GroupReport{Group: "site-a", Status: drift.StatusOK, Zones: []drift.ZoneReport{z}}
 		g.Counts.InSync, g.Counts.Drift = 1-i, i
-		if _, _, err := st.RecordRefresh(t.Context(), store.RefreshRecord{
+		if _, err := st.RecordRefresh(t.Context(), store.RefreshRecord{
 			Kind: store.RefreshFull, Cause: store.CauseSchedule, Started: at, Finished: at.Add(time.Second), Outcome: "complete",
 			Groups:  []store.GroupResult{{Group: "site-a", Status: drift.StatusOK, Counts: g.Counts}},
 			Reports: []store.KeptReport{{Report: g, LastSuccess: at.Add(time.Second)}},

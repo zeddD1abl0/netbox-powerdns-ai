@@ -869,7 +869,16 @@ components:
           examples: [/api/server-groups/site-z]
     Status:
       type: object
-      description: The nbpdns service's state.
+      description: >-
+        The nbpdns service's state. Its facts are of two kinds. The
+        deployment's come from the database, and every replica shows the
+        same, within `database.poll_interval`, 5 seconds by default, or as
+        soon as it hears of a change, with `database.listen`: the
+        schedule's interval and timeout, and its last and next refresh;
+        `netbox`; `leader`; and the server groups, which `/api/server-groups`
+        serves. The rest are this replica's own: its build, uptime,
+        readiness and liveness, the refreshes it ran, `tracing`, `webhooks`,
+        `database` and `replica`.
       required: [version, revision, started, uptime_seconds, ready, live, schedule, netbox, tracing, webhooks, database, replica, leader]
       properties:
         version:
@@ -894,9 +903,10 @@ components:
         ready:
           type: boolean
           description: >-
-            Whether the service has restored the reports it kept before it
-            restarted, or, with none to restore, whether its first refresh has
-            finished, whatever its outcome, as `/readyz` reports.
+            Whether this replica serves a full refresh that finished,
+            whatever its outcome, as `/readyz` reports: its own, once the
+            database has it, or one that it loaded from the database, as it
+            started, or from the leader.
           examples: [true]
         live:
           type: boolean
@@ -984,7 +994,7 @@ components:
           examples: ["2026-10-08T01:15:00Z"]
     Database:
       type: object
-      description: The database that the service keeps its state in.
+      description: The database that the service keeps its state in, as this replica connects to it.
       required: [backend, url, path, tls, restored, restored_as_of, history_write_failures, last_write_failure, last_write_error]
       properties:
         backend:
@@ -1013,21 +1023,22 @@ components:
         restored:
           type: boolean
           description: >-
-            Whether the service started from the reports it kept before it
-            restarted, which it serves until its first refresh replaces them.
+            Whether this replica started from a refresh that the database
+            held, which it served at once, until a later refresh replaced it.
           examples: [true]
         restored_as_of:
           type: [string, "null"]
           format: date-time
-          description: When the refresh before the restart finished, or null if nothing was restored.
+          description: When that refresh finished, or null if the database held none.
           examples: ["2026-10-08T00:55:40Z"]
         history_write_failures:
           type: integer
           format: int64
           minimum: 0
           description: >-
-            The refreshes that couldn't be written to the drift history since
-            the service started. Each is still served.
+            The refreshes that this replica couldn't write to the drift
+            history since it started. No replica serves them: the last
+            refresh that was written is served until another is.
           examples: [0]
         last_write_failure:
           type: [string, "null"]
@@ -1040,7 +1051,9 @@ components:
           examples: [null]
     Schedule:
       type: object
-      description: The refreshes' schedule, and how they went.
+      description: >-
+        The refreshes' schedule, and how they went: the deployment's, but
+        for `refreshes`, which counts this replica's own.
       required: [interval_seconds, timeout_seconds, last_refresh, last_complete_refresh, next_refresh, refreshes]
       properties:
         interval_seconds:
@@ -1056,7 +1069,10 @@ components:
           description: How long a refresh may take, `drift.timeout`.
           examples: [600]
         last_refresh:
-          description: The last refresh that finished, or null before the first.
+          description: >-
+            The last full refresh that finished, as the database holds it, or
+            null before the first. A refresh that couldn't be written isn't
+            there.
           oneOf:
             - $ref: "#/components/schemas/Refresh"
             - type: "null"
@@ -1068,7 +1084,10 @@ components:
         next_refresh:
           type: [string, "null"]
           format: date-time
-          description: When the next refresh starts, or null while one runs.
+          description: >-
+            When the leader's next refresh starts, or null while one runs. On
+            a follower, as the leader's row in the database had it at the
+            leader's last heartbeat, or null if it knows no leader.
           examples: ["2026-10-08T01:15:00Z"]
         refreshes:
           $ref: "#/components/schemas/RefreshCounts"
@@ -1109,7 +1128,10 @@ components:
           examples: [null]
     RefreshCounts:
       type: object
-      description: The refreshes that finished since the service started, by outcome.
+      description: >-
+        The refreshes that this replica ran, and that finished, since it
+        started, by outcome, whether they could be written or not. A
+        follower runs none.
       required: [complete, incomplete, failed]
       properties:
         complete:
@@ -1132,7 +1154,7 @@ components:
           examples: [0]
     NetBoxState:
       type: object
-      description: NetBox's state, as of the last refresh.
+      description: NetBox's state, as the last refresh that tried it found it, which the database holds.
       required: [url, up, error]
       properties:
         url:
@@ -1168,7 +1190,10 @@ components:
             - type: "null"
     Webhooks:
       type: object
-      description: The state of NetBox's webhooks, which refresh the zones they name.
+      description: >-
+        The state of NetBox's webhooks, which refresh the zones they name:
+        those that this replica received, and the refreshes it ran for
+        them.
       required: [enabled, delay_seconds, last_event, pending, last_refresh]
       properties:
         enabled:
@@ -1336,8 +1361,9 @@ components:
     ServerGroup:
       type: object
       description: >-
-        A PowerDNS server group, with its last-known state. The counts are
-        as of `last_success`.
+        A PowerDNS server group, with its last-known state, as the database
+        holds it, which every replica serves alike. The counts are as of
+        `last_success`.
       required: [name, primary_url, views, drift_policy, managed_by, status, error, last_success, counts, problem_count, warning_count]
       properties:
         name:

@@ -54,7 +54,7 @@ func historyStore(t *testing.T) *store.Store {
 			Outcome: "failed", Error: "couldn't read NetBox"},
 		zones,
 	} {
-		if _, _, err := st.RecordRefresh(t.Context(), r); err != nil {
+		if _, err := st.RecordRefresh(t.Context(), r); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -6,26 +6,27 @@ weight: 18
 # How nbpdns stores its state
 
 `nbpdns serve` keeps its state in a database: the runtime settings, the
-server groups, the secrets it stores, the audit trail, and the drift history
-of each refresh and each zone. This page explains how that database is
-built, what is in it, and what protects it. It doesn't hold NetBox's
-records: they're a cache, which the first refresh after a restart reads
-again. The one-shot commands, such as `nbpdns drift`, need no database.
+server groups, the secrets it stores, the audit trail, the drift history of
+each refresh and each zone, and NetBox's zones, with their records, as the
+last refresh read them. This page explains how that database is built, what
+is in it, and what protects it. The one-shot commands, such as
+`nbpdns drift`, need no database.
 
 ```mermaid
 flowchart LR
     file[Config file] -->|its server groups, at each start| serve[nbpdns serve]
     cli[nbpdns settings, groups, secrets] -->|each change, with its audit event| db[(Database)]
     serve -->|refreshes, history, audit events| db
-    db -->|changed settings and groups, at each poll| serve
+    db -->|changed settings, groups and refreshes, at each poll| serve
 ```
 
 [ADR-0038](../adr/0038-an-embedded-sqlite-store-with-goose-and-sqlc.md),
 [ADR-0039](../adr/0039-a-hash-chained-audit-trail.md),
 [ADR-0040](../adr/0040-runtime-settings-and-managed-resources.md),
 [ADR-0041](../adr/0041-secrets-encrypted-at-rest.md),
-[ADR-0042](../adr/0042-drift-history.md) and
+[ADR-0042](../adr/0042-drift-history.md),
 [ADR-0045](../adr/0045-rename-a-server-group-by-moving-its-name-keyed-row.md)
+and [ADR-0048](../adr/0048-replicas-share-their-state-through-the-database.md)
 record the decisions.
 
 ## One file, one serve
@@ -243,9 +244,24 @@ the report gets a last row, with the state `removed`.
 history](../how-to/read-a-zones-drift-history.md) shows how to read it.
 
 `serve` keeps each group's last report whole, replaced at each refresh. When
-it starts, it restores the reports and serves them at once, so `/readyz`
+it starts, it loads the reports and serves them at once, so `/readyz`
 answers 200 without waiting for the first refresh, and a restart hides
 nothing that nbpdns knew. The first refresh starts at once and replaces them.
+
+It keeps NetBox's zones too, each with its records, which the API's
+`…/rrsets` serves: a row for each zone in the server groups' views. A
+refresh writes a zone's row only when the zone changed, by the digest of
+its JSON, and deletes it once the zone has left the views. A refresh that
+changes one zone writes that zone's row alone. So a restarted `serve`
+serves NetBox's records at once too, and so does each replica on
+PostgreSQL.
+
+`serve` serves a refresh only once the database has it. A replica on the
+same database, and `serve` after a restart, loads the same refresh, so
+each serves what the leader does
+([ADR-0048](../adr/0048-replicas-share-their-state-through-the-database.md)).
+A replica that loads again reads only NetBox's zones that were written
+since it last loaded them.
 
 A change of a zone's state is also a `zone.drift_changed` audit event. The
 two differ in what they hold and how long they last. The history holds the
@@ -254,12 +270,14 @@ change of state, and last as long as the audit trail.
 
 ## When a write fails
 
-If the history of a refresh can't be written, `serve` still serves the
-refresh from memory. It counts the failure in
-`nbpdns_db_write_failures_total`, logs it, and shows it on `/status`. The
-next refresh that's written compares each zone with its last row, so the
-history catches up. It lacks only the refreshes that failed, and any state
-that a zone held during them alone.
+If a refresh can't be written, no replica serves it: each keeps serving the
+last refresh that was written, so that every replica answers the same. A
+full disk stops the report from moving on, which the last refresh's time on
+`/status` and in `nbpdns_drift_last_refresh_timestamp_seconds` shows. `serve`
+counts the failure in `nbpdns_db_write_failures_total`, logs it, and shows
+it on `/status`. The next refresh that's written compares each zone with its
+last row, so the history catches up. It lacks only the refreshes that
+failed, and any state that a zone held during them alone.
 
 A change from the command line and its audit event are one transaction, so a
 write that fails changes nothing.

@@ -93,6 +93,10 @@ func TestElected(t *testing.T) {
 		!st.Leader.Since.Equal(want.Since) || !st.Leader.LastSeen.Equal(want.LastSeen) || !st.Leader.NextRefresh.Equal(*want.NextRefresh) {
 		t.Errorf("a follower: replica %+v, leader %+v, want %+v", st.Replica, st.Leader, want)
 	}
+	// The next refresh is the leader's, as its row has it (ADR-0048).
+	if st.Schedule.NextRefresh == nil || !st.Schedule.NextRefresh.Equal(other.NextRefresh) {
+		t.Errorf("a follower's next refresh = %v, want the leader's, %v", st.Schedule.NextRefresh, other.NextRefresh)
+	}
 	if _, page := get(t, s, http.MethodGet, "/status"); !strings.Contains(page,
 		"Replica: host-a, ID AAAA, a follower of host-b, ID BBBB, the leader since 2026-10-22T11:01:01Z, last seen 2026-10-22T12:00:59Z") {
 		t.Errorf("the page of a follower:\n%s", page)

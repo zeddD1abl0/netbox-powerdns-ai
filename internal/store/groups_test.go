@@ -228,7 +228,7 @@ func TestRenameGroup(t *testing.T) {
 		}
 		t0 := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
 		zones := []drift.ZoneReport{zone("a.example.", drift.StateInSync), zone("b.example.", drift.StateDrift, change("192.0.2.9"))}
-		if _, _, err := s.RecordRefresh(ctx, full(t0, group(zones...))); err != nil {
+		if _, err := s.RecordRefresh(ctx, full(t0, group(zones...))); err != nil {
 			t.Fatal(err)
 		}
 
@@ -255,23 +255,26 @@ func TestRenameGroup(t *testing.T) {
 		if refreshes, err := s.Refreshes(ctx, "lab-c", 0, 10); err != nil || len(refreshes) != 1 || refreshes[0].Group == nil {
 			t.Errorf("lab-c's refreshes = %+v, %v, want lab-a's result", refreshes, err)
 		}
-		restored, err := s.RestoreDrift(ctx)
-		if _, old := restored.Groups["lab-a"]; err != nil || restored.Groups["lab-c"].Report == nil || old {
-			t.Errorf("RestoreDrift() = %+v, %v, want lab-a's report as lab-c's", restored.Groups, err)
+		loaded, err := s.LoadDrift(ctx, 0)
+		if _, old := loaded.Groups["lab-a"]; err != nil || loaded.Groups["lab-c"].Report == nil || old {
+			t.Errorf("LoadDrift() = %+v, %v, want lab-a's report as lab-c's", loaded.Groups, err)
+		}
+		if g := loaded.Groups["lab-c"].Report; g != nil && g.Group != "lab-c" {
+			t.Errorf("LoadDrift() gives lab-c's report as %s's, want lab-c's", g.Group)
 		}
 
 		// A refresh that the rename overtook writes nothing under the old name,
 		// and the next one, under the new name, finds no change.
-		if rows, events, err := s.RecordRefresh(ctx, full(t0.Add(time.Hour), group(zones...))); err != nil || rows != 0 || len(events) != 0 {
-			t.Errorf("a refresh under the old name wrote %d rows, %d events, %v", rows, len(events), err)
+		if w, err := s.RecordRefresh(ctx, full(t0.Add(time.Hour), group(zones...))); err != nil || w.ZoneRows != 0 || len(w.Events) != 0 {
+			t.Errorf("a refresh under the old name wrote %d rows, %d events, %v", w.ZoneRows, len(w.Events), err)
 		}
 		if rows, err := s.ZoneHistory(ctx, "lab-a", "b.example.", 0, 10); err != nil || len(rows) != 0 {
 			t.Errorf("lab-a has rows again: %+v, %v", rows, err)
 		}
 		next := group(zones...)
 		next.Group = "lab-c"
-		if rows, events, err := s.RecordRefresh(ctx, full(t0.Add(2*time.Hour), next)); err != nil || rows != 0 || len(events) != 0 {
-			t.Errorf("the first refresh after the rename wrote %d rows, %d events, %v, want none", rows, len(events), err)
+		if w, err := s.RecordRefresh(ctx, full(t0.Add(2*time.Hour), next)); err != nil || w.ZoneRows != 0 || len(w.Events) != 0 {
+			t.Errorf("the first refresh after the rename wrote %d rows, %d events, %v, want none", w.ZoneRows, len(w.Events), err)
 		}
 
 		// A removed group's history keeps its name until it's pruned.
@@ -346,14 +349,14 @@ func TestPruneRemovedGroups(t *testing.T) {
 		old := now.AddDate(0, 0, -10)
 		b := group(zone("b.example.", drift.StateInSync))
 		b.Group = "lab-b"
-		if _, _, err := s.RecordRefresh(ctx, full(old, group(zone("a.example.", drift.StateInSync)), b)); err != nil {
+		if _, err := s.RecordRefresh(ctx, full(old, group(zone("a.example.", drift.StateInSync)), b)); err != nil {
 			t.Fatal(err)
 		}
 		// lab-b leaves the file; its last report goes, and its history stays
 		// until the prune.
 		mirror(t, s, "lab-a")
-		if restored, err := s.RestoreDrift(ctx); err != nil || restored.Groups["lab-b"].Report != nil {
-			t.Errorf("lab-b's report is kept: %+v, %v", restored.Groups["lab-b"], err)
+		if loaded, err := s.LoadDrift(ctx, 0); err != nil || loaded.Groups["lab-b"].Report != nil {
+			t.Errorf("lab-b's report is kept: %+v, %v", loaded.Groups["lab-b"], err)
 		}
 		if rows, err := s.ZoneHistory(ctx, "lab-b", "b.example.", 0, 10); err != nil || len(rows) != 1 {
 			t.Errorf("lab-b's history = %+v, %v, want its row", rows, err)

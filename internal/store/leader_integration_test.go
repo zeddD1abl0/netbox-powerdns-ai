@@ -192,7 +192,7 @@ func TestFence(t *testing.T) {
 	}
 	writes := map[string]func(s *Store) error{
 		"RecordRefresh": func(s *Store) error {
-			_, _, err := s.RecordRefresh(t.Context(), full(time.Now()))
+			_, err := s.RecordRefresh(t.Context(), full(time.Now()))
 			return err
 		},
 		"PruneDriftHistory": func(s *Store) error {

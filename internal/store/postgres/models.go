@@ -92,6 +92,21 @@ type Leader struct {
 	NextRefresh string
 }
 
+type NetboxState struct {
+	Singleton int64
+	Status    string
+	Error     string
+	ZonesAsOf string
+}
+
+type NetboxZone struct {
+	ViewName  string
+	Name      string
+	RefreshID int64
+	Digest    string
+	ZoneJson  string
+}
+
 type Sequence struct {
 	Name  string
 	Value int64

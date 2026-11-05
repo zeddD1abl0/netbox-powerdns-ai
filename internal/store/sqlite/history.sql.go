@@ -265,6 +265,28 @@ func (q *Queries) LastCompleteRefresh(ctx context.Context) (string, error) {
 	return finished_at, err
 }
 
+const lastFullRefresh = `-- name: LastFullRefresh :one
+SELECT id, kind, cause, started_at, finished_at, outcome, error, zones_json, netbox_request_ids_json, trace_id FROM drift_refreshes WHERE kind = 'full' ORDER BY id DESC LIMIT 1
+`
+
+func (q *Queries) LastFullRefresh(ctx context.Context) (DriftRefresh, error) {
+	row := q.db.QueryRowContext(ctx, lastFullRefresh)
+	var i DriftRefresh
+	err := row.Scan(
+		&i.ID,
+		&i.Kind,
+		&i.Cause,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.Outcome,
+		&i.Error,
+		&i.ZonesJson,
+		&i.NetboxRequestIdsJson,
+		&i.TraceID,
+	)
+	return i, err
+}
+
 const lastGroupResults = `-- name: LastGroupResults :many
 SELECT refresh_id, group_name, status, error, counts_json FROM drift_refresh_groups g
 WHERE g.refresh_id = (SELECT MAX(l.refresh_id) FROM drift_refresh_groups l WHERE l.group_name = g.group_name)
@@ -297,28 +319,6 @@ func (q *Queries) LastGroupResults(ctx context.Context) ([]DriftRefreshGroup, er
 		return nil, err
 	}
 	return items, nil
-}
-
-const lastRefresh = `-- name: LastRefresh :one
-SELECT id, kind, cause, started_at, finished_at, outcome, error, zones_json, netbox_request_ids_json, trace_id FROM drift_refreshes ORDER BY id DESC LIMIT 1
-`
-
-func (q *Queries) LastRefresh(ctx context.Context) (DriftRefresh, error) {
-	row := q.db.QueryRowContext(ctx, lastRefresh)
-	var i DriftRefresh
-	err := row.Scan(
-		&i.ID,
-		&i.Kind,
-		&i.Cause,
-		&i.StartedAt,
-		&i.FinishedAt,
-		&i.Outcome,
-		&i.Error,
-		&i.ZonesJson,
-		&i.NetboxRequestIdsJson,
-		&i.TraceID,
-	)
-	return i, err
 }
 
 const latestZoneRows = `-- name: LatestZoneRows :many

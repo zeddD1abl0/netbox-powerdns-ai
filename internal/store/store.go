@@ -38,6 +38,10 @@ const busyTimeout = 5 * time.Second
 // audit trail's, whose hashes cover times as stored.
 const TimeLayout = audit.TimeLayout
 
+// Stored returns t as the store keeps it, and reads it back: in UTC, to the
+// microsecond.
+func Stored(t time.Time) time.Time { return t.UTC().Truncate(time.Microsecond) }
+
 // The databases that a store can be open on, as Backend names them.
 const (
 	SQLite     = "sqlite"

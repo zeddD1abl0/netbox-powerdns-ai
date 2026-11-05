@@ -346,14 +346,14 @@ type ChangeRequest struct {
 	User *string `json:"user"`
 }
 
-// Database The database that the service keeps its state in.
+// Database The database that the service keeps its state in, as this replica connects to it.
 type Database struct {
 	// Backend The database that `database.url` names.
 	//
 	// Examples: postgresql
 	Backend string `json:"backend"`
 
-	// HistoryWriteFailures The refreshes that couldn't be written to the drift history since the service started. Each is still served.
+	// HistoryWriteFailures The refreshes that this replica couldn't write to the drift history since it started. No replica serves them: the last refresh that was written is served until another is.
 	//
 	// Examples: 0
 	HistoryWriteFailures int64 `json:"history_write_failures"`
@@ -373,12 +373,12 @@ type Database struct {
 	// Examples: /var/lib/nbpdns/nbpdns.db
 	Path string `json:"path"`
 
-	// Restored Whether the service started from the reports it kept before it restarted, which it serves until its first refresh replaces them.
+	// Restored Whether this replica started from a refresh that the database held, which it served at once, until a later refresh replaced it.
 	//
 	// Examples: true
 	Restored bool `json:"restored"`
 
-	// RestoredAsOf When the refresh before the restart finished, or null if nothing was restored.
+	// RestoredAsOf When that refresh finished, or null if the database held none.
 	//
 	// Examples: 2026-10-08T00:55:40Z
 	RestoredAsOf *time.Time `json:"restored_as_of"`
@@ -486,7 +486,7 @@ type NetBoxSnapshots struct {
 	AdditionalProperties map[string]interface{}  `json:"-"`
 }
 
-// NetBoxState NetBox's state, as of the last refresh.
+// NetBoxState NetBox's state, as the last refresh that tried it found it, which the database holds.
 type NetBoxState struct {
 	// Error Why NetBox couldn't be read, or null.
 	//
@@ -667,7 +667,7 @@ type Refresh struct {
 // Examples: complete
 type RefreshOutcome string
 
-// RefreshCounts The refreshes that finished since the service started, by outcome.
+// RefreshCounts The refreshes that this replica ran, and that finished, since it started, by outcome, whether they could be written or not. A follower runs none.
 type RefreshCounts struct {
 	// Complete Refreshes that read NetBox and every group's primary.
 	//
@@ -792,7 +792,7 @@ type Replica struct {
 	Role string `json:"role"`
 }
 
-// Schedule The refreshes' schedule, and how they went.
+// Schedule The refreshes' schedule, and how they went: the deployment's, but for `refreshes`, which counts this replica's own.
 type Schedule struct {
 	// IntervalSeconds The time from the start of one refresh to the start of the next, `drift.interval`.
 	//
@@ -804,15 +804,15 @@ type Schedule struct {
 	// Examples: 2026-10-08T01:10:02Z
 	LastCompleteRefresh *time.Time `json:"last_complete_refresh"`
 
-	// LastRefresh The last refresh that finished, or null before the first.
+	// LastRefresh The last full refresh that finished, as the database holds it, or null before the first. A refresh that couldn't be written isn't there.
 	LastRefresh *Refresh `json:"last_refresh"`
 
-	// NextRefresh When the next refresh starts, or null while one runs.
+	// NextRefresh When the leader's next refresh starts, or null while one runs. On a follower, as the leader's row in the database had it at the leader's last heartbeat, or null if it knows no leader.
 	//
 	// Examples: 2026-10-08T01:15:00Z
 	NextRefresh *time.Time `json:"next_refresh"`
 
-	// Refreshes The refreshes that finished since the service started, by outcome.
+	// Refreshes The refreshes that this replica ran, and that finished, since it started, by outcome, whether they could be written or not. A follower runs none.
 	Refreshes RefreshCounts `json:"refreshes"`
 
 	// TimeoutSeconds How long a refresh may take, `drift.timeout`.
@@ -821,7 +821,7 @@ type Schedule struct {
 	TimeoutSeconds float64 `json:"timeout_seconds"`
 }
 
-// ServerGroup A PowerDNS server group, with its last-known state. The counts are as of `last_success`.
+// ServerGroup A PowerDNS server group, with its last-known state, as the database holds it, which every replica serves alike. The counts are as of `last_success`.
 type ServerGroup struct {
 	// Counts The group's zones by state, as of `last_success`, and of the zone refreshes since, or null if it was never read.
 	//
@@ -915,9 +915,9 @@ type Side struct {
 	Values []string `json:"values"`
 }
 
-// Status The nbpdns service's state.
+// Status The nbpdns service's state. Its facts are of two kinds. The deployment's come from the database, and every replica shows the same, within `database.poll_interval`, 5 seconds by default, or as soon as it hears of a change, with `database.listen`: the schedule's interval and timeout, and its last and next refresh; `netbox`; `leader`; and the server groups, which `/api/server-groups` serves. The rest are this replica's own: its build, uptime, readiness and liveness, the refreshes it ran, `tracing`, `webhooks`, `database` and `replica`.
 type Status struct {
-	// Database The database that the service keeps its state in.
+	// Database The database that the service keeps its state in, as this replica connects to it.
 	Database Database `json:"database"`
 
 	// Leader The replica that leads, as this replica last knew it: from the database, on a follower, which reads it every `database.poll_interval`, 5 seconds by default, or as soon as it hears of a change, with `database.listen`. Null if it knows of none, before a replica first leads the database, or just after this one stepped down.
@@ -928,10 +928,10 @@ type Status struct {
 	// Examples: true
 	Live bool `json:"live"`
 
-	// Netbox NetBox's state, as of the last refresh.
+	// Netbox NetBox's state, as the last refresh that tried it found it, which the database holds.
 	Netbox NetBoxState `json:"netbox"`
 
-	// Ready Whether the service has restored the reports it kept before it restarted, or, with none to restore, whether its first refresh has finished, whatever its outcome, as `/readyz` reports.
+	// Ready Whether this replica serves a full refresh that finished, whatever its outcome, as `/readyz` reports: its own, once the database has it, or one that it loaded from the database, as it started, or from the leader.
 	//
 	// Examples: true
 	Ready bool `json:"ready"`
@@ -944,7 +944,7 @@ type Status struct {
 	// Examples: ec048d836f57f7ee1102e27b7baa38d8a17469bc
 	Revision string `json:"revision"`
 
-	// Schedule The refreshes' schedule, and how they went.
+	// Schedule The refreshes' schedule, and how they went: the deployment's, but for `refreshes`, which counts this replica's own.
 	Schedule Schedule `json:"schedule"`
 
 	// Started When the service started.
@@ -965,7 +965,7 @@ type Status struct {
 	// Examples: v0.2.0
 	Version string `json:"version"`
 
-	// Webhooks The state of NetBox's webhooks, which refresh the zones they name.
+	// Webhooks The state of NetBox's webhooks, which refresh the zones they name: those that this replica received, and the refreshes it ran for them.
 	Webhooks Webhooks `json:"webhooks"`
 }
 
@@ -1059,7 +1059,7 @@ type WebhookRefresh struct {
 // Examples: complete
 type WebhookRefreshOutcome string
 
-// Webhooks The state of NetBox's webhooks, which refresh the zones they name.
+// Webhooks The state of NetBox's webhooks, which refresh the zones they name: those that this replica received, and the refreshes it ran for them.
 type Webhooks struct {
 	// DelaySeconds How long the zones that webhooks name wait for the webhooks to stop coming, `drift.webhook_delay`.
 	//
