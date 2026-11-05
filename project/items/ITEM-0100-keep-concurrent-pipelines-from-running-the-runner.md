@@ -113,3 +113,7 @@ tag no longer fails main.
   1406 s without an OOM kill, but failed two tests on a long host name
   (ITEM-0120), so it doesn't count as a pass. The item still waits for a
   merge and its tag.
+- 2026-11-05: Pipeline 950 (9573c69) ran every job without a retry. Its
+  integration job ran to the end in 1584 s, without an OOM kill, but
+  failed five tests on the runner's long host name (ITEM-0120), so it
+  doesn't count as a pass. The item still waits for a merge and its tag.

@@ -36,3 +36,9 @@ the PID.
 - 2026-11-04: Found in pipeline 845 (f8e728a), while ITEM-0113 checked it
   for ITEM-0110. Its job got its 2Gi request and ran to the end, without
   an OOM kill or a retry; only these two tests failed.
+- 2026-11-05: Pipeline 950 (9573c69) failed its integration job the same
+  way, now in five tests, as ITEM-0112's and ITEM-0113's tests read the
+  same name: TestServeOnPostgres, TestListenerOutlastsIdleTimeout,
+  TestSessionSettings, TestReplicasShareTheServeLock and
+  TestStoreLock/postgres. Each shows `host runner-…-6pxrh5d4,` with the PID
+  cut off. Every pipeline fails on it until it's fixed.
