@@ -263,6 +263,15 @@ each serves what the leader does
 A replica that loads again reads only NetBox's zones that were written
 since it last loaded them.
 
+NetBox's webhooks wait in the database too: each webhook that asks for a
+refresh is a row of a queue, which any replica writes, and the leader
+gathers. The refresh that covers a row deletes it, in the transaction that
+writes the refresh, so a row outlasts a refresh that isn't written, a
+restart, and a takeover. The database also keeps the last webhook's event
+and the last refresh that webhooks asked for, which `/status` shows, the
+same on every replica. A replica that loads the queue again reads only the
+rows queued since it last loaded it.
+
 A change of a zone's state is also a `zone.drift_changed` audit event. The
 two differ in what they hold and how long they last. The history holds the
 changes, row by row, for `drift.history_retention_days`. The events hold the
@@ -281,6 +290,10 @@ failed, and any state that a zone held during them alone.
 
 A change from the command line and its audit event are one transaction, so a
 write that fails changes nothing.
+
+A webhook that can't be written to the queue changes nothing either: the
+replica answers NetBox with a `503`, and the next scheduled refresh finds
+the change.
 
 ## Copies of the database
 

@@ -28,6 +28,9 @@ type Versions struct {
 	// Refreshes is the refreshes' version, the last refresh's ID, which
 	// each refresh recorded moves.
 	Refreshes int64
+	// Webhooks is the webhooks' version, which each webhook that a replica
+	// takes moves, as does each refresh that covers their queue.
+	Webhooks int64
 	// Leader is the leader's row, or nil if no replica has led the database,
 	// as on SQLite.
 	Leader *Leader
@@ -50,6 +53,9 @@ func (s *Store) Versions(ctx context.Context) (Versions, error) {
 	}
 	if v.Refreshes, err = q.SequenceValue(ctx, seqRefreshes); err != nil {
 		return Versions{}, fmt.Errorf("reading the refreshes' version: %w", err)
+	}
+	if v.Webhooks, err = q.SequenceValue(ctx, seqQueue); err != nil {
+		return Versions{}, fmt.Errorf("reading the webhooks' version: %w", err)
 	}
 	if v.Leader, err = readLeader(ctx, q); err != nil {
 		return Versions{}, err

@@ -107,6 +107,18 @@ type NetboxZone struct {
 	ZoneJson  string
 }
 
+type RefreshQueue struct {
+	ID          int64
+	ReceivedAt  string
+	ZonesJson   string
+	FullRefresh bool
+	Reason      string
+	RequestID   string
+	RequestUser string
+	TraceID     string
+	SpanID      string
+}
+
 type Sequence struct {
 	Name  string
 	Value int64
@@ -130,4 +142,15 @@ type Setting struct {
 	Sealed    bool
 	UpdatedAt string
 	UpdatedBy string
+}
+
+type WebhookState struct {
+	Singleton       int64
+	CoveredThrough  int64
+	LastEventAt     string
+	LastEvent       string
+	LastObjectType  string
+	LastRequestID   string
+	LastRequestUser string
+	LastRefreshJson string
 }

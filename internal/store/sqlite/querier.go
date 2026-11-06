@@ -17,6 +17,7 @@ type Querier interface {
 	DeleteGroupReport(ctx context.Context, groupName string) error
 	DeleteNetBoxZone(ctx context.Context, arg DeleteNetBoxZoneParams) error
 	DeleteOrphanGroupReports(ctx context.Context) error
+	DeleteQueuedRefreshesThrough(ctx context.Context, through int64) (int64, error)
 	DeleteRefreshGroupsBefore(ctx context.Context, cutoff string) error
 	DeleteRefreshesBefore(ctx context.Context, cutoff string) (int64, error)
 	DeleteSetting(ctx context.Context, key string) (int64, error)
@@ -28,12 +29,14 @@ type Querier interface {
 	GetLeader(ctx context.Context) (GetLeaderRow, error)
 	GetNetBoxState(ctx context.Context) (GetNetBoxStateRow, error)
 	GetSetting(ctx context.Context, key string) (Setting, error)
+	GetWebhookState(ctx context.Context) (GetWebhookStateRow, error)
 	GroupNames(ctx context.Context) ([]string, error)
 	GroupRefreshes(ctx context.Context, arg GroupRefreshesParams) ([]GroupRefreshesRow, error)
 	GroupReports(ctx context.Context) ([]DriftGroupReport, error)
 	InitDatabaseInfo(ctx context.Context, arg InitDatabaseInfoParams) error
 	InsertAuditEvent(ctx context.Context, arg InsertAuditEventParams) error
 	InsertGroup(ctx context.Context, arg InsertGroupParams) error
+	InsertQueuedRefresh(ctx context.Context, arg InsertQueuedRefreshParams) error
 	InsertRefresh(ctx context.Context, arg InsertRefreshParams) error
 	InsertRefreshGroup(ctx context.Context, arg InsertRefreshGroupParams) error
 	InsertZoneRow(ctx context.Context, arg InsertZoneRowParams) error
@@ -57,6 +60,7 @@ type Querier interface {
 	NetBoxZoneIndex(ctx context.Context) ([]NetBoxZoneIndexRow, error)
 	NetBoxZonesAfter(ctx context.Context, after int64) ([]NetBoxZonesAfterRow, error)
 	NextIDs(ctx context.Context, arg NextIDsParams) (int64, error)
+	QueuedRefreshesAfter(ctx context.Context, after int64) ([]RefreshQueue, error)
 	RenameGroup(ctx context.Context, arg RenameGroupParams) error
 	RenameGroupReport(ctx context.Context, arg RenameGroupReportParams) error
 	RenameRefreshGroupRows(ctx context.Context, arg RenameRefreshGroupRowsParams) error
@@ -66,9 +70,11 @@ type Querier interface {
 	SealedSettings(ctx context.Context) ([]SealedSettingsRow, error)
 	SequenceValue(ctx context.Context, name string) (int64, error)
 	SetAuditAnchor(ctx context.Context, arg SetAuditAnchorParams) error
+	SetLastWebhookEvent(ctx context.Context, arg SetLastWebhookEventParams) error
 	SetLeader(ctx context.Context, arg SetLeaderParams) error
 	SetNetBoxStatus(ctx context.Context, arg SetNetBoxStatusParams) error
 	SetNetBoxZonesAsOf(ctx context.Context, zonesAsOf string) error
+	SetQueueCovered(ctx context.Context, arg SetQueueCoveredParams) error
 	UpdateGroup(ctx context.Context, arg UpdateGroupParams) error
 	UpdateGroupKey(ctx context.Context, arg UpdateGroupKeyParams) error
 	UpdateSealedSetting(ctx context.Context, arg UpdateSealedSettingParams) error

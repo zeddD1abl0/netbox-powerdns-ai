@@ -71,6 +71,9 @@ type RefreshRecord struct {
 	// NetBoxZones are NetBox's zones as the refresh read them, for the API's
 	// records, or nil if it read none to keep.
 	NetBoxZones *NetBoxZones
+	// Queue is what the refresh covered of the webhooks' queue, or nil if it
+	// covered none of it (ADR-0048).
+	Queue *CoveredQueue
 }
 
 // What a refresh found of NetBox.
@@ -120,11 +123,14 @@ type KeptReport struct {
 // removed row for each zone that has left its group's report; each group's
 // report, replacing its last; and what it found of NetBox, with a row for
 // each of NetBox's zones whose digest differs from its last, and none for a
-// zone that has left (ADR-0048). Each zone's change of state is also a
-// zone.drift_changed event (ADR-0008, ADR-0039), with ctx's trace and request
-// IDs, as is a new zone's, if it drifted. Only the groups that the database
-// stores are written. It's a leader-only write, which fails with
-// ErrNotLeader on a replica that doesn't lead (ADR-0047).
+// zone that has left (ADR-0048); and, if r covered the webhooks' queue, the
+// queue's rows that it covered go, and it becomes the webhooks' last
+// refresh, so that a refresh that isn't recorded leaves them queued. Each
+// zone's change of state is also a zone.drift_changed event (ADR-0008,
+// ADR-0039), with ctx's trace and request IDs, as is a new zone's, if it
+// drifted. Only the groups that the database stores are written. It's a
+// leader-only write, which fails with ErrNotLeader on a replica that doesn't
+// lead (ADR-0047).
 func (s *Store) RecordRefresh(ctx context.Context, r RefreshRecord) (Recorded, error) {
 	var out Recorded
 	events, err := s.leaderTx(ctx, func(tx *Tx) error {
@@ -204,6 +210,9 @@ func (s *Store) RecordRefresh(ctx context.Context, r RefreshRecord) (Recorded, e
 					return err
 				}
 			}
+		}
+		if r.Queue != nil {
+			return tx.coverQueue(ctx, *r.Queue)
 		}
 		return nil
 	})

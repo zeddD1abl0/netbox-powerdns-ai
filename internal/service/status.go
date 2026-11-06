@@ -281,19 +281,21 @@ func (s *Service) Status() Status {
 	return out
 }
 
-// webhooks returns the webhooks' state. It's called with s.mu held.
+// webhooks returns the webhooks' state, as the history holds it, if there's
+// one (ADR-0048). It's called with s.mu held.
 func (s *Service) webhooks() Webhooks {
 	st := &s.st
 	delay := s.Timing().WebhookDelay
 	w := Webhooks{Enabled: s.webhooksOn.Load(), DelaySeconds: delay.Seconds(), Pending: Pending{Zones: []string{}}}
-	if e := st.lastEvent; e != nil {
+	h := &st.hooks
+	if e := h.lastEvent; e != nil {
 		copied := *e
 		w.LastEvent = &copied
 	}
-	if p := &st.pending; p.events > 0 {
+	if p := &h.queue; p.events > 0 {
 		w.Pending = Pending{Events: p.events, Zones: p.names(), Full: p.full, Due: utc(p.due(delay, s.o.maxWait))}
 	}
-	if r := st.lastWebhookRefresh; r != nil {
+	if r := h.lastRefresh; r != nil {
 		// A kept refresh is never changed, only replaced.
 		copied := *r
 		w.LastRefresh = &copied

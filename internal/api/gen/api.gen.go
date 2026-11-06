@@ -522,9 +522,9 @@ type PageLinks struct {
 	Self string `json:"self"`
 }
 
-// PendingRefresh What NetBox's webhooks queued, waiting for its refresh.
+// PendingRefresh What NetBox's webhooks queued in the database, waiting for its refresh. A refresh's webhooks wait until it's written, as do those of a refresh that couldn't be: the next refresh, which a later webhook or the schedule starts, covers those.
 type PendingRefresh struct {
-	// Due When the refresh is due, unless the scheduled one comes first, or null if nothing waits.
+	// Due When the refresh is due, unless the scheduled one comes first, or null if nothing waits. A time that has passed means that the leader is refreshing them, or hasn't heard of them yet, as it does within `database.poll_interval`.
 	//
 	// Examples: 2026-10-08T01:12:01.2Z
 	Due *time.Time `json:"due"`
@@ -915,7 +915,7 @@ type Side struct {
 	Values []string `json:"values"`
 }
 
-// Status The nbpdns service's state. Its facts are of two kinds. The deployment's come from the database, and every replica shows the same, within `database.poll_interval`, 5 seconds by default, or as soon as it hears of a change, with `database.listen`: the schedule's interval and timeout, and its last and next refresh; `netbox`; `leader`; and the server groups, which `/api/server-groups` serves. The rest are this replica's own: its build, uptime, readiness and liveness, the refreshes it ran, `tracing`, `webhooks`, `database` and `replica`.
+// Status The nbpdns service's state. Its facts are of two kinds. The deployment's come from the database, and every replica shows the same, within `database.poll_interval`, 5 seconds by default, or as soon as it hears of a change, with `database.listen`: the schedule's interval and timeout, and its last and next refresh; `netbox`; `webhooks`; `leader`; and the server groups, which `/api/server-groups` serves. The rest are this replica's own: its build, uptime, readiness and liveness, the refreshes it ran, `tracing`, `database` and `replica`.
 type Status struct {
 	// Database The database that the service keeps its state in, as this replica connects to it.
 	Database Database `json:"database"`
@@ -965,7 +965,7 @@ type Status struct {
 	// Examples: v0.2.0
 	Version string `json:"version"`
 
-	// Webhooks The state of NetBox's webhooks, which refresh the zones they name: those that this replica received, and the refreshes it ran for them.
+	// Webhooks The state of NetBox's webhooks, which refresh the zones they name, as the database holds it: the deployment's, the same on every replica, whichever replica took each webhook, and the refreshes that the leader ran for them.
 	Webhooks Webhooks `json:"webhooks"`
 }
 
@@ -1059,7 +1059,7 @@ type WebhookRefresh struct {
 // Examples: complete
 type WebhookRefreshOutcome string
 
-// Webhooks The state of NetBox's webhooks, which refresh the zones they name: those that this replica received, and the refreshes it ran for them.
+// Webhooks The state of NetBox's webhooks, which refresh the zones they name, as the database holds it: the deployment's, the same on every replica, whichever replica took each webhook, and the refreshes that the leader ran for them.
 type Webhooks struct {
 	// DelaySeconds How long the zones that webhooks name wait for the webhooks to stop coming, `drift.webhook_delay`.
 	//
@@ -1071,13 +1071,13 @@ type Webhooks struct {
 	// Examples: true
 	Enabled bool `json:"enabled"`
 
-	// LastEvent The last event that a signed webhook brought, or null before the first.
+	// LastEvent The last event that a signed webhook brought to any replica, or null before the first.
 	LastEvent *WebhookEvent `json:"last_event"`
 
 	// LastRefresh The last refresh that webhooks asked for, or that covered the zones they named, or null.
 	LastRefresh *WebhookRefresh `json:"last_refresh"`
 
-	// Pending What NetBox's webhooks queued, waiting for its refresh.
+	// Pending What NetBox's webhooks queued in the database, waiting for its refresh. A refresh's webhooks wait until it's written, as do those of a refresh that couldn't be: the next refresh, which a later webhook or the schedule starts, covers those.
 	Pending PendingRefresh `json:"pending"`
 }
 
@@ -1323,6 +1323,11 @@ type BadRequest = Problem
 //
 // Examples: {"detail":"No server group is named site-z.","instance":"/api/server-groups/site-z","status":404,"title":"Not Found","type":"about:blank"}
 type BadSignature = Problem
+
+// EventNotQueued An error, as RFC 9457 describes it.
+//
+// Examples: {"detail":"No server group is named site-z.","instance":"/api/server-groups/site-z","status":404,"title":"Not Found","type":"about:blank"}
+type EventNotQueued = Problem
 
 // EventTooLarge An error, as RFC 9457 describes it.
 //
@@ -2486,6 +2491,15 @@ type BadSignatureApplicationProblemPlusJSONResponse struct {
 	Headers BadSignatureResponseHeaders
 }
 
+type EventNotQueuedResponseHeaders struct {
+	XFlowID *string
+}
+type EventNotQueuedApplicationProblemPlusJSONResponse struct {
+	Body Problem
+
+	Headers EventNotQueuedResponseHeaders
+}
+
 type EventTooLargeResponseHeaders struct {
 	XFlowID *string
 }
@@ -2631,6 +2645,25 @@ func (response ReceiveNetBoxEvent413ApplicationProblemPlusJSONResponse) VisitRec
 		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
 	}
 	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReceiveNetBoxEvent503ApplicationProblemPlusJSONResponse struct {
+	EventNotQueuedApplicationProblemPlusJSONResponse
+}
+
+func (response ReceiveNetBoxEvent503ApplicationProblemPlusJSONResponse) VisitReceiveNetBoxEventResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.XFlowID != nil {
+		w.Header().Set("X-Flow-ID", fmt.Sprint(*response.Headers.XFlowID))
+	}
+	w.WriteHeader(503)
 	_, err := buf.WriteTo(w)
 	return err
 }

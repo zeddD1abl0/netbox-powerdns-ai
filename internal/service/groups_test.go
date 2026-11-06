@@ -65,10 +65,10 @@ func TestSetGroups(t *testing.T) {
 	}
 
 	// Webhooks match the groups' views now.
-	if s.Notify(t.Context(), event("r1", "u"), webhook.Refresh{Zones: []webhook.Zone{{View: "x", Name: "a.example."}}}) {
+	if notify(t, s, event("r1", "u"), webhook.Refresh{Zones: []webhook.Zone{{View: "x", Name: "a.example."}}}) {
 		t.Error("a zone of the removed group's view was queued")
 	}
-	if !s.Notify(t.Context(), event("r2", "u"), webhook.Refresh{Zones: []webhook.Zone{{View: "y", Name: "a.example."}}}) {
+	if !notify(t, s, event("r2", "u"), webhook.Refresh{Zones: []webhook.Zone{{View: "y", Name: "a.example."}}}) {
 		t.Error("a zone of the new group's view wasn't queued")
 	}
 

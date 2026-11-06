@@ -23,9 +23,10 @@ const maxEventSize = 1 << 20
 type Notifier interface {
 	// Notify queues the refresh r that the event e asks for, and reports
 	// whether it queued anything: not if r asks for nothing, or names only
-	// zones in views that no server group serves. ctx carries the webhook
-	// request's span, which the refresh links to.
-	Notify(ctx context.Context, e webhook.Event, r webhook.Refresh) bool
+	// zones in views that no server group serves. Its error means that it
+	// couldn't record e, or queue r, as the database couldn't be written.
+	// ctx carries the webhook request's span, which the refresh links to.
+	Notify(ctx context.Context, e webhook.Event, r webhook.Refresh) (bool, error)
 }
 
 // verified is the generated server's middleware for the routes whose
@@ -89,7 +90,8 @@ func (o Options) countWebhook(result string) {
 
 // ReceiveNetBoxEvent queues the refresh that a NetBox event asks for, and
 // records NetBox's request and user in the request's span and log (Q-037).
-// verified has checked its signature.
+// verified has checked its signature. An event that can't be queued is a
+// 503.
 func (s *server) ReceiveNetBoxEvent(ctx context.Context, req gen.ReceiveNetBoxEventRequestObject) (gen.ReceiveNetBoxEventResponseObject, error) {
 	e := *req.Body
 	span := trace.SpanFromContext(ctx)
@@ -106,7 +108,15 @@ func (s *server) ReceiveNetBoxEvent(ctx context.Context, req gen.ReceiveNetBoxEv
 		prob := problem(request(ctx), http.StatusBadRequest, "The body isn't an event that NetBox sends: "+err.Error()+".")
 		return gen.ReceiveNetBoxEvent400ApplicationProblemPlusJSONResponse{InvalidEventApplicationProblemPlusJSONResponse: gen.InvalidEventApplicationProblemPlusJSONResponse{Body: prob}}, nil
 	}
-	queued := s.o.Events.Notify(ctx, e, r)
+	queued, err := s.o.Events.Notify(ctx, e, r)
+	if err != nil {
+		s.o.countWebhook(metrics.WebhookFailed)
+		s.o.Log.ErrorContext(ctx, "couldn't queue a NetBox event's refresh, so the next scheduled refresh finds its change",
+			"netbox_request_id", e.RequestID(), "netbox_user", e.User(), "event", e.Event, "object_type", e.ObjectType, "err", err)
+		prob := problem(request(ctx), http.StatusServiceUnavailable,
+			"The event couldn't be queued, as the database couldn't be written. The next scheduled refresh finds its change.")
+		return gen.ReceiveNetBoxEvent503ApplicationProblemPlusJSONResponse{EventNotQueuedApplicationProblemPlusJSONResponse: gen.EventNotQueuedApplicationProblemPlusJSONResponse{Body: prob}}, nil
+	}
 	result := metrics.WebhookIgnored
 	if queued {
 		result = metrics.WebhookAccepted

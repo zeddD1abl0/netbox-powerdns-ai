@@ -2,14 +2,15 @@ package store
 
 import (
 	"testing"
+	"time"
 
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/audit"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/config"
 )
 
 // TestVersions checks that the change feed's versions move with each change
-// to the settings and to the groups, on either database, and that no
-// replica leads a new one (ADR-0048).
+// to the settings, to the groups, and to the webhooks, on either database,
+// and that no replica leads a new one (ADR-0048).
 func TestVersions(t *testing.T) {
 	onEach(t, func(t *testing.T, db backend) {
 		s := db.migrated(t)
@@ -29,6 +30,12 @@ func TestVersions(t *testing.T) {
 		}
 		if v, err := s.Versions(ctx); err != nil || v != (Versions{Settings: 1, Groups: 1}) {
 			t.Errorf("Versions() after a group = %+v, %v, want 1 and 1", v, err)
+		}
+		if err := s.RecordWebhook(ctx, WebhookEvent{Received: time.Now(), Event: "updated", ObjectType: "netbox_dns.record"}, nil); err != nil {
+			t.Fatal(err)
+		}
+		if v, err := s.Versions(ctx); err != nil || v != (Versions{Settings: 1, Groups: 1, Webhooks: 1}) {
+			t.Errorf("Versions() after a webhook = %+v, %v, want 1, 1 and 1", v, err)
 		}
 	})
 }

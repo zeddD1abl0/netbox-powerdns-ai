@@ -108,10 +108,12 @@ func obj(t *testing.T, e map[string]any, keys ...string) map[string]any {
 	return e
 }
 
-// post sends body to path, signed with secret, and checks the response
-// against the API's OpenAPI document.
-func (s *served) post(path string, body []byte, secret string) (int, string) {
+// postEvent sends body to /api/netbox-events, signed with secret, as
+// NetBox's webhook does, and checks the response against the API's OpenAPI
+// document.
+func (s *served) postEvent(body []byte, secret string) (int, string) {
 	s.t.Helper()
+	const path = "/api/netbox-events"
 	checker, err := contract.New(api.Spec(), "/api")
 	if err != nil {
 		s.t.Fatal(err)
@@ -204,7 +206,7 @@ func TestServeWebhooks(t *testing.T) {
 		obj(t, e, "snapshots", "prechange")["zone"] = id
 		obj(t, e, "request")["id"] = requestID
 	})
-	if code, body := s.post("/api/netbox-events", event, webhookSecret); code != http.StatusAccepted {
+	if code, body := s.postEvent(event, webhookSecret); code != http.StatusAccepted {
 		t.Fatalf("the event: %d %s", code, body)
 	}
 	eventually(t, 15*time.Second, "the zone refresh", func() bool { return refreshes("zone_", "complete") == 1 })
@@ -242,7 +244,7 @@ func TestServeWebhooks(t *testing.T) {
 	}
 
 	// A forged event changes nothing.
-	if code, body := s.post("/api/netbox-events", event, "a-secret-that-isnt-nbpdnss"); code != http.StatusUnauthorized {
+	if code, body := s.postEvent(event, "a-secret-that-isnt-nbpdnss"); code != http.StatusUnauthorized {
 		t.Errorf("a forged event: %d %s", code, body)
 	}
 	time.Sleep(time.Second)
@@ -254,7 +256,7 @@ func TestServeWebhooks(t *testing.T) {
 	view := replayed(t, "view-renamed.json", func(e map[string]any) {
 		obj(t, e, "data")["name"] = f.View
 	})
-	if code, body := s.post("/api/netbox-events", view, webhookSecret); code != http.StatusAccepted {
+	if code, body := s.postEvent(view, webhookSecret); code != http.StatusAccepted {
 		t.Fatalf("the view's event: %d %s", code, body)
 	}
 	eventually(t, 30*time.Second, "the full refresh", func() bool { return refreshes("", "complete") == 2 })

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -29,6 +30,8 @@ const hookSecret = "test-webhook-secret-0123456789" // gitleaks:allow
 // fakeNotifier records what it's asked to queue, and reports queued.
 type fakeNotifier struct {
 	queued bool
+	// fail, if set, is every call's error.
+	fail error
 
 	mu        sync.Mutex
 	events    []webhook.Event
@@ -36,12 +39,12 @@ type fakeNotifier struct {
 	spans     []bool // whether each call's ctx had a span
 }
 
-func (f *fakeNotifier) Notify(ctx context.Context, e webhook.Event, r webhook.Refresh) bool {
+func (f *fakeNotifier) Notify(ctx context.Context, e webhook.Event, r webhook.Refresh) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.events, f.refreshes = append(f.events, e), append(f.refreshes, r)
 	f.spans = append(f.spans, trace.SpanContextFromContext(ctx).IsValid())
-	return f.queued
+	return f.queued && f.fail == nil, f.fail
 }
 
 // hooks is the API with webhooks on, or off if secret is "", and its log,
@@ -117,7 +120,7 @@ func capturedEvent(t *testing.T, name string) []byte {
 func counts(accepted, ignored, badSignature, invalid float64) map[string]float64 {
 	return map[string]float64{
 		metrics.WebhookAccepted: accepted, metrics.WebhookIgnored: ignored,
-		metrics.WebhookBadSignature: badSignature, metrics.WebhookInvalid: invalid,
+		metrics.WebhookBadSignature: badSignature, metrics.WebhookInvalid: invalid, metrics.WebhookFailed: 0,
 	}
 }
 
@@ -171,6 +174,27 @@ func TestNetBoxEventAccepted(t *testing.T) {
 	if line.Msg != "received a NetBox event" || line.RequestID != r.header.Get("X-Flow-ID") || line.NetBoxRequestID != e.RequestID() ||
 		line.NetBoxUser != "admin" || !reflect.DeepEqual(line.Zones, want.Zones) || line.Result != "accepted" {
 		t.Errorf("log line %+v:\n%s", line, h.log)
+	}
+}
+
+func TestNetBoxEventNotQueued(t *testing.T) {
+	h := newHooks(t, hookSecret, true)
+	h.events.fail = errors.New("queuing a webhook's refresh: database is locked")
+	body := capturedEvent(t, "record-updated.json")
+	r := h.post(t, body, webhook.Sign(hookSecret, body))
+	if r.code != http.StatusServiceUnavailable || r.header.Get("Content-Type") != "application/problem+json" ||
+		!bytes.Contains(r.body, []byte("The event couldn't be queued, as the database couldn't be written.")) {
+		t.Fatalf("%d %s %s", r.code, r.header.Get("Content-Type"), r.body)
+	}
+	want := counts(0, 0, 0, 0)
+	want[metrics.WebhookFailed] = 1
+	if got := h.webhooks(t); !reflect.DeepEqual(got, want) {
+		t.Errorf("webhooks %v", got)
+	}
+	// The error is logged, but its text isn't in the answer.
+	if !strings.Contains(h.log.String(), `"msg":"couldn't queue a NetBox event's refresh`) || !strings.Contains(h.log.String(), "database is locked") ||
+		bytes.Contains(r.body, []byte("database is locked")) {
+		t.Errorf("log:\n%s\nbody %s", h.log, r.body)
 	}
 }
 

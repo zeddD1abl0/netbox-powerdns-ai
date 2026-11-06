@@ -41,10 +41,13 @@ const (
 
 // A History keeps each refresh, and gives back what the refreshes found, at
 // start and whenever another replica's refresh is recorded (ADR-0042,
-// ADR-0048). The store is one.
+// ADR-0048). It also keeps what NetBox's webhooks ask for, in a queue that
+// any replica writes to and the leader refreshes. The store is one.
 type History interface {
 	RecordRefresh(ctx context.Context, r store.RefreshRecord) (store.Recorded, error)
 	LoadDrift(ctx context.Context, since int64) (store.DriftState, error)
+	RecordWebhook(ctx context.Context, e store.WebhookEvent, q *store.QueuedRefresh) error
+	LoadWebhooks(ctx context.Context, covered, since int64) (store.WebhookState, error)
 }
 
 // A RefreshFunc reads NetBox and every group's primary, and compares them,
@@ -66,8 +69,9 @@ type Options struct {
 	// Webhooks says whether the API takes NetBox's webhooks, for /status.
 	Webhooks bool
 	// History, if set, keeps each refresh, which the service serves once
-	// it's kept, and gives back what the refreshes found, which the service
-	// serves; Database says where, for /status.
+	// it's kept, and what NetBox's webhooks ask for, and gives back what the
+	// refreshes found, and what the webhooks left, which the service serves;
+	// Database says where, for /status.
 	History  History
 	Database DatabaseInfo
 	// Replica is this serve, among those on the database. Elected says
@@ -136,8 +140,8 @@ type Service struct {
 	timing  atomic.Pointer[Timing]
 	// webhooksOn is whether the API takes NetBox's webhooks, for /status.
 	webhooksOn atomic.Bool
-	// wake tells Run that a webhook has queued a refresh, or that the
-	// schedule changed.
+	// wake tells Run that a webhook has queued a refresh, on this replica
+	// or another, or that the schedule changed.
 	wake chan struct{}
 
 	mu sync.Mutex
@@ -188,12 +192,9 @@ type state struct {
 	groups      map[string]*groupState
 	// netbox is NetBox's zones as of its last successful read.
 	netbox NetBoxView
-	// pending is what NetBox's webhooks asked to refresh, waiting.
-	pending batch
-	// lastEvent is the last webhook's event, and lastWebhookRefresh the
-	// last refresh that webhooks asked for, or nil.
-	lastEvent          *Event
-	lastWebhookRefresh *WebhookRefresh
+	// hooks are what NetBox's webhooks left: their queue, their last event,
+	// and their last refresh.
+	hooks hooks
 	// refreshNow brings the next full refresh forward to now.
 	refreshNow bool
 	// leads is whether this replica leads, which it has since leadSince;
@@ -225,7 +226,7 @@ func New(o Options) *Service {
 		o.maxWait = maxWait
 	}
 	s := &Service{o: o, started: o.now(), groups: o.Groups, views: viewsOf(o.Groups), wake: make(chan struct{}, 1),
-		st: state{refreshes: map[string]int{}, groups: map[string]*groupState{}}}
+		st: state{refreshes: map[string]int{}, groups: map[string]*groupState{}, hooks: hooks{covered: -1}}}
 	s.storeTiming(Timing{Interval: o.Interval, Timeout: o.Timeout, WebhookDelay: o.WebhookDelay})
 	s.webhooksOn.Store(o.Webhooks)
 	if !o.Elected {
@@ -351,10 +352,7 @@ func (s *Service) RefreshNow() {
 		st.next = s.o.now()
 	}
 	s.mu.Unlock()
-	select {
-	case s.wake <- struct{}{}:
-	default:
-	}
+	s.poke()
 }
 
 // configured reports whether the service compares a group named name. It's
@@ -381,10 +379,7 @@ func (s *Service) SetTiming(t Timing) {
 	}
 	s.mu.Unlock()
 	// Run waits until the next refresh; it works the time out again.
-	select {
-	case s.wake <- struct{}{}:
-	default:
-	}
+	s.poke()
 }
 
 func (s *Service) storeTiming(t Timing) {
@@ -396,15 +391,23 @@ func (s *Service) storeTiming(t Timing) {
 
 // Run refreshes at once, then every interval, from one refresh's start to
 // the next's, until ctx is canceled. In between, it refreshes the zones that
-// NetBox's webhooks name, once they're due (ADR-0036). Refreshes never
-// overlap: one that takes longer than the interval delays the next. It
-// first loads what the history holds, which a replica that has just taken
-// over may not have loaded yet (ADR-0048), so that its zone refreshes merge
-// into the last reports.
+// NetBox's webhooks name, once they're due (ADR-0036), whichever replica
+// queued them (ADR-0048). Refreshes never overlap: one that takes longer
+// than the interval delays the next. It first loads what the history holds,
+// which a replica that has just taken over may not have loaded yet, so that
+// its zone refreshes merge into the last reports, and its first refresh
+// covers every webhook queued.
 func (s *Service) Run(ctx context.Context) {
 	if err := s.Reload(ctx); err != nil && ctx.Err() == nil {
 		s.o.Log.WarnContext(ctx, "couldn't load the last drift reports from the database before refreshing; the first refresh replaces them",
 			"err", err)
+	}
+	s.mu.Lock()
+	s.st.hooks.retake()
+	s.mu.Unlock()
+	if err := s.reloadWebhooks(ctx); err != nil && ctx.Err() == nil {
+		s.o.Log.WarnContext(ctx, "couldn't load NetBox's webhooks' queue from the database before refreshing; "+
+			"serve loads it at its next check, and each full refresh covers the zones that changed", "err", err)
 	}
 	// last is the last full refresh's start, and the next one starts an
 	// interval after it, whatever the interval is by then.
@@ -446,10 +449,11 @@ func (s *Service) Run(ctx context.Context) {
 
 // wait waits until next(), when the scheduled refresh is due, which is now
 // if it's zero, or RefreshNow brought it forward, or until what webhooks
-// queued is due, whichever is sooner, and takes what's queued. full reports
-// whether a full refresh is due: the scheduled one, which covers every zone
-// queued, or one that a webhook asked for. A wake, from a webhook or a
-// change of timing or of the groups, works the time out again.
+// queued since the last refresh took any is due, whichever is sooner, and
+// takes every row queued. full reports whether a full refresh is due: the
+// scheduled one, or one that the queue asks for. A wake, from a webhook, on
+// this replica or another, or a change of timing or of the groups, works
+// the time out again.
 func (s *Service) wait(ctx context.Context, nextFn func() time.Time) (b batch, full bool) {
 	for {
 		now := s.o.now()
@@ -459,13 +463,12 @@ func (s *Service) wait(ctx context.Context, nextFn func() time.Time) (b batch, f
 			next = now
 		}
 		until := next
-		if p := &s.st.pending; p.events > 0 {
+		if p := &s.st.hooks.pending; p.events > 0 {
 			until = minTime(until, p.due(s.Timing().WebhookDelay, s.o.maxWait))
 		}
 		s.mu.Unlock()
 		if !until.After(now) {
-			b := s.take()
-			full := !now.Before(next) || b.full
+			b, full := s.take(!now.Before(next))
 			if full {
 				// This refresh covers what RefreshNow asked for.
 				s.mu.Lock()
@@ -488,9 +491,10 @@ func (s *Service) wait(ctx context.Context, nextFn func() time.Time) (b batch, f
 
 // refresh runs one full refresh, as its own trace with its own request ID,
 // and serves it once it's recorded (ADR-0048). If webhooks queued b, the
-// refresh covers it: its trace
-// links to their spans, and its logs carry their NetBox requests. A
-// refresh cut short by ctx's cancellation isn't recorded.
+// refresh covers it: its trace links to their spans, its logs carry their
+// NetBox requests, and once it's recorded, b's rows leave the queue. A
+// refresh cut short by ctx's cancellation isn't recorded, and leaves them
+// queued.
 func (s *Service) refresh(ctx context.Context, start time.Time, b batch) {
 	s.mu.Lock()
 	s.st.lastStart = start
@@ -529,13 +533,12 @@ func (s *Service) refresh(ctx context.Context, start time.Time, b batch) {
 	if b.full {
 		cause = store.CauseWebhook
 	}
+	w := s.webhookRefresh(b, true, start, end, res.outcome, err)
 	if !s.commit(rctx, log, res, store.RefreshRecord{Kind: store.RefreshFull, Cause: cause, Started: start, Finished: end,
-		Outcome: res.outcome, Error: errText(err), NetBoxRequestIDs: b.requestIDs()}) {
+		Outcome: res.outcome, Error: errText(err), NetBoxRequestIDs: b.requestIDs(), Queue: coveredQueue(b, w)}) {
 		return
 	}
-	if b.events > 0 {
-		s.noteWebhookRefresh(b, true, start, end, res.outcome, err)
-	}
+	s.cover(b, w)
 }
 
 // A result is what a refresh found, which the service serves once the
@@ -576,7 +579,8 @@ func (s *Service) commit(ctx context.Context, log *slog.Logger, res result, rec 
 // keep writes a refresh, rec, with what it found, res, to the history, and
 // returns the history's version once it has it. A failed write is counted,
 // logged and shown on /status, and reported false: the refresh isn't served,
-// and the next full refresh covers what it found.
+// the webhooks' rows that it took stay queued, for the next refresh, and the
+// next full refresh covers what it found.
 func (s *Service) keep(ctx context.Context, log *slog.Logger, res result, rec store.RefreshRecord) (int64, bool) {
 	rec.TraceID = trace.SpanContextFromContext(ctx).TraceID().String()
 	for _, c := range res.changes {

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/audit"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/drift"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/lab"
 )
 
@@ -213,6 +214,35 @@ func TestFence(t *testing.T) {
 	check("a follower", stores[1], ErrNotLeader)
 	// The command line's store joined nothing, and writes freely.
 	check("the command line", stores[2], nil)
+
+	// Any replica queues a webhook's refresh (ADR-0048), but only the
+	// leader's refresh covers it.
+	q := &QueuedRefresh{Received: time.Now(), Zones: []drift.ZoneRef{{View: "v", Name: "a.example."}}}
+	if err := stores[1].RecordWebhook(t.Context(), WebhookEvent{Received: q.Received, Event: "updated", ObjectType: "netbox_dns.record"}, q); err != nil {
+		t.Fatalf("a follower's RecordWebhook() = %v", err)
+	}
+	covering := full(time.Now())
+	covering.Queue = &CoveredQueue{Through: q.ID}
+	if _, err := stores[1].RecordRefresh(t.Context(), covering); !errors.Is(err, ErrNotLeader) {
+		t.Errorf("a follower's RecordRefresh() of the queue: error = %v, want ErrNotLeader", err)
+	}
+	queued := func() int {
+		t.Helper()
+		w, err := stores[0].LoadWebhooks(t.Context(), -1, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(w.Queued)
+	}
+	if n := queued(); n != 1 {
+		t.Errorf("after the follower's refresh, %d rows queued, want 1", n)
+	}
+	if _, err := stores[0].RecordRefresh(t.Context(), covering); err != nil {
+		t.Errorf("the leader's RecordRefresh() of the queue = %v", err)
+	}
+	if n := queued(); n != 0 {
+		t.Errorf("after the leader's refresh, %d rows queued, want none", n)
+	}
 
 	// PostgreSQL ends the leader's session, as it does a lost leader's,
 	// and b takes over. a hasn't noticed, but can't write.

@@ -157,6 +157,14 @@ func (failingHistory) LoadDrift(context.Context, int64) (store.DriftState, error
 	return store.DriftState{}, errors.New("disk I/O error")
 }
 
+func (failingHistory) RecordWebhook(context.Context, store.WebhookEvent, *store.QueuedRefresh) error {
+	return errors.New("disk I/O error")
+}
+
+func (failingHistory) LoadWebhooks(context.Context, int64, int64) (store.WebhookState, error) {
+	return store.WebhookState{}, errors.New("disk I/O error")
+}
+
 // TestHistoryWriteFailure checks that a refresh whose history can't be
 // written isn't served, and that the failure is counted, logged and shown
 // (ADR-0048).
@@ -223,7 +231,8 @@ func deployment(st Status) any {
 		LastComplete *time.Time
 		NetBox       NetBox
 		Groups       []GroupInfo
-	}{st.Schedule.LastRefresh, st.Schedule.LastCompleteRefresh, st.NetBox, st.Groups}
+		Webhooks     Webhooks
+	}{st.Schedule.LastRefresh, st.Schedule.LastCompleteRefresh, st.NetBox, st.Groups, st.Webhooks}
 }
 
 // servedBy returns what s serves of its deployment, as JSON: the
@@ -257,6 +266,7 @@ var driftGauges = []string{
 	"nbpdns_drift_last_refresh_timestamp_seconds", "nbpdns_drift_last_complete_refresh_timestamp_seconds",
 	"nbpdns_drift_zones", "nbpdns_drift_rrset_changes", "nbpdns_drift_zone_drifted", "nbpdns_drift_problems",
 	"nbpdns_drift_warnings", "nbpdns_netbox_up", "nbpdns_server_group_up", "nbpdns_server_group_last_success_timestamp_seconds",
+	"nbpdns_drift_pending_zones",
 }
 
 // driftMetrics returns the series of s's drift gauges.
@@ -328,6 +338,11 @@ func TestFollowerServesTheLeadersRefreshes(t *testing.T) {
 		}
 		if err := follower.Reload(ctx); err != nil {
 			t.Fatalf("%s: Reload() = %v", step.name, err)
+		}
+		// The change feed loads the webhooks too: the zone refresh is
+		// their last.
+		if err := follower.ReloadWebhooks(ctx); err != nil {
+			t.Fatalf("%s: ReloadWebhooks() = %v", step.name, err)
 		}
 		if want, got := servedBy(t, leader), servedBy(t, follower); got != want {
 			t.Errorf("%s: the follower serves\n%s\nwant the leader's\n%s", step.name, got, want)

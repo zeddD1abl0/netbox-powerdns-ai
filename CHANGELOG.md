@@ -62,6 +62,18 @@ All notable changes to this project are recorded here. The format follows
 - The database keeps NetBox's zones, with their records, writing a zone's
   row only when the zone changed, so that a restarted `serve` serves the
   API's `…/rrsets` at once, rather than after its first refresh.
+- Any replica takes NetBox's webhooks: `/api/netbox-events` writes each
+  event, and the refresh it asks for, to a queue in the database, on
+  SQLite too, and the leader gathers the queue, with `drift.webhook_delay`
+  and the same bounds as before, within `database.poll_interval`, or at
+  once with `database.listen`. A refresh's webhooks leave the queue once
+  it's written, so a queued webhook survives a restart and a takeover, and
+  one whose refresh can't be written waits for the next refresh, which a
+  later webhook or the schedule starts.
+  `/status`'s `webhooks` section and `nbpdns_drift_pending_zones` are the
+  deployment's, the same on every replica. A webhook that can't be written
+  is a `503`, counted as `failed` in `nbpdns_netbox_webhooks_total` and as
+  `webhook` in `nbpdns_db_write_failures_total`.
 
 ### Changed
 

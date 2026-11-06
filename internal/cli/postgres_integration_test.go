@@ -250,16 +250,18 @@ func TestServeOnPostgres(t *testing.T) {
 // TestReplicasServeTheSameAnswers runs two replicas on PostgreSQL, with the
 // lab's NetBox and PowerDNS, and checks that the follower, once it has
 // polled, serves what the leader does: the API's answers, NetBox's records
-// included, the deployment's status, and the drift gauges (ADR-0048). A
-// follower that starts once the leader has refreshed is ready at once, and
-// a refresh after that reaches it at its next poll.
+// included, the deployment's status, its webhooks included, and the drift
+// gauges (ADR-0048). A follower that starts once the leader has refreshed is
+// ready at once, a refresh after that reaches it at its next poll, and a
+// webhook sent to it is refreshed by the leader.
 func TestReplicasServeTheSameAnswers(t *testing.T) {
 	nb, p := lab.NetBoxes[0], lab.PowerDNSes[0]
 	f := lab.NewDriftFixture(t, nb, p)
 	_, keyPath := keyFile(t)
 	env := with(configFile(t, "powerdns:\n  groups:\n"+labGroup(f, p.Group, p.URL())),
 		"NBPDNS_NETBOX_URL", nb.URL(), "NBPDNS_NETBOX_TOKEN", f.ReaderToken, "NBPDNS_DATABASE_URL", lab.NewPostgresDatabase(t),
-		"NBPDNS_DATABASE_POLL_INTERVAL", "100ms", "NBPDNS_DATABASE_MASTER_KEY_FILE", keyPath)
+		"NBPDNS_DATABASE_POLL_INTERVAL", "100ms", "NBPDNS_DATABASE_MASTER_KEY_FILE", keyPath,
+		"NBPDNS_NETBOX_WEBHOOK_SECRET", webhookSecret, "NBPDNS_DRIFT_WEBHOOK_DELAY", "200ms")
 	leader := startServe(t, env)
 	leader.waitReady(2 * time.Minute)
 	follower := startServe(t, env)
@@ -270,7 +272,7 @@ func TestReplicasServeTheSameAnswers(t *testing.T) {
 	paths := []string{"/api/server-groups"}
 	of := func(group string) {
 		paths = append(paths, "/api/server-groups/"+group+"/zones", "/api/server-groups/"+group+"/refreshes")
-		for _, z := range []string{f.Drift, f.Missing, f.Parked} {
+		for _, z := range []string{f.Drift, f.Missing, f.Parked, f.InSync} {
 			zone := "/api/server-groups/" + group + "/zones/" + z
 			paths = append(paths, zone, zone+"/changes", zone+"/rrsets", zone+"/history")
 		}
@@ -290,7 +292,8 @@ func TestReplicasServeTheSameAnswers(t *testing.T) {
 		if err := json.Unmarshal([]byte(page), &st); err != nil {
 			t.Fatalf("/status?json=1: %v:\n%s", err, page)
 		}
-		facts, err := json.Marshal([]any{st.Schedule.LastRefresh, st.Schedule.LastCompleteRefresh, st.Schedule.NextRefresh, st.NetBox, st.Groups})
+		facts, err := json.Marshal([]any{st.Schedule.LastRefresh, st.Schedule.LastCompleteRefresh, st.Schedule.NextRefresh, st.NetBox, st.Groups,
+			st.Webhooks})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -299,7 +302,8 @@ func TestReplicasServeTheSameAnswers(t *testing.T) {
 		for line := range strings.Lines(metrics) {
 			for _, gauge := range []string{"nbpdns_drift_zones{", "nbpdns_drift_zone_drifted{", "nbpdns_drift_rrset_changes{",
 				"nbpdns_server_group_up{", "nbpdns_server_group_last_success_timestamp_seconds{", "nbpdns_netbox_up ",
-				"nbpdns_drift_last_refresh_timestamp_seconds ", "nbpdns_drift_last_complete_refresh_timestamp_seconds "} {
+				"nbpdns_drift_last_refresh_timestamp_seconds ", "nbpdns_drift_last_complete_refresh_timestamp_seconds ",
+				"nbpdns_drift_pending_zones "} {
 				if strings.HasPrefix(line, gauge) {
 					b.WriteString(line)
 				}
@@ -349,9 +353,33 @@ func TestReplicasServeTheSameAnswers(t *testing.T) {
 	})
 	of("lab-cli")
 	same("the refresh of the group added", "lab-cli")
+
+	// A record changes in NetBox, and its webhook reaches the follower: the
+	// leader refreshes its zone, which both then serve.
+	id := zoneID(t, nb, f.InSync, f.View)
+	changeRecord(t, nb, id, "www", "A", "192.0.2.10", "192.0.2.11")
+	event := replayed(t, "record-updated.json", func(e map[string]any) {
+		z := obj(t, e, "data", "zone")
+		z["id"], z["name"] = id, strings.TrimSuffix(f.InSync, ".")
+		obj(t, e, "data", "zone", "view")["name"] = f.View
+		obj(t, e, "snapshots", "prechange")["zone"] = id
+	})
+	if code, body := follower.postEvent(event, webhookSecret); code != http.StatusAccepted {
+		t.Fatalf("the event to the follower: %d %s", code, body)
+	}
+	zoneRefreshes := `nbpdns_drift_zone_refreshes_total{outcome="complete"}`
+	eventually(t, 15*time.Second, "the leader's zone refresh", func() bool { return metric(t, leader, zoneRefreshes) == 1 })
+	leader.statusWhen(t, func(st service.Status) bool { return st.Webhooks.LastRefresh != nil && st.Webhooks.Pending.Events == 0 })
+	same("the leader's refresh of the follower's webhook", "lab-a")
+	for _, group := range []string{"lab-a", "lab-cli"} {
+		if state, changes := zoneState(t, follower, group, f.InSync); state != "drift" || changes != 1 {
+			t.Errorf("on the follower, %s's %s is %s with %d changes, want drift with 1", group, f.InSync, state, changes)
+		}
+	}
 	if st := follower.statusWhen(t, func(service.Status) bool { return true }); st.Replica.Role != service.RoleFollower ||
-		st.Schedule.Refreshes != (service.Refreshes{}) {
-		t.Errorf("the follower: replica %+v, refreshes %+v, want a follower that ran none", st.Replica, st.Schedule.Refreshes)
+		st.Schedule.Refreshes != (service.Refreshes{}) || metric(t, follower, zoneRefreshes) != 0 ||
+		metric(t, follower, `nbpdns_netbox_webhooks_total{result="accepted"}`) != 1 {
+		t.Errorf("the follower: replica %+v, refreshes %+v, want a follower that took the webhook, and ran no refresh", st.Replica, st.Schedule.Refreshes)
 	}
 }
 

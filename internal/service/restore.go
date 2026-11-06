@@ -10,16 +10,72 @@ import (
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/store"
 )
 
-// Restore loads what the history holds as serve starts, as Reload does, so
-// that the service serves it, and is ready, before a refresh of its own
-// finishes (ADR-0042, ADR-0048). With nothing to load, a leader is ready once
-// its first refresh is recorded, and a follower once it loads the leader's.
-// A failure is logged, and the service starts with nothing. Call it before
-// Run.
+// Restore loads what the history holds as serve starts, as Reload and
+// ReloadWebhooks do, so that the service serves it, and is ready, before a
+// refresh of its own finishes (ADR-0042, ADR-0048), and the webhooks queued
+// before the start are refreshed. With nothing to load, a leader is ready
+// once its first refresh is recorded, and a follower once it loads the
+// leader's. A failure is logged, and the service starts with nothing. Call
+// it before Run.
 func (s *Service) Restore(ctx context.Context) {
 	if err := s.reload(ctx, true); err != nil {
 		s.o.Log.WarnContext(ctx, "couldn't load the last drift reports from the database, so the service is ready once it serves a refresh",
 			"err", err)
+	}
+	if err := s.reloadWebhooks(ctx); err != nil {
+		s.o.Log.WarnContext(ctx, "couldn't load NetBox's webhooks' queue from the database; serve loads it at its next check",
+			"err", err)
+	}
+}
+
+// ReloadWebhooks loads what NetBox's webhooks left in the history, which
+// every replica writes to (ADR-0048): their last event and refresh, and
+// their queue, of which it reads only the rows queued since it last loaded
+// it, unless a refresh covered the queue since. It tells Run, on the leader,
+// to gather what it loaded. The change feed calls it whenever the webhooks'
+// version moves past the service's.
+func (s *Service) ReloadWebhooks(ctx context.Context) error { return s.reloadWebhooks(ctx) }
+
+// WebhooksVersion returns the webhooks' version in the history that the
+// service holds, for the change feed to tell whether a replica has taken a
+// webhook, or a refresh covered their queue, since (ADR-0048). It's 0 before
+// the service loads one, and without a history.
+func (s *Service) WebhooksVersion() int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.st.hooks.version
+}
+
+// reloadWebhooks loads what NetBox's webhooks left, as ReloadWebhooks does.
+func (s *Service) reloadWebhooks(ctx context.Context) error {
+	if s.o.History == nil {
+		return nil
+	}
+	for {
+		s.mu.Lock()
+		covered, seen := s.st.hooks.covered, s.st.hooks.seen
+		s.mu.Unlock()
+		w, err := s.o.History.LoadWebhooks(ctx, covered, seen)
+		if err != nil {
+			return err
+		}
+		s.mu.Lock()
+		h := &s.st.hooks
+		// Another reload, or a refresh of this replica's, may have moved the
+		// queue meanwhile, so that w's rows don't follow on from it.
+		if h.covered != covered || h.seen != seen {
+			s.mu.Unlock()
+			continue
+		}
+		if covered >= 0 && w.Covered == covered && w.Version <= h.version {
+			s.mu.Unlock()
+			return nil
+		}
+		h.load(w)
+		s.setPending()
+		s.mu.Unlock()
+		s.poke()
+		return nil
 	}
 }
 

@@ -218,10 +218,14 @@ also has facts of each replica's own, such as the refreshes it ran; the
 [service endpoints reference](../reference/service-endpoints.md#status)
 says which are which.
 
-> [!WARNING]
-> For now, a webhook from NetBox is refreshed only if it reaches the
-> leader. The rest of M09 has any replica take them. Until then, send
-> NetBox's webhooks to the leader.
+Any replica takes NetBox's webhooks, so NetBox's webhook can point at the
+same load balancer. The replica that takes one writes it to a queue in the
+database, and the leader refreshes its zones once it hears of it, within
+`database.poll_interval`, or at once with `database.listen`. A webhook
+stays queued until the refresh that covers it is written, so it survives a
+restart, or a takeover.
+[Refresh drift as NetBox changes](refresh-drift-as-netbox-changes.md) sets
+webhooks up.
 
 Each replica holds a lock in the database, a PostgreSQL session advisory
 lock, shared with the other replicas. `nbpdns db migrate` and

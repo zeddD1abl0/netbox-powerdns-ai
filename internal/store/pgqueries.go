@@ -45,6 +45,8 @@ var (
 	pgGetDatabaseInfoRow      = func(r postgres.GetDatabaseInfoRow) sqlite.GetDatabaseInfoRow { return sqlite.GetDatabaseInfoRow(r) }
 	pgGetLeaderRow            = func(r postgres.GetLeaderRow) sqlite.GetLeaderRow { return sqlite.GetLeaderRow(r) }
 	pgGetNetBoxStateRow       = func(r postgres.GetNetBoxStateRow) sqlite.GetNetBoxStateRow { return sqlite.GetNetBoxStateRow(r) }
+	pgGetWebhookStateRow      = func(r postgres.GetWebhookStateRow) sqlite.GetWebhookStateRow { return sqlite.GetWebhookStateRow(r) }
+	pgRefreshQueue            = func(r postgres.RefreshQueue) sqlite.RefreshQueue { return sqlite.RefreshQueue(r) }
 	pgNetBoxZoneIndexRow      = func(r postgres.NetBoxZoneIndexRow) sqlite.NetBoxZoneIndexRow { return sqlite.NetBoxZoneIndexRow(r) }
 	pgNetBoxZonesAfterRow     = func(r postgres.NetBoxZonesAfterRow) sqlite.NetBoxZonesAfterRow { return sqlite.NetBoxZonesAfterRow(r) }
 	pgServerGroup             = func(r postgres.ServerGroup) sqlite.ServerGroup { return sqlite.ServerGroup(r) }
@@ -94,6 +96,10 @@ func (p pgQueries) DeleteOrphanGroupReports(ctx context.Context) error {
 	return p.q.DeleteOrphanGroupReports(ctx)
 }
 
+func (p pgQueries) DeleteQueuedRefreshesThrough(ctx context.Context, through int64) (int64, error) {
+	return p.q.DeleteQueuedRefreshesThrough(ctx, through)
+}
+
 func (p pgQueries) DeleteRefreshGroupsBefore(ctx context.Context, cutoff string) error {
 	return p.q.DeleteRefreshGroupsBefore(ctx, cutoff)
 }
@@ -138,6 +144,10 @@ func (p pgQueries) GetSetting(ctx context.Context, key string) (sqlite.Setting, 
 	return one(pgSetting)(p.q.GetSetting(ctx, key))
 }
 
+func (p pgQueries) GetWebhookState(ctx context.Context) (sqlite.GetWebhookStateRow, error) {
+	return one(pgGetWebhookStateRow)(p.q.GetWebhookState(ctx))
+}
+
 func (p pgQueries) GroupNames(ctx context.Context) ([]string, error) {
 	return p.q.GroupNames(ctx)
 }
@@ -160,6 +170,10 @@ func (p pgQueries) InsertAuditEvent(ctx context.Context, arg sqlite.InsertAuditE
 
 func (p pgQueries) InsertGroup(ctx context.Context, arg sqlite.InsertGroupParams) error {
 	return p.q.InsertGroup(ctx, postgres.InsertGroupParams(arg))
+}
+
+func (p pgQueries) InsertQueuedRefresh(ctx context.Context, arg sqlite.InsertQueuedRefreshParams) error {
+	return p.q.InsertQueuedRefresh(ctx, postgres.InsertQueuedRefreshParams(arg))
 }
 
 func (p pgQueries) InsertRefresh(ctx context.Context, arg sqlite.InsertRefreshParams) error {
@@ -226,6 +240,10 @@ func (p pgQueries) NextIDs(ctx context.Context, arg sqlite.NextIDsParams) (int64
 	return p.q.NextIDs(ctx, postgres.NextIDsParams(arg))
 }
 
+func (p pgQueries) QueuedRefreshesAfter(ctx context.Context, after int64) ([]sqlite.RefreshQueue, error) {
+	return all(pgRefreshQueue)(p.q.QueuedRefreshesAfter(ctx, after))
+}
+
 func (p pgQueries) RenameGroup(ctx context.Context, arg sqlite.RenameGroupParams) error {
 	return p.q.RenameGroup(ctx, postgres.RenameGroupParams(arg))
 }
@@ -258,6 +276,10 @@ func (p pgQueries) SetAuditAnchor(ctx context.Context, arg sqlite.SetAuditAnchor
 	return p.q.SetAuditAnchor(ctx, postgres.SetAuditAnchorParams(arg))
 }
 
+func (p pgQueries) SetLastWebhookEvent(ctx context.Context, arg sqlite.SetLastWebhookEventParams) error {
+	return p.q.SetLastWebhookEvent(ctx, postgres.SetLastWebhookEventParams(arg))
+}
+
 func (p pgQueries) SetNetBoxStatus(ctx context.Context, arg sqlite.SetNetBoxStatusParams) error {
 	return p.q.SetNetBoxStatus(ctx, postgres.SetNetBoxStatusParams(arg))
 }
@@ -268,6 +290,10 @@ func (p pgQueries) SetNetBoxZonesAsOf(ctx context.Context, zonesAsOf string) err
 
 func (p pgQueries) SetLeader(ctx context.Context, arg sqlite.SetLeaderParams) error {
 	return p.q.SetLeader(ctx, postgres.SetLeaderParams(arg))
+}
+
+func (p pgQueries) SetQueueCovered(ctx context.Context, arg sqlite.SetQueueCoveredParams) error {
+	return p.q.SetQueueCovered(ctx, postgres.SetQueueCoveredParams(arg))
 }
 
 func (p pgQueries) UpdateGroup(ctx context.Context, arg sqlite.UpdateGroupParams) error {

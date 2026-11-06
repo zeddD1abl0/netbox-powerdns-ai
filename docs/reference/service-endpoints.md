@@ -26,7 +26,7 @@ the request's own, if it sent a valid one, or a new one. It's the request's
 | `/status` | The service's state, as text for a person, or as JSON with `?json=1`. |
 | `/metrics` | The metrics, in Prometheus's text format, or in OpenMetrics if the scraper asks for it. The [metrics reference](metrics.md) lists them. |
 | `/api/…` | The API, as JSON: the service's status, at `/api/status`; the server groups, at `/api/server-groups`; each group's zones, filtered by state; each zone's changes; and each zone's records as NetBox defines them, at `…/rrsets`. Everything is last-known state. Lists are paged with `limit` and `cursor`. The [API reference](api.md) lists every operation. |
-| `/api/netbox-events` | `POST` only: NetBox's webhooks, signed with `netbox.webhook_secret`, which queue a refresh of the zones they name. `202` when accepted, `401` for a missing or wrong `X-Hook-Signature`, and `404` while `netbox.webhook_secret` isn't set. [Refresh drift as NetBox changes](../how-to/refresh-drift-as-netbox-changes.md) sets them up. |
+| `/api/netbox-events` | `POST` only: NetBox's webhooks, signed with `netbox.webhook_secret`, which queue a refresh of the zones they name, in the database, for the leader to run. Any replica takes them. `202` when accepted, `401` for a missing or wrong `X-Hook-Signature`, `404` while `netbox.webhook_secret` isn't set, and `503` if the database couldn't be written, so that nothing was queued. [Refresh drift as NetBox changes](../how-to/refresh-drift-as-netbox-changes.md) sets them up. |
 | `/api/openapi.yaml` | The API's OpenAPI 3.1 document, `application/yaml`, which describes every operation under `/api`. |
 | `/api/docs` | The API's reference, for a browser: Scalar's, built into nbpdns, reading `/api/openapi.yaml`. Its Content-Security-Policy lets it reach no other host. |
 
@@ -48,9 +48,9 @@ field is always present. A field with nothing to say yet is `null`, such as
 The facts are of two kinds. The deployment's come from the database, so
 that every replica on it shows the same, within `database.poll_interval`,
 or at once with `database.listen`: the schedule, but for
-`schedule.refreshes`; `netbox`; `groups`; and `leader`. The rest are the
-replica's own: its build, uptime, readiness and liveness, the refreshes it
-ran, `tracing`, `webhooks`, `database`, and `replica`. A refresh is served
+`schedule.refreshes`; `netbox`; `groups`; `webhooks`; and `leader`. The
+rest are the replica's own: its build, uptime, readiness and liveness, the
+refreshes it ran, `tracing`, `database`, and `replica`. A refresh is served
 once the database has it: one that can't be written is served by no
 replica, and counted in `database.history_write_failures`.
 
@@ -244,16 +244,16 @@ be read:
 | `tracing.protocol` | string | `otlp.protocol`. |
 | `webhooks.enabled` | Boolean | Whether `netbox.webhook_secret` is set, so that `/api/netbox-events` takes NetBox's webhooks. |
 | `webhooks.delay_seconds` | number | `drift.webhook_delay`: how long the zones that webhooks name wait for the webhooks to stop coming. |
-| `webhooks.last_event` | object or null | The last event that a signed webhook brought, or `null` before the first. |
+| `webhooks.last_event` | object or null | The last event that a signed webhook brought to any replica, or `null` before the first. |
 | `webhooks.last_event.received` | time | When it came. |
 | `webhooks.last_event.event` | string | What happened to the object: `created`, `updated`, or `deleted`. |
 | `webhooks.last_event.object_type` | string | The object's type, such as `netbox_dns.record`. |
 | `webhooks.last_event.request.id` | string | NetBox's ID for the request that made the change, or empty if no request did. |
 | `webhooks.last_event.request.user` | string | The user who made the request, or empty. |
-| `webhooks.pending.events` | integer | The webhooks whose refresh waits, or 0. |
+| `webhooks.pending.events` | integer | The webhooks whose refresh waits in the database's queue, or 0. A refresh's webhooks wait until it's written, as do those of a refresh that couldn't be: the next refresh, which a later webhook or the schedule starts, covers those. |
 | `webhooks.pending.zones` | array | The zones that webhooks named, waiting, each as `view/name`. Once a full refresh waits, it covers them, and no more are added. |
 | `webhooks.pending.full` | Boolean | Whether a full refresh waits: for a change to a view that a group serves, a zone or a record that moved, or more than 100 zones. |
-| `webhooks.pending.due` | time or null | When the refresh is due, unless the scheduled one comes first: `drift.webhook_delay` after the last webhook, or 30 seconds after the first, whichever is sooner. `null` if nothing waits. |
+| `webhooks.pending.due` | time or null | When the refresh is due, unless the scheduled one comes first: `drift.webhook_delay` after the last webhook, or 30 seconds after the first, whichever is sooner. `null` if nothing waits. A time that has passed means that the leader is refreshing them, or that it hasn't heard of them yet, as it does within `database.poll_interval`. |
 | `webhooks.last_refresh` | object or null | The last refresh that webhooks asked for, or that covered the zones they named, or `null`. |
 | `webhooks.last_refresh.started` | time | When it started. |
 | `webhooks.last_refresh.finished` | time | When it finished. |

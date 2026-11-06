@@ -69,7 +69,7 @@ event, and an **event rule**, which says which changes to send.
 | Webhook field | Value |
 |---|---|
 | Name | `nbpdns`, or any other |
-| URL | nbpdns's address, with `/api/netbox-events`, such as `https://nbpdns.example.com/api/netbox-events` |
+| URL | nbpdns's address, with `/api/netbox-events`, such as `https://nbpdns.example.com/api/netbox-events`. With several replicas, the address of their load balancer: any replica takes webhooks |
 | Body template | empty: nbpdns reads the body that NetBox sends without one |
 | Secret | the secret in `netbox.webhook_secret` |
 | SSL verification | on |
@@ -86,6 +86,13 @@ type `application/json`.
 
 nbpdns ignores events for any other object type, and counts them as
 `ignored`.
+
+With several replicas on PostgreSQL, each one writes the webhooks it takes
+to a queue in the database, and the leader refreshes them. It hears of
+another replica's webhook within `database.poll_interval`, 5 seconds by
+default, or at once with
+[`database.listen`](run-nbpdns-on-postgresql.md#have-the-replicas-hear-of-changes-at-once),
+so a zone refresh can come a few seconds later than with one replica.
 
 ### In NetBox's web interface
 
@@ -155,7 +162,7 @@ resource "netbox_event_rule" "nbpdns" {
 ## Check that webhooks arrive
 
 Change a record of a zone that a server group serves, wait a few seconds,
-then read the webhooks' state:
+then read the webhooks' state, from any replica:
 
 ```shell
 curl -s "$NBPDNS/api/status" | jq '.webhooks | {last_event, last_refresh}'
@@ -191,14 +198,16 @@ curl -s "$NBPDNS/api/status" | jq '.webhooks | {last_event, last_refresh}'
 }
 ```
 
-The zone's drift in the API is now as of that refresh. nbpdns's log has a
-line `received a NetBox event` for each event, and `zones refreshed` for
-each group, with NetBox's request IDs in `netbox_request_ids`. With
+The zone's drift in the API is now as of that refresh. The log of the
+replica that took the event has a line `received a NetBox event`, and the
+leader's has `zones refreshed` for each group, with NetBox's request IDs in
+`netbox_request_ids`. With
 `otlp.endpoint` set, each zone refresh is a trace, `drift zone refresh`,
 linked to the spans of the webhooks it served.
 
-`nbpdns_netbox_webhooks_total` counts the webhooks by result, and
-`nbpdns_drift_zone_refreshes_total` the zone refreshes by outcome.
+`nbpdns_netbox_webhooks_total` counts the webhooks that each replica took,
+by result, and `nbpdns_drift_zone_refreshes_total` the zone refreshes that
+it ran, by outcome, so sum them across replicas.
 
 ## Fix a webhook that doesn't work
 
@@ -215,6 +224,11 @@ Tasks**, in the default queue's failed jobs, with nbpdns's answer.
   `/api/netbox-events`.
 - **`400 Bad Request`:** the webhook has a body template. Empty it: nbpdns
   reads only the body that NetBox sends without one.
+- **`503 Service Unavailable`:** nbpdns couldn't write the event to its
+  database, so nothing was queued. nbpdns logs it as `couldn't queue a
+  NetBox event's refresh`, with the database's error, and counts it in
+  `nbpdns_db_write_failures_total{op="webhook"}`. The next scheduled
+  refresh finds the change.
 - **No failed jobs, and no `last_event`:** NetBox's worker isn't running,
   or the event rule doesn't select the DNS plugin's object types, or it's
   turned off.
@@ -222,5 +236,8 @@ Tasks**, in the default queue's failed jobs, with nbpdns's answer.
   that any server group in nbpdns's configuration serves, so nbpdns ignores
   the event.
 
-A webhook that's lost costs nothing lasting: the next scheduled refresh,
-within `drift.interval`, finds the change.
+A webhook that nbpdns took is in its database until the refresh that
+covers it is written, so it's refreshed after a restart, or by another
+replica once it takes over. A webhook that's lost before nbpdns takes it,
+or that it couldn't write, costs nothing lasting: the next scheduled
+refresh, within `drift.interval`, finds the change.

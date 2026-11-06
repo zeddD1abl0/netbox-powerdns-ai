@@ -35,3 +35,5 @@ v0.9.0, and say so in the CHANGELOG.
 - 2026-11-05: Created by ITEM-0114, which found it while it changed the
   spec's descriptions (no new fields, so it didn't bump the version itself).
   v0.8.0's spec is at 1.2.0, as checked with `git show v0.8.0:api/openapi.yaml`.
+- 2026-11-06: ITEM-0115 adds one more: `/api/netbox-events` has a `503`
+  response, `EventNotQueued`, for an event that the database can't take.

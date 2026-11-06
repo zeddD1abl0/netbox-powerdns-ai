@@ -43,10 +43,13 @@ const (
 	// WebhookInvalid is a signed request that wasn't an event NetBox sends,
 	// or was too large.
 	WebhookInvalid = "invalid"
+	// WebhookFailed is an event that couldn't be written to the database,
+	// so that nothing was queued (ADR-0048).
+	WebhookFailed = "failed"
 )
 
 // WebhookResults are the values of the result label.
-var WebhookResults = []string{WebhookAccepted, WebhookIgnored, WebhookBadSignature, WebhookInvalid}
+var WebhookResults = []string{WebhookAccepted, WebhookIgnored, WebhookBadSignature, WebhookInvalid, WebhookFailed}
 
 // The writes to the database that serve counts the failures of.
 const (
@@ -57,10 +60,13 @@ const (
 	// WritePrune is the daily prune of the audit trail and the drift
 	// history.
 	WritePrune = "prune"
+	// WriteWebhook is a NetBox webhook's event, and the refresh it asks for,
+	// written to the refresh queue (ADR-0048).
+	WriteWebhook = "webhook"
 )
 
 // WriteOps are the values of the op label.
-var WriteOps = []string{WriteHistory, WriteAudit, WritePrune}
+var WriteOps = []string{WriteHistory, WriteAudit, WritePrune, WriteWebhook}
 
 // The outcomes of a reload of the runtime settings (ADR-0040).
 const (
@@ -121,7 +127,8 @@ var (
 		buckets: []float64{0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60},
 		help:    "How long each zone refresh took."}
 	defPendingZones = def{name: "nbpdns_drift_pending_zones", kind: gauge,
-		help: "The zones that NetBox's webhooks named, waiting for their refresh. " +
+		help: "The zones that NetBox's webhooks named, waiting in the database's queue for their refresh, whichever replica took them. " +
+			"A refresh's zones wait until it's recorded. " +
 			"Once a full refresh waits instead, for a view or past 100 zones, no more are added."}
 	defLastRefresh = def{name: "nbpdns_drift_last_refresh_timestamp_seconds", kind: gauge,
 		help: "When the last full drift refresh that the database holds finished, whatever its outcome, as a Unix time. It has no value before the first."}
@@ -166,9 +173,10 @@ var (
 		help:    "How long the API took to answer each request."}
 	defWebhooks = def{name: "nbpdns_netbox_webhooks_total", kind: counter, labels: []string{"result"},
 		values: map[string][]string{"result": WebhookResults},
-		help: "Requests to `/api/netbox-events`, NetBox's webhooks, by result: `accepted` if the event queued a refresh, " +
+		help: "Requests to `/api/netbox-events`, NetBox's webhooks, to this replica, by result: `accepted` if the event queued a refresh, " +
 			"`ignored` if it named nothing that a server group serves, `bad_signature` if its signature didn't verify, " +
-			"and `invalid` if it wasn't an event that NetBox sends, or was over 1 MiB. Requests while webhooks are off aren't counted."}
+			"`invalid` if it wasn't an event that NetBox sends, or was over 1 MiB, " +
+			"and `failed` if it couldn't be written to the database, so that nothing was queued. Requests while webhooks are off aren't counted."}
 	defAuditEvents = def{name: "nbpdns_audit_events_total", kind: counter, labels: []string{"action"},
 		values: map[string][]string{"action": auditActions()},
 		help: "Audit events that `nbpdns serve` recorded, by action. Those that the command line records, " +
@@ -176,7 +184,8 @@ var (
 	defDBWriteFailures = def{name: "nbpdns_db_write_failures_total", kind: counter, labels: []string{"op"},
 		values: map[string][]string{"op": WriteOps},
 		help: "Writes to the database that failed, by what they wrote: `history`, a refresh, to the drift history; " +
-			"`audit`, an audit event of serve's own, such as its stop; and `prune`, the daily prune of the audit trail and the drift history. " +
+			"`audit`, an audit event of serve's own, such as its stop; `prune`, the daily prune of the audit trail and the drift history; " +
+			"and `webhook`, a NetBox webhook's event, and the refresh it asks for, to the refresh queue. " +
 			"A refresh whose history couldn't be written isn't served by any replica."}
 	defSettingsReloads = def{name: "nbpdns_settings_reloads_total", kind: counter, labels: []string{"outcome"},
 		values: map[string][]string{"outcome": ReloadOutcomes},

@@ -75,12 +75,26 @@ Zone refreshes and scheduled ones share one loop, so they never overlap. A
 scheduled refresh that comes first covers every zone waiting, and a full
 refresh that webhooks asked for starts the schedule again.
 
+Any replica takes webhooks. The one that takes a webhook writes it to a
+queue in the database before it answers, and the leader gathers the queue,
+whichever replica wrote to it: it hears of another replica's webhook at its
+next check of the database, within `database.poll_interval`, or at once
+with `database.listen`. A refresh's webhooks leave the queue in the
+transaction that writes the refresh, so a webhook stays queued until a
+refresh that covers it is written. One that's queued when the leader stops,
+or steps down, is refreshed by the next leader, or by `serve` once it
+starts again.
+
 The scheduled refresh stays, as the safety net. NetBox sends each webhook
-once, so one that's lost, while nbpdns restarts or the network fails, is
-found only by the next scheduled refresh, within `drift.interval`. A zone
-refresh that fails, because NetBox or a primary can't be read, does the
-same: its zones wait for the next scheduled refresh, and the groups keep
-their last reports, as they do when a scheduled refresh fails.
+once, so one that's lost before nbpdns takes it, while the network fails,
+or that nbpdns can't write to its database, is found only by the next
+scheduled refresh, within `drift.interval`. A zone refresh that fails,
+because NetBox or a primary can't be read, does the same: its zones wait
+for the next scheduled refresh, and the groups keep their last reports, as
+they do when a scheduled refresh fails. A refresh that can't be written
+leaves its webhooks queued, for the next refresh, which a later webhook or
+the schedule starts, rather than for another at once, which would meet the
+same database.
 
 Each zone refresh is a trace of its own, `drift zone refresh`, linked to the
 spans of the webhooks it serves, and it carries NetBox's request IDs and

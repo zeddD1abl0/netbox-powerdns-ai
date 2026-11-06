@@ -221,7 +221,7 @@ func diffGroups(prev, next []servedGroup) groupChanges {
 // A watcher applies the settings and the groups that the database stores to
 // a running serve, when the change feed finds that their versions have moved
 // on (ADR-0040, ADR-0048), and has the service load the refreshes that
-// another replica recorded.
+// another replica recorded, and the webhooks that another replica took.
 type watcher struct {
 	s    *session
 	st   *store.Store
@@ -237,10 +237,11 @@ type watcher struct {
 
 // apply reads the settings, or the groups, again, and applies them, if their
 // versions in v have moved on from those applied, then has the service load
-// the refreshes, if theirs has moved on from what it serves. The groups come
-// first, so that the service loads the reports of the groups it compares.
-// What can't be applied, or loaded, is logged, and serve keeps what it has,
-// and tries again at the feed's next check.
+// the refreshes, and NetBox's webhooks, if their versions have moved on
+// from what it serves. The groups come first, so that the service loads the
+// reports of the groups it compares. What can't be applied, or loaded, is
+// logged, and serve keeps what it has, and tries again at the feed's next
+// check.
 func (w *watcher) apply(ctx context.Context, v store.Versions) {
 	if v.Settings != w.settingsVersion && w.reloadSettings(ctx) {
 		w.settingsVersion = v.Settings
@@ -250,6 +251,23 @@ func (w *watcher) apply(ctx context.Context, v store.Versions) {
 	}
 	if v.Refreshes != w.svc.Version() {
 		w.reloadDrift(ctx)
+	}
+	if v.Webhooks != w.svc.WebhooksVersion() {
+		w.reloadWebhooks(ctx)
+	}
+}
+
+// reloadWebhooks has the service load what NetBox's webhooks left, as the
+// database holds it: the leader then refreshes what another replica queued
+// (ADR-0048). Each reload is its own trace.
+func (w *watcher) reloadWebhooks(ctx context.Context) {
+	s := w.s
+	ctx, span := s.tracer.Start(logging.WithRequestID(ctx, rand.Text()), "webhooks reload", trace.WithNewRoot())
+	defer span.End()
+	if err := w.svc.ReloadWebhooks(ctx); err != nil && ctx.Err() == nil {
+		span.RecordError(err)
+		s.log.WarnContext(ctx, "couldn't load NetBox's webhooks' queue from the database, so serve serves what it has, and tries again soon",
+			"err", err)
 	}
 }
 

@@ -582,8 +582,10 @@ paths:
         record moved to another zone, and more than 100 zones at once each
         make a full refresh instead. Events for other object types, and for
         zones and views that no server group serves, are accepted and
-        ignored. The endpoint is off until `netbox.webhook_secret` is
-        set.
+        ignored. Any replica takes events: it writes them to the database,
+        whose queue the leader refreshes, so that a queued refresh survives
+        a restart or a takeover. The endpoint is off until
+        `netbox.webhook_secret` is set.
       tags: [netbox]
       security:
         - netboxSignature: []
@@ -630,8 +632,8 @@ paths:
       responses:
         "202":
           description: >-
-            The event is accepted. The refresh it asks for runs later, if it
-            asks for one.
+            The event is accepted, and written to the database. The refresh
+            it asks for runs later, on the leader, if it asks for one.
           headers:
             X-Flow-ID:
               $ref: "#/components/headers/FlowID"
@@ -643,6 +645,8 @@ paths:
           $ref: "#/components/responses/WebhooksOff"
         "413":
           $ref: "#/components/responses/EventTooLarge"
+        "503":
+          $ref: "#/components/responses/EventNotQueued"
         default:
           $ref: "#/components/responses/Problem"
 components:
@@ -813,6 +817,25 @@ components:
             status: 413
             detail: The body is over 1 MiB.
             instance: /api/netbox-events
+    EventNotQueued:
+      description: >-
+        The event couldn't be written to the database, so its refresh isn't
+        queued. The next scheduled refresh finds its change.
+      headers:
+        X-Flow-ID:
+          $ref: "#/components/headers/FlowID"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: about:blank
+            title: Service Unavailable
+            status: 503
+            detail: >-
+              The event couldn't be queued, as the database couldn't be
+              written. The next scheduled refresh finds its change.
+            instance: /api/netbox-events
     Problem:
       description: Any other error.
       headers:
@@ -875,10 +898,10 @@ components:
         same, within `database.poll_interval`, 5 seconds by default, or as
         soon as it hears of a change, with `database.listen`: the
         schedule's interval and timeout, and its last and next refresh;
-        `netbox`; `leader`; and the server groups, which `/api/server-groups`
-        serves. The rest are this replica's own: its build, uptime,
-        readiness and liveness, the refreshes it ran, `tracing`, `webhooks`,
-        `database` and `replica`.
+        `netbox`; `webhooks`; `leader`; and the server groups, which
+        `/api/server-groups` serves. The rest are this replica's own: its
+        build, uptime, readiness and liveness, the refreshes it ran,
+        `tracing`, `database` and `replica`.
       required: [version, revision, started, uptime_seconds, ready, live, schedule, netbox, tracing, webhooks, database, replica, leader]
       properties:
         version:
@@ -1191,9 +1214,10 @@ components:
     Webhooks:
       type: object
       description: >-
-        The state of NetBox's webhooks, which refresh the zones they name:
-        those that this replica received, and the refreshes it ran for
-        them.
+        The state of NetBox's webhooks, which refresh the zones they name,
+        as the database holds it: the deployment's, the same on every
+        replica, whichever replica took each webhook, and the refreshes
+        that the leader ran for them.
       required: [enabled, delay_seconds, last_event, pending, last_refresh]
       properties:
         enabled:
@@ -1211,7 +1235,7 @@ components:
             stop coming, `drift.webhook_delay`.
           examples: [3]
         last_event:
-          description: The last event that a signed webhook brought, or null before the first.
+          description: The last event that a signed webhook brought to any replica, or null before the first.
           oneOf:
             - $ref: "#/components/schemas/WebhookEvent"
             - type: "null"
@@ -1259,7 +1283,11 @@ components:
           examples: [admin]
     PendingRefresh:
       type: object
-      description: What NetBox's webhooks queued, waiting for its refresh.
+      description: >-
+        What NetBox's webhooks queued in the database, waiting for its
+        refresh. A refresh's webhooks wait until it's written, as do those
+        of a refresh that couldn't be: the next refresh, which a later
+        webhook or the schedule starts, covers those.
       required: [events, zones, full, due]
       properties:
         events:
@@ -1288,7 +1316,9 @@ components:
           format: date-time
           description: >-
             When the refresh is due, unless the scheduled one comes first,
-            or null if nothing waits.
+            or null if nothing waits. A time that has passed means that the
+            leader is refreshing them, or hasn't heard of them yet, as it
+            does within `database.poll_interval`.
           examples: ["2026-10-08T01:12:01.2Z"]
     WebhookRefresh:
       type: object

@@ -31,6 +31,17 @@ func event(id, user string) webhook.Event {
 	return webhook.Event{Event: "updated", ObjectType: webhook.TypeRecord, Request: &webhook.Request{ID: id, User: user}}
 }
 
+// notify tells s of e, which asks for r, and reports whether it queued
+// anything. It fails t if s couldn't.
+func notify(t *testing.T, s *Service, e webhook.Event, r webhook.Refresh) bool {
+	t.Helper()
+	queued, err := s.Notify(t.Context(), e, r)
+	if err != nil {
+		t.Errorf("notifying %+v: %v", r, err)
+	}
+	return queued
+}
+
 func zonesOf(names ...string) webhook.Refresh {
 	r := webhook.Refresh{}
 	for _, n := range names {
@@ -41,51 +52,110 @@ func zonesOf(names ...string) webhook.Refresh {
 
 func TestNotify(t *testing.T) {
 	s, _, _ := testService(t, Options{Groups: served})
-	if s.Notify(t.Context(), event("r1", "alice"), webhook.Refresh{Reason: "nbpdns doesn't read extras.tag objects"}) {
+	if notify(t, s, event("r1", "alice"), webhook.Refresh{Reason: "nbpdns doesn't read extras.tag objects"}) {
 		t.Error("an ignored event was queued")
 	}
-	if s.Notify(t.Context(), event("r1", "alice"), webhook.Refresh{Zones: []webhook.Zone{{View: "other", Name: "a.example."}}}) {
+	if notify(t, s, event("r1", "alice"), webhook.Refresh{Zones: []webhook.Zone{{View: "other", Name: "a.example."}}}) {
 		t.Error("a zone in a view that no group serves was queued")
 	}
-	if s.Notify(t.Context(), event("r1", "alice"), webhook.Refresh{Full: true, Views: []string{"other", "elsewhere"}, Reason: "a view was updated"}) {
+	if notify(t, s, event("r1", "alice"), webhook.Refresh{Full: true, Views: []string{"other", "elsewhere"}, Reason: "a view was updated"}) {
 		t.Error("a view that no group serves made a full refresh")
 	}
-	if !s.Notify(t.Context(), event("r1", "alice"), zonesOf("a.example.", "b.example.")) ||
-		!s.Notify(t.Context(), event("r1", "alice"), zonesOf("a.example.")) ||
-		!s.Notify(t.Context(), event("r2", "bob"), zonesOf("c.example.")) {
+	if !notify(t, s, event("r1", "alice"), zonesOf("a.example.", "b.example.")) ||
+		!notify(t, s, event("r1", "alice"), zonesOf("a.example.")) ||
+		!notify(t, s, event("r2", "bob"), zonesOf("c.example.")) {
 		t.Fatal("served zones weren't queued")
 	}
 	if got := testutil.ToFloat64(s.o.Metrics.PendingZones); got != 3 {
 		t.Errorf("%v pending zones, want 3", got)
 	}
-	b := s.take()
-	if b.events != 3 || b.full || !slices.Equal(b.names(), []string{"v/a.example.", "v/b.example.", "v/c.example."}) ||
-		!reflect.DeepEqual(b.requests, []Request{{"r1", "alice"}, {"r2", "bob"}}) {
-		t.Errorf("batch %+v", b)
+	b, full := s.take(false)
+	if full || b.events != 3 || b.full || !slices.Equal(b.names(), []string{"v/a.example.", "v/b.example.", "v/c.example."}) ||
+		!reflect.DeepEqual(b.requests, []Request{{"r1", "alice"}, {"r2", "bob"}}) || b.through != 3 {
+		t.Errorf("batch %+v, full %t", b, full)
 	}
-	if got := testutil.ToFloat64(s.o.Metrics.PendingZones); got != 0 || s.st.pending.events != 0 {
-		t.Errorf("after take, %v pending zones, %d events", got, s.st.pending.events)
+	// The rows wait in the queue, which /status shows, until the refresh
+	// that took them is recorded.
+	if got := testutil.ToFloat64(s.o.Metrics.PendingZones); got != 3 || s.st.hooks.pending.events != 0 || s.st.hooks.queue.events != 3 {
+		t.Errorf("after take, %v pending zones, %d events to take, %d queued", got, s.st.hooks.pending.events, s.st.hooks.queue.events)
 	}
-	if e := s.st.lastEvent; e == nil || e.Request != (Request{"r2", "bob"}) || e.ObjectType != webhook.TypeRecord {
+	if e := s.st.hooks.lastEvent; e == nil || e.Request != (Request{"r2", "bob"}) || e.ObjectType != webhook.TypeRecord {
 		t.Errorf("last event %+v", e)
+	}
+	recorded := func(b batch, full bool) {
+		t.Helper()
+		s.cover(b, s.webhookRefresh(b, full, time.Now(), time.Now(), metrics.OutcomeComplete, nil))
+	}
+	recorded(b, false)
+	if got := testutil.ToFloat64(s.o.Metrics.PendingZones); got != 0 || s.st.hooks.queue.events != 0 || s.st.hooks.covered != 3 {
+		t.Errorf("once recorded, %v pending zones, %d queued, covered through %d", got, s.st.hooks.queue.events, s.st.hooks.covered)
 	}
 
 	t.Run("a full refresh", func(t *testing.T) {
-		s.Notify(t.Context(), event("r3", ""), zonesOf("a.example."))
+		notify(t, s, event("r3", ""), zonesOf("a.example."))
 		// A view that a group serves, by its old name.
-		s.Notify(t.Context(), event("r3", ""), webhook.Refresh{Full: true, Views: []string{"renamed", "v"}, Reason: "a view was updated"})
-		if b := s.take(); !b.full || b.reason != "a view was updated" {
-			t.Errorf("batch %+v", b)
+		notify(t, s, event("r3", ""), webhook.Refresh{Full: true, Views: []string{"renamed", "v"}, Reason: "a view was updated"})
+		b, full := s.take(false)
+		if !full || !b.full || b.reason != "a view was updated" || b.events != 2 {
+			t.Errorf("batch %+v, full %t", b, full)
 		}
+		recorded(b, true)
 	})
 	t.Run("too many zones", func(t *testing.T) {
 		for i := range maxZones + 5 {
-			s.Notify(t.Context(), event("r4", ""), zonesOf(fmt.Sprintf("z%d.example.", i)))
+			notify(t, s, event("r4", ""), zonesOf(fmt.Sprintf("z%d.example.", i)))
 		}
-		if b := s.take(); !b.full || b.reason != "more than 100 zones changed" || len(b.zones) != maxZones+1 || len(b.requests) != 1 {
+		if b, full := s.take(false); !full || !b.full || b.reason != "more than 100 zones changed" || len(b.zones) != maxZones+1 || len(b.requests) != 1 {
 			t.Errorf("full %t for %q, with %d zones and %d requests", b.full, b.reason, len(b.zones), len(b.requests))
 		}
 	})
+}
+
+// TestTakeAfterAFailedWrite checks that the rows of a refresh that wasn't
+// recorded stay queued, and due no more, so that a database that can't be
+// written isn't met with a zone refresh after another, and that the next
+// refresh, which a later webhook makes due, takes them again (ADR-0048).
+func TestTakeAfterAFailedWrite(t *testing.T) {
+	s, _, _ := testService(t, Options{Groups: served})
+	due := func() bool {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		return s.st.hooks.pending.events > 0
+	}
+	notify(t, s, event("r1", ""), zonesOf("a.example."))
+	if b, full := s.take(false); full || !slices.Equal(b.names(), []string{"v/a.example."}) {
+		t.Fatalf("batch %+v, full %t", b, full)
+	}
+	// The refresh isn't recorded: its row waits, but isn't due again.
+	if p := s.Status().Webhooks.Pending; p.Events != 1 || due() {
+		t.Errorf("pending %+v, due %t", p, due())
+	}
+	// Another webhook comes, whose refresh covers both.
+	notify(t, s, event("r2", ""), zonesOf("b.example."))
+	if !due() {
+		t.Error("the second webhook's refresh isn't due")
+	}
+	b, full := s.take(false)
+	if full || !slices.Equal(b.names(), []string{"v/a.example.", "v/b.example."}) || b.events != 2 || b.through != 2 {
+		t.Errorf("the next zone refresh took %+v, full %t", b, full)
+	}
+	s.cover(b, s.webhookRefresh(b, false, time.Now(), time.Now(), metrics.OutcomeComplete, nil))
+	if p := s.Status().Webhooks.Pending; p.Events != 0 || p.Due != nil {
+		t.Errorf("pending %+v after the zone refresh", p)
+	}
+	// A replica that stops leading, and leads again, takes what its
+	// refresh, cut short, had taken.
+	notify(t, s, event("r3", ""), zonesOf("c.example."))
+	s.take(false)
+	s.mu.Lock()
+	s.st.hooks.retake()
+	s.mu.Unlock()
+	if !due() {
+		t.Error("after retake, nothing is due")
+	}
+	if b, _ := s.take(false); !slices.Equal(b.names(), []string{"v/c.example."}) {
+		t.Errorf("after retake, took %+v", b)
+	}
 }
 
 // fakeDrift is a RefreshFunc that records each call, whose zones are nil
@@ -171,7 +241,7 @@ func TestZoneRefreshAfterTheQuietSpell(t *testing.T) {
 		if i > 0 {
 			time.Sleep(20 * time.Millisecond)
 		}
-		s.Notify(t.Context(), event("r1", "alice"), zonesOf(n))
+		notify(t, s, event("r1", "alice"), zonesOf(n))
 	}
 	last := time.Now()
 	z := f.next(t)
@@ -186,7 +256,7 @@ func TestZoneRefreshAfterTheQuietSpell(t *testing.T) {
 		t.Errorf("%v zone refreshes counted", got)
 	}
 	s.mu.Lock()
-	w := s.st.lastWebhookRefresh
+	w := s.st.hooks.lastRefresh
 	s.mu.Unlock()
 	if w == nil || w.Full || !slices.Equal(w.Zones, []string{"v/a.example.", "v/b.example."}) || w.Outcome != metrics.OutcomeComplete ||
 		w.Events != 3 || !reflect.DeepEqual(w.Requests, []Request{{"r1", "alice"}}) {
@@ -202,7 +272,7 @@ func TestZoneRefreshWaitsNoLongerThanTheCap(t *testing.T) {
 	stop := make(chan struct{})
 	go func() {
 		for {
-			s.Notify(context.Background(), event("r1", ""), zonesOf("a.example."))
+			notify(t, s, event("r1", ""), zonesOf("a.example."))
 			select {
 			case <-stop:
 				return
@@ -223,15 +293,15 @@ func TestFullRefreshFromAWebhook(t *testing.T) {
 	f := newFakeDrift()
 	s, _, _ := testService(t, Options{Groups: served, Refresh: f.refresh, WebhookDelay: 20 * time.Millisecond})
 	running(t, s, f)
-	s.Notify(t.Context(), event("r1", ""), zonesOf("a.example."))
-	s.Notify(t.Context(), event("r1", ""), webhook.Refresh{Full: true, Reason: "a view was updated"})
+	notify(t, s, event("r1", ""), zonesOf("a.example."))
+	notify(t, s, event("r1", ""), webhook.Refresh{Full: true, Reason: "a view was updated"})
 	before := time.Now()
 	if z := f.next(t); z != nil {
 		t.Fatalf("refreshed %v, want every zone", z)
 	}
 	f.none(t, 100*time.Millisecond)
 	s.mu.Lock()
-	next, w := s.st.next, s.st.lastWebhookRefresh
+	next, w := s.st.next, s.st.hooks.lastRefresh
 	s.mu.Unlock()
 	// The schedule starts again from the full refresh.
 	if next.Before(before.Add(time.Hour - time.Second)) {
@@ -246,13 +316,13 @@ func TestScheduledRefreshCoversTheZonesWaiting(t *testing.T) {
 	f := newFakeDrift()
 	s, _, _ := testService(t, Options{Groups: served, Refresh: f.refresh, Interval: 150 * time.Millisecond, WebhookDelay: 2 * time.Second})
 	running(t, s, f)
-	s.Notify(t.Context(), event("r1", ""), zonesOf("a.example."))
+	notify(t, s, event("r1", ""), zonesOf("a.example."))
 	if z := f.next(t); z != nil {
 		t.Fatalf("refreshed %v, want the scheduled full refresh", z)
 	}
 	// Nothing is left for a zone refresh.
 	s.mu.Lock()
-	events := s.st.pending.events
+	events := s.st.hooks.pending.events
 	s.mu.Unlock()
 	if events != 0 {
 		t.Errorf("%d events still waiting", events)
@@ -260,10 +330,14 @@ func TestScheduledRefreshCoversTheZonesWaiting(t *testing.T) {
 	waitFor(t, func() bool {
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		return s.st.lastWebhookRefresh != nil
+		return s.st.hooks.lastRefresh != nil
 	})
-	if w := s.Status().Webhooks.LastRefresh; !w.Full || w.Reason != "the scheduled refresh came first" || w.Zones != nil {
-		t.Errorf("last webhook refresh %+v", w)
+	w := s.Status().Webhooks
+	if r := w.LastRefresh; !r.Full || r.Reason != "the scheduled refresh came first" || r.Zones != nil {
+		t.Errorf("last webhook refresh %+v", r)
+	}
+	if w.Pending.Events != 0 {
+		t.Errorf("pending %+v once the scheduled refresh is recorded", w.Pending)
 	}
 }
 
@@ -274,7 +348,7 @@ func TestRefreshesNeverOverlap(t *testing.T) {
 	running(t, s, f)
 	deadline := time.Now().Add(400 * time.Millisecond)
 	for time.Now().Before(deadline) {
-		s.Notify(t.Context(), event("r1", ""), zonesOf("a.example."))
+		notify(t, s, event("r1", ""), zonesOf("a.example."))
 		time.Sleep(15 * time.Millisecond)
 	}
 	if most := f.most.Load(); most != 1 {
@@ -290,7 +364,9 @@ func TestZoneRefreshIsATraceLinkedToItsWebhooks(t *testing.T) {
 	for i, id := range []string{"r1", "r2"} {
 		ctx, span := s.o.Tracer.Start(t.Context(), "POST /api/netbox-events")
 		hooks = append(hooks, span.SpanContext())
-		s.Notify(ctx, event(id, []string{"alice", "bob"}[i]), zonesOf("a.example."))
+		if _, err := s.Notify(ctx, event(id, []string{"alice", "bob"}[i]), zonesOf("a.example.")); err != nil {
+			t.Fatal(err)
+		}
 		span.End()
 	}
 	f.next(t)
@@ -303,12 +379,16 @@ func TestZoneRefreshIsATraceLinkedToItsWebhooks(t *testing.T) {
 		}
 		return zr != nil
 	})
-	var linked []trace.SpanContext
+	// The queue keeps each webhook's span by its IDs.
+	var linked, want []string
 	for _, l := range zr.Links() {
-		linked = append(linked, l.SpanContext)
+		linked = append(linked, l.SpanContext.TraceID().String()+"/"+l.SpanContext.SpanID().String())
 	}
-	if !reflect.DeepEqual(linked, hooks) || zr.Parent().IsValid() {
-		t.Errorf("links %v, want the webhooks' %v; parent %v", linked, hooks, zr.Parent())
+	for _, h := range hooks {
+		want = append(want, h.TraceID().String()+"/"+h.SpanID().String())
+	}
+	if !slices.Equal(linked, want) || zr.Parent().IsValid() {
+		t.Errorf("links %v, want the webhooks' %v; parent %v", linked, want, zr.Parent())
 	}
 	attrs := map[attribute.Key]string{}
 	for _, a := range zr.Attributes() {
@@ -459,7 +539,7 @@ func TestNotifyIsSafeWhileRefreshing(t *testing.T) {
 	for i := range 8 {
 		wg.Go(func() {
 			for j := range 20 {
-				s.Notify(context.Background(), event("r", ""), zonesOf(fmt.Sprintf("z%d-%d.example.", i, j)))
+				notify(t, s, event("r", ""), zonesOf(fmt.Sprintf("z%d-%d.example.", i, j)))
 				_ = s.Status()
 				_ = s.Groups()
 			}
@@ -485,7 +565,7 @@ func TestStatusShowsTheWebhooks(t *testing.T) {
 	}
 
 	s, _, _ := testService(t, Options{Groups: served, Webhooks: true})
-	s.Notify(t.Context(), event("r1", "alice"), zonesOf("a.example."))
+	notify(t, s, event("r1", "alice"), zonesOf("a.example."))
 	w := s.Status().Webhooks
 	if !w.Enabled || w.DelaySeconds != 3 || w.LastEvent == nil || w.LastEvent.Request != (Request{"r1", "alice"}) ||
 		w.Pending.Events != 1 || !slices.Equal(w.Pending.Zones, []string{"v/a.example."}) || w.Pending.Due == nil {
@@ -503,12 +583,13 @@ func TestStatusShowsTheWebhooks(t *testing.T) {
 		}
 	}
 	// A full refresh waiting covers the zones gathered, which still show.
-	s.Notify(t.Context(), event("r2", ""), webhook.Refresh{Full: true, Views: []string{"v"}, Reason: "view v was updated"})
+	notify(t, s, event("r2", ""), webhook.Refresh{Full: true, Views: []string{"v"}, Reason: "view v was updated"})
 	if p := s.Status().Webhooks.Pending; !p.Full || !slices.Equal(p.Zones, []string{"v/a.example."}) ||
 		testutil.ToFloat64(s.o.Metrics.PendingZones) != 1 {
 		t.Errorf("pending %+v", p)
 	}
-	s.noteWebhookRefresh(s.take(), false, time.Now(), time.Now(), metrics.OutcomeComplete, nil)
+	b, _ := s.take(false)
+	s.cover(b, s.webhookRefresh(b, false, time.Now(), time.Now(), metrics.OutcomeComplete, nil))
 	if page := text(s); !strings.Contains(page, "complete, of v/a.example.") || !strings.Contains(page, "waiting:       nothing") {
 		t.Errorf("status page:\n%s", page)
 	}
