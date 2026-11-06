@@ -339,9 +339,12 @@ VALE_FILES := docs README.md CHANGELOG.md
 
 VACUUM_LINT = $(VACUUM) lint --no-update-check -r api/ruleset.yaml -b -q -d --no-clip
 
+# GOMEMLIMIT holds golangci-lint to 1.5 GiB. On 2 CPUs, as CI's runner has,
+# it otherwise peaks at about 2 GiB, the most that CI's heavy jobs request; at
+# this limit it peaks at 1.5 GiB and takes 3% longer (ITEM-0122).
 .PHONY: lint
 lint: $(GOLANGCI_LINT) ## Lint Go code with golangci-lint
-	$(call each_module,$(GOLANGCI_LINT) run --config $(ROOT)/.golangci.yml ./...)
+	$(call each_module,GOMEMLIMIT=1536MiB $(GOLANGCI_LINT) run --config $(ROOT)/.golangci.yml ./...)
 
 .PHONY: docs-lint
 docs-lint: $(VALE) ## Lint prose with Vale; any finding fails

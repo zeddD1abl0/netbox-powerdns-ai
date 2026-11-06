@@ -93,6 +93,9 @@ All notable changes to this project are recorded here. The format follows
 - After a restart, `/status`'s `schedule.last_refresh` is the last full
   refresh, as it was before the restart, not a zone refresh from NetBox's
   webhooks that came after it.
+- `make lint` no longer stops golangci-lint after 5 minutes, which failed
+  clean code on CI's 2-CPU runner, and holds it to 1.5 GiB of memory, within
+  what GitLab's heavy jobs request.
 
 ### Security
 

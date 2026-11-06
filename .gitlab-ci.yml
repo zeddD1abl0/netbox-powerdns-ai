@@ -40,8 +40,10 @@ workflow:
 # With a cold build cache on 16 CPUs, the job's processes peak together at
 # 1.65 GiB for the integration tests' build, 1.62 GiB for the unit tests,
 # 1.60 GiB for the linter, and 0.82 GiB for the release. The runner's nodes
-# have 2 CPUs, so the jobs compile less at once there. The request takes
-# effect only up to the runner's memory_request_overwrite_max_allowed.
+# have 2 CPUs, so the jobs compile less at once there, but golangci-lint
+# alone peaks at about 2 GiB on 2 CPUs, so `make lint` holds it to 1.5 GiB
+# (ITEM-0122). The request takes effect only up to the runner's
+# memory_request_overwrite_max_allowed.
 .heavy:
   resource_group: runner-memory
   variables:

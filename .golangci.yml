@@ -3,7 +3,11 @@
 version: "2"
 
 run:
-  timeout: 5m
+  # No timeout of golangci-lint's own; 0s disables it, as v2 does by default.
+  # On CI's 2-CPU runner, in a job that starts with an empty cache, it took
+  # from 2.6 minutes to more than 22, and a limit of 5 failed clean code
+  # (ITEM-0122). There, the job's timeout, an hour, bounds it.
+  timeout: 0s
   # Lint the integration, end-to-end webhook and release tests too, which
   # carry these build tags.
   build-tags: [integration, release, webhooks]

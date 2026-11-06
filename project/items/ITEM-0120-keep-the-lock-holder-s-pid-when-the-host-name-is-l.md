@@ -66,3 +66,7 @@ the PID.
   `go-lint` job failed when golangci-lint ran past its 5-minute timeout
   (ITEM-0122), and the test stage was skipped. The last criterion's
   pipeline half still waits, now for the first pipeline after ITEM-0122.
+- 2026-11-06: Pipeline 964 (dc80fc6) didn't reach the integration job
+  either: its `go-lint` job failed on golangci-lint's timeout again
+  (ITEM-0122). The last criterion's pipeline half still waits for the
+  first pipeline after ITEM-0122.

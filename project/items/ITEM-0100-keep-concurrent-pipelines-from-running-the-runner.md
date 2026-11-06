@@ -123,3 +123,11 @@ tag no longer fails main.
   after `go vet` took about 12 minutes (ITEM-0122). The later stages were
   skipped, so it doesn't count as a pass. The item still waits for a merge
   and its tag.
+- 2026-11-06: Pipeline 964 (dc80fc6, ITEM-0115) failed in its `go-lint`
+  job, without an OOM kill or a retry. Job 5337 got its 2Gi request and
+  ran on `talos-control-temp`, the node that the note of 2026-10-18 keeps
+  CI's pods off, or gives more memory, so CI's pods still reach it. There
+  `go vet` took 9 min 55 s, about as long as on `talos-control-1`, but
+  golangci-lint ran for 22 min 51 s, past its 5-minute timeout, and then
+  failed (ITEM-0122). The later stages were skipped, so it doesn't count
+  as a pass. The item still waits for a merge and its tag.
