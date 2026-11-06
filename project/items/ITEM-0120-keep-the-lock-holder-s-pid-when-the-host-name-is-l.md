@@ -62,3 +62,7 @@ the PID.
   passes; `make test-integration` passes in 2 min 32 s, its largest
   process at 1.41 GiB. The last criterion's pipeline half waits for the
   branch's next push, which ITEM-0100's notes record.
+- 2026-11-06: Pipeline 953 (26f2217) didn't reach the integration job: its
+  `go-lint` job failed when golangci-lint ran past its 5-minute timeout
+  (ITEM-0122), and the test stage was skipped. The last criterion's
+  pipeline half still waits, now for the first pipeline after ITEM-0122.

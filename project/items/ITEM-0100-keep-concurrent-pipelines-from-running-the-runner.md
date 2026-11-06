@@ -117,3 +117,9 @@ tag no longer fails main.
   integration job ran to the end in 1584 s, without an OOM kill, but
   failed five tests on the runner's long host name (ITEM-0120), so it
   doesn't count as a pass. The item still waits for a merge and its tag.
+- 2026-11-06: Pipeline 953 (26f2217, ITEM-0120's fix) failed in its
+  `go-lint` job, without an OOM kill or a retry: golangci-lint ran past
+  `.golangci.yml`'s 5-minute timeout on the 2-CPU node `talos-control-1`,
+  after `go vet` took about 12 minutes (ITEM-0122). The later stages were
+  skipped, so it doesn't count as a pass. The item still waits for a merge
+  and its tag.
