@@ -114,12 +114,16 @@ func newAuditVerifyCmd(a *app) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if sum.Count == 0 {
+			switch sum.Count {
+			case 0:
 				fmt.Fprintln(a.stdout, "The audit trail is empty.")
 				return nil
+			case 1:
+				fmt.Fprintf(a.stdout, "The audit trail is intact: 1 event, event %d, at %s.\n", sum.First.Seq, sum.First.Time.Format(time.RFC3339))
+			default:
+				fmt.Fprintf(a.stdout, "The audit trail is intact: %d events, from event %d, at %s, to event %d, at %s.\n",
+					sum.Count, sum.First.Seq, sum.First.Time.Format(time.RFC3339), sum.Last.Seq, sum.Last.Time.Format(time.RFC3339))
 			}
-			fmt.Fprintf(a.stdout, "The audit trail is intact: %d events, from event %d, at %s, to event %d, at %s.\n",
-				sum.Count, sum.First.Seq, sum.First.Time.Format(time.RFC3339), sum.Last.Seq, sum.Last.Time.Format(time.RFC3339))
 			if sum.Anchor != nil {
 				fmt.Fprintf(a.stdout, "It starts after event %d, the last one that a prune deleted.\n", sum.Anchor.Seq)
 			}

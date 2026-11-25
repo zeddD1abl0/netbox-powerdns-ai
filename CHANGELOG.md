@@ -96,6 +96,8 @@ All notable changes to this project are recorded here. The format follows
 - `make lint` no longer stops golangci-lint after 5 minutes, which failed
   clean code on CI's 2-CPU runner, and holds it to 1.5 GiB of memory, within
   what GitLab's heavy jobs request.
+- `nbpdns audit verify` counts a trail of one event as `1 event`, and names
+  that event once, where it said `1 events`, from the event to itself.
 
 ### Security
 
