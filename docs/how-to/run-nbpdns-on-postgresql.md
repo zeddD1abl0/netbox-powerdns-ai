@@ -16,9 +16,9 @@ install that moves to PostgreSQL starts with an empty database: nbpdns
 doesn't copy a SQLite database's state across.
 
 > [!NOTE]
-> One `serve` uses a database at a time, as on SQLite: a second one refuses
-> to start, and names the first. Several replicas of `serve` on one
-> PostgreSQL database come in M09.
+> Several `serve`s can share one PostgreSQL database, as replicas, which
+> [Run several replicas of nbpdns](run-several-replicas-of-nbpdns.md) sets
+> up once this guide has made the database.
 
 ## Before you start
 
@@ -154,7 +154,10 @@ list.
    Applied migration 3, drift_history.
    Applied migration 4, settings.
    Applied migration 5, server_groups.
-   The database, postgres://nbpdns:xxxxx@db.example.com/nbpdns?sslmode=verify-full&sslrootcert=/etc/nbpdns/pg-ca.pem, is up to date, at version 5.
+   Applied migration 6, leader.
+   Applied migration 7, netbox_zones.
+   Applied migration 8, refresh_queue.
+   The database, postgres://nbpdns:xxxxx@db.example.com/nbpdns?sslmode=verify-full&sslrootcert=/etc/nbpdns/pg-ca.pem, is up to date, at version 8.
    ```
 
    `serve` applies them too, when it starts, so this step is optional. It
@@ -169,7 +172,7 @@ list.
    ```text
    Database: PostgreSQL 18.1, postgres://nbpdns:xxxxx@db.example.com/nbpdns?sslmode=verify-full&sslrootcert=/etc/nbpdns/pg-ca.pem, over TLS
    ID:       I5S4DUBY7JZSMIXNGZ4W2RX5L7, created 2026-10-18T14:15:18Z by nbpdns v0.9.0
-   Schema:   version 5, up to date
+   Schema:   version 8, up to date
    ```
 
    `over TLS` says that the connection is encrypted. `unencrypted` says
@@ -198,74 +201,11 @@ the same, in its `database` section:
 
 ## Run more than one `serve`
 
-Several `serve`s can run on one PostgreSQL database, as replicas. One of
-them leads: it refreshes and prunes. The others follow, and one of them
-takes over if the leader stops, dies or is cut off: within
-`database.poll_interval`, 5 seconds by default, if it stops, and within
-about 30 seconds otherwise. `/status` names the replica that answers, its
-role, and the leader, as does the `nbpdns_leader` metric, and each
-takeover is a `service.leader_acquired` event in the audit trail.
-
-Every replica serves the same API answers, NetBox's records included, and
-the same deployment status, so a load balancer can send requests to any of
-them. The leader writes each refresh to the database before it serves it,
-and each follower loads it at its next check of the database, every
-`database.poll_interval`, or at once with
-[`database.listen`](#have-the-replicas-hear-of-changes-at-once). A
-follower is ready once it has loaded a refresh: at once if the database
-holds one, and otherwise once the leader's first is written. `/status`
-also has facts of each replica's own, such as the refreshes it ran; the
-[service endpoints reference](../reference/service-endpoints.md#status)
-says which are which.
-
-Any replica takes NetBox's webhooks, so NetBox's webhook can point at the
-same load balancer. The replica that takes one writes it to a queue in the
-database, and the leader refreshes its zones once it hears of it, within
-`database.poll_interval`, or at once with `database.listen`. A webhook
-stays queued until the refresh that covers it is written, so it survives a
-restart, or a takeover.
-[Refresh drift as NetBox changes](refresh-drift-as-netbox-changes.md) sets
-webhooks up.
-
-Each replica holds a lock in the database, a PostgreSQL session advisory
-lock, shared with the other replicas. `nbpdns db migrate` and
-`nbpdns secrets rotate-master-key` take it alone, so they refuse while any
-replica runs, and a replica refuses to start while one of them runs:
-
-```text
-2 other nbpdns processes hold the database's lock: host nbpdns-0, PID 1, since 2026-10-22T09:15:27Z; host nbpdns-1, PID 1, since 2026-10-22T09:15:31Z; stop them first, or give this one another database.url
-```
-
-Each replica's sessions are named so in `pg_stat_activity`'s
-`application_name`. PostgreSQL keeps 63 bytes of it, so a host name too long
-to fit beside the PID, as a GitLab runner's can be, is cut short in its
-middle, at `...`.
-
-PostgreSQL releases a replica's locks when its session ends, however it
-ends: when the replica stops, or within about 30 seconds of its host
-dying, its network failing, or its process hanging. A write that the
-replica was making ends sooner, within 20 seconds, so that the others can
-write again.
-
-## Have the replicas hear of changes at once
-
-Each replica checks the database for changes every
-`database.poll_interval`: the runtime settings and server groups that
-`nbpdns settings` and `nbpdns groups` change, and the leader. Each change
-also sends a notification, with PostgreSQL's `NOTIFY`. Turn on
-`database.listen`, on every replica, for each to listen for them on a
-connection of its own, and act on a change at once:
-
-```yaml
-database:
-  listen: true
-```
-
-A follower then takes over from a leader that stops at once, too. Each
-replica still checks every `database.poll_interval`, so a notification
-that's lost, such as while its connection reconnects, costs at most one
-interval. Each replica logs `listening for the database's changes` once
-it listens, and a warning if its connection is lost, then listens again.
+Several `serve`s can run on this database at once, as replicas. One of
+them leads, and the others take over if it stops, dies or is cut off.
+[Run several replicas of nbpdns](run-several-replicas-of-nbpdns.md) runs
+them, and [How nbpdns replicas choose a leader](../explanation/how-nbpdns-replicas-choose-a-leader.md)
+explains how they share the work.
 
 ## Connect through a pooler
 
@@ -277,6 +217,8 @@ PostgreSQL, or through a pooler in session mode, such as PgBouncer with
 
 ## Next steps
 
+- [Run several replicas of nbpdns](run-several-replicas-of-nbpdns.md) on
+  the database.
 - [Back up nbpdns's database](back-up-nbpdns-database.md#back-up-a-postgresql-database)
   copies it with `pg_dump`.
 - [Protect stored secrets with a master key](protect-stored-secrets-with-a-master-key.md):

@@ -91,7 +91,7 @@ With several replicas on PostgreSQL, each one writes the webhooks it takes
 to a queue in the database, and the leader refreshes them. It hears of
 another replica's webhook within `database.poll_interval`, 5 seconds by
 default, or at once with
-[`database.listen`](run-nbpdns-on-postgresql.md#have-the-replicas-hear-of-changes-at-once),
+[`database.listen`](run-several-replicas-of-nbpdns.md#give-every-replica-the-same-configuration),
 so a zone refresh can come a few seconds later than with one replica.
 
 ### In NetBox's web interface

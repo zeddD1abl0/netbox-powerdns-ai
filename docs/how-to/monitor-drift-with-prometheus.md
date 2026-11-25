@@ -136,7 +136,7 @@ with Alertmanager, as for any other alert.
 
 ## Monitor several replicas
 
-With [several replicas](run-nbpdns-on-postgresql.md#run-more-than-one-serve)
+With [several replicas](run-several-replicas-of-nbpdns.md)
 on PostgreSQL, scrape each one, as a target of its own. Each replica sets
 the drift gauges from what the database holds, so each shows the same
 values, within `database.poll_interval`, and a rule on a gauge would fire

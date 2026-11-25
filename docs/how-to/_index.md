@@ -18,6 +18,7 @@ its goal and prerequisites, then gives numbered steps.
 - [Set a zone's drift policy](set-a-zones-drift-policy.md)
 - [Run nbpdns on PostgreSQL](run-nbpdns-on-postgresql.md)
 - [Run nbpdns in a container](run-nbpdns-in-a-container.md)
+- [Run several replicas of nbpdns](run-several-replicas-of-nbpdns.md)
 - [Change nbpdns's settings while it runs](change-nbpdns-settings-while-it-runs.md)
 - [Manage server groups from the command line](manage-server-groups-from-the-command-line.md)
 - [Protect stored secrets with a master key](protect-stored-secrets-with-a-master-key.md)

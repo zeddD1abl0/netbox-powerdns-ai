@@ -21,6 +21,10 @@ A **refresh** does exactly what `nbpdns drift` does: it reads NetBox once,
 for every server group's views, reads each group's primary, and compares
 them ([How nbpdns finds drift](how-nbpdns-finds-drift.md)).
 
+- With several replicas on PostgreSQL, only the leader refreshes, and the
+  others serve its refreshes from the database, as
+  [How nbpdns replicas choose a leader](how-nbpdns-replicas-choose-a-leader.md)
+  explains.
 - The first refresh starts as soon as `serve` does. The next starts
   `drift.interval` after the last one *started*, 5 minutes by default.
 - A refresh that takes longer than the interval delays the next one, which
@@ -209,4 +213,3 @@ the host scrapes it, or restrict it with a firewall or a network policy.
 ## What it doesn't do yet
 
 - **Correct drift.** Nothing is written to PowerDNS until M14.
-- **Run more than one instance.** High availability comes in M09.

@@ -64,24 +64,13 @@ refreshes and prunes:
   the others, on a connection of its own. `nbpdns db migrate` and
   `nbpdns secrets rotate-master-key` take that lock alone, and refuse while
   any replica runs.
-- The leader holds a second lock. Its session's keepalives and timeouts
-  have PostgreSQL end it, and free the lock, within about 30 seconds of the
-  leader's loss. Another replica then takes the lock, and the lead.
-- Every 5 seconds, the leader confirms that it still holds its lock. If it
-  can't, within 5 seconds, it stops leading before PostgreSQL can free the
-  lock, so two replicas never lead at once.
-- A refresh's history and the prune check, as they write, that the
-  writer still holds the leader's lock. A leader that lost it, but hasn't
-  noticed, such as a process that resumes after a pause, can't write.
-- Writes take turns, under a lock that each one holds until it ends. A
-  write whose replica goes quiet for 20 seconds, as a lost one does, is
-  ended, and frees that lock before PostgreSQL can free the leader's, so
-  the replica that takes over can write. A replica that resumes then
-  finds its write undone.
-- Each follower tries for the lock at each of its polls, every
-  `database.poll_interval`. A leader that stops releases the lock, and
-  sends a notification, so that a follower that listens takes over at
-  once, and one that doesn't at its next poll.
+- The leader holds a second lock, which a follower takes when the leader
+  stops or is lost.
+  [How nbpdns replicas choose a leader](how-nbpdns-replicas-choose-a-leader.md)
+  explains how, and what keeps a lost leader from writing.
+- Writes take turns, under a lock that each one holds until it ends, as
+  SQLite's writes do. A write whose replica goes quiet for 20 seconds, as
+  a lost one does, is ended, and frees that lock.
 
 [ADR-0046](../adr/0046-the-store-on-postgresql-18-with-pgx-and-a-second-s.md),
 [ADR-0047](../adr/0047-elect-the-leader-with-a-postgresql-session-advisor.md)
@@ -318,7 +307,8 @@ from the copies, and keep it for as long as copies made with it exist.
 
 ## What it doesn't do yet
 
-- **More than one instance.** That comes in M09, on PostgreSQL.
+- **Move from SQLite to PostgreSQL.** An install that changes to
+  PostgreSQL starts with an empty database.
 - **Serve the audit trail through the API.** That comes in M10.
 - **Send the audit trail to a SIEM.** That comes in M17.
 - **Export, import, and back up.** Commands for them come in M18.

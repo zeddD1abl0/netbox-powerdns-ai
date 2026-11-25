@@ -6,6 +6,17 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+PostgreSQL and high availability, M09: `nbpdns serve` can keep its state
+in PostgreSQL 18, and run as several replicas on one database. Every
+replica serves the same API answers and status, from the database, and
+takes NetBox's webhooks. One of them, the leader, refreshes and prunes,
+and another takes over within seconds if it stops or dies, and within
+about 30 seconds if its host or network fails.
+[Run several replicas of nbpdns](docs/how-to/run-several-replicas-of-nbpdns.md)
+sets them up, and
+[How nbpdns replicas choose a leader](docs/explanation/how-nbpdns-replicas-choose-a-leader.md)
+explains the leader. SQLite stays a single `serve`.
+
 ### Added
 
 - The development lab publishes its PostgreSQL 18 server on port 5418, and
@@ -32,8 +43,9 @@ All notable changes to this project are recorded here. The format follows
   within about 30 seconds, frees its lock for another replica to take. A
   refresh's history and the prune refuse to write once their replica has
   lost the lock. A write that a lost replica leaves open ends within 20
-  seconds, so that it holds up no other replica's writes. `nbpdns db migrate` and `nbpdns secrets rotate-master-key`
-  refuse while any replica runs. `/status` and `/api/status` gain `replica`
+  seconds, so that it holds up no other replica's writes. `nbpdns db
+  migrate` and `nbpdns secrets rotate-master-key` refuse while any replica
+  runs. `/status` and `/api/status` gain `replica`
   and `leader`; the metrics `nbpdns_leader`,
   `nbpdns_leader_since_timestamp_seconds` and `nbpdns_leader_changes_total`
   say which replica leads; and each takeover is a `service.leader_acquired`

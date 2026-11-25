@@ -145,6 +145,63 @@ closes once a merge and its tag both pass without a retry.
 ## Verification log
 
 <!-- Append-only. Start each entry with the date: "- YYYY-MM-DD: …" -->
+- 2026-11-25: **The manual verification** (ITEM-0117), in the lab, with
+  `nbpdns` built from `5801a13`, the lab's `nbpdns` database, a drift
+  fixture of its own in the lab's NetBox and PowerDNS, `make lab-up
+  LAB_PROFILES=webhooks`, and `database.poll_interval` at its default,
+  5 s. Each step passed.
+  1. With the URL in `NBPDNS_DATABASE_URL_FILE`, `nbpdns db migrate`
+     applied migrations 6 to 8 to the database that ITEM-0111 left at 5,
+     and `nbpdns db status` showed `PostgreSQL 18.6`, the URL as
+     `postgres://nbpdns:xxxxx@localhost:5418/nbpdns?sslmode=disable`,
+     `unencrypted`, and version 8. The password was in none of the
+     replicas' logs, the commands' output, or the `/status` pages and JSON
+     read during the steps.
+  2. Three `serve`s on ports 18081 to 18083: 18081, started first, led,
+     and the other two followed it. All three named the same leader, with
+     the same `since`, served the same last refresh and the group `lab-a`,
+     `ok`; only the leader counted a refresh; `nbpdns_leader` was 1 on
+     18081 alone.
+  3. `nbpdns settings set drift.interval 2m` was applied by all three
+     within 2.5 s of each other, each at its next poll, and each `/status`
+     showed `interval_seconds` 120.
+  4. A record of the fixture's in-sync zone changed in NetBox, whose
+     webhook went to the follower on 18082: it accepted 3 events, the
+     leader ran the one zone refresh, and all three served the zone as
+     drift, with 1 change, 5.8 s after the change (`drift.webhook_delay`,
+     3 s, then a poll).
+  5. SIGINT, as Ctrl-C sends, stopped the leader, which released its lock;
+     18082 led 2.3 s later, and `nbpdns audit list --action
+     service.leader_acquired` showed its takeover beside 18081's.
+  6. With 18081 started again, `kill -9` of 18082: 18083 led 2.4 s later.
+  7. With 18082 started again, `kill -STOP` of 18083: 18082 led 29.7 s
+     later, once `idle_session_timeout` ended the frozen session. After
+     `kill -CONT`, 18083's heartbeat failed with `terminating connection
+     due to idle-session timeout`, it logged its step-down and followed
+     18082, and it wrote nothing: its write failures stayed at 0.
+  8. All three restarted with `database.listen: true`, and each logged
+     `listening for the database's changes`. SIGINT stopped the leader:
+     18083 took over 7 ms after the old leader's release, and led 0.11 s
+     after the signal.
+  9. `sslmode=require` was refused, with `tls error: server refused TLS
+     connection`. Without `sslmode`, `prefer`, nbpdns connected, warned
+     that the connection isn't encrypted, and a fourth replica's `/status`
+     showed `unencrypted`, with `tls` false.
+  10. A second `serve` on a SQLite file that one already used refused:
+      `another nbpdns holds the database's lock, …/one.db.lock: host
+      framework, PID 742790, since 2026-11-25T06:27:45Z`.
+- 2026-11-25: **The examples of "Run several replicas of nbpdns"**
+  (ITEM-0117). `make release-check` passed, and its snapshot image,
+  `goreleaser.ko.local:0.8.0-SNAPSHOT-5801a13`, ran the page's Compose
+  example on the lab's network, with only the image, the paths and the
+  network changed: the three replicas were ready at once, `nbpdns-2` led,
+  and each `/status` named its replica by its Compose host name. `docker
+  compose stop` of the leader exited 0, and `nbpdns-3` took over at once,
+  with `database.listen`; `nbpdns audit list --action
+  service.leader_acquired` showed both takeovers, by their host names. The
+  Kubernetes manifest parsed as a Secret, a ConfigMap, a Deployment of 3
+  replicas and a Service, but wasn't applied: the only cluster that
+  `kubectl` reaches is the user's own.
 
 ## Approved design
 

@@ -254,7 +254,7 @@ lists the image's settings.
      an update stops the old pod before it starts the new one. A rolling
      update would wait forever for a new pod that can't start while the old
      one holds the database. On PostgreSQL, replicas share one database, as
-     [Run nbpdns on PostgreSQL](run-nbpdns-on-postgresql.md#run-more-than-one-serve)
+     [Run several replicas of nbpdns](run-several-replicas-of-nbpdns.md)
      describes.
    - **The database:** on the volume `nbpdns-data`, which `fsGroup` makes
      writable by group 65532. Use storage on a local disk, not NFS, which
