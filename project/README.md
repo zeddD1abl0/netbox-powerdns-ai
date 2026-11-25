@@ -84,4 +84,4 @@
 
 ## Decisions
 
-49 ADRs (39 accepted, 1 proposed, 9 superseded), listed in [docs/adr](../docs/adr/_index.md).
+49 ADRs (40 accepted, 9 superseded), listed in [docs/adr](../docs/adr/_index.md).

@@ -77,3 +77,4 @@ anything. The lab's PostgreSQL 18 has every such timeout at 0.
     integration tests took 222 s, against 147 s that morning: the
     committed code, run then, was as slow, so it's the lab's pace, not
     this change.
+- 2026-11-25: The user accepted ADR-0049 as it stands.

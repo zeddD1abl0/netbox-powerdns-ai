@@ -1,8 +1,8 @@
 ---
 title: '0049: End a lost replica''s write transaction after 20 seconds idle'
-status: proposed # proposed | accepted | rejected | deprecated | superseded by ADR-NNNN
+status: accepted # proposed | accepted | rejected | deprecated | superseded by ADR-NNNN
 date: 2026-11-25
-decision-makers: []
+decision-makers: [jordan]
 requirements: [REQ-033] # REQ-nnn this decision serves
 questions: [] # Q-nnn this decision answers
 supersedes: # ADR-NNNN this replaces, if any
