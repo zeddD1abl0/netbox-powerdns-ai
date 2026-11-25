@@ -28,8 +28,8 @@ for the runner, and the job should spend less time compiling twice.
 ## Acceptance criteria
 
 - [x] golangci-lint's timeout leaves room for CI's 2-CPU runner with an empty cache, with the reason beside it.
-- [ ] The `go-lint` job's time is measured on the runner before and after, and recorded here.
-- [ ] The branch's next pipeline passes its `go-lint` job.
+- [x] The `go-lint` job's time is measured on the runner before and after, and recorded here.
+- [x] The branch's next pipeline passes its `go-lint` job.
 
 ## Notes
 
@@ -94,3 +94,15 @@ for the runner, and the job should spend less time compiling twice.
   here and in ITEM-0100's and ITEM-0120's notes. If golangci-lint is still
   slow on `talos-control-temp` with the limit, the node, not the lint, is
   ITEM-0100's to settle.
+- 2026-11-25: Pipeline 965 (720db36, this item's fix). Its first
+  `go-lint` job, 5348, ran on `talos-control-temp` on 2026-11-06: `go vet`
+  took 14 min 3 s, then golangci-lint, with `GOMEMLIMIT=1536MiB` and no
+  timeout of its own, ran for more than 45 minutes until the job's hour
+  stopped it (`job_execution_timeout`). The user retried it on 2026-11-25,
+  once the cluster had a new node, `talos-control-2` (an i5-6260U, more
+  memory): job 5705 passed in 361 s, `go vet` in 3 min 38 s and
+  golangci-lint in 55 s on the root module, `0 issues`. So with the limit,
+  lint on a sound node takes a quarter of vet's time, as measured locally,
+  and `talos-control-temp` stays too slow for it whatever the limit, which
+  is ITEM-0100's. The last two criteria are ticked: measured before and
+  after, and the branch's pipeline passed its `go-lint` job, on the retry.

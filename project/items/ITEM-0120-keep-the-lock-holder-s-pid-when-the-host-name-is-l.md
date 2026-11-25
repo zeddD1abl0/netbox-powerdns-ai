@@ -70,3 +70,11 @@ the PID.
   either: its `go-lint` job failed on golangci-lint's timeout again
   (ITEM-0122). The last criterion's pipeline half still waits for the
   first pipeline after ITEM-0122.
+- 2026-11-25: Pipeline 965 (720db36) ran the integration job, 5353, on
+  `talos-control-2`, on the runner's 49-character host name. The five
+  tests that failed in 950 passed, and the errors kept the PID (`host
+  runner-d7rzzl1zg-pr...current-0-1lxgs2w8, PID 7970`). Only
+  `TestServeOnPostgres` failed, on its own expectation: it wanted the
+  host's first 20 characters, but how many are kept depends on the PID's
+  length (ITEM-0124, which fixes the test). The last criterion's pipeline
+  half still waits, now for the first pipeline after ITEM-0124.

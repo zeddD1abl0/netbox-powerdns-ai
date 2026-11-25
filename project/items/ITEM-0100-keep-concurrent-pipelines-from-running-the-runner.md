@@ -131,3 +131,14 @@ tag no longer fails main.
   golangci-lint ran for 22 min 51 s, past its 5-minute timeout, and then
   failed (ITEM-0122). The later stages were skipped, so it doesn't count
   as a pass. The item still waits for a merge and its tag.
+- 2026-11-25: Pipeline 965 (720db36, ITEM-0122) ran every job that it
+  reached without an OOM kill. Its first `go-lint` job, 5348, ran on
+  `talos-control-temp` on 2026-11-06 and ran into the job's hour in
+  golangci-lint (ITEM-0122). The user added a node with more memory,
+  `talos-control-2`, and retried the job on 2026-11-25: it passed there in
+  6 min, and `unit-test` (398 s) and `integration-test` (1047 s) ran there
+  too. The integration pod waited about 40 s at first, as `0/3 nodes are
+  available: 3 Insufficient memory`, until its requests fitted; it then ran
+  to the end, but failed one test on its own expectation (ITEM-0124), so
+  it doesn't count as a pass. Later stages were skipped. The item still
+  waits for a merge and its tag.

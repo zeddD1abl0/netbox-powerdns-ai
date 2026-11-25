@@ -189,11 +189,17 @@ func TestServeOnPostgres(t *testing.T) {
 	other := with(env, "NBPDNS_SERVER_LISTEN", "127.0.0.1:0")
 	host, _ := os.Hostname()
 	code, _, stderr := run(t, other, "db", "migrate")
-	// A long host name is cut short in its middle, to keep the PID.
-	want := []string{"2 other nbpdns processes hold the database's lock: host " + host[:min(len(host), 20)],
-		fmt.Sprintf(", PID %d, since ", os.Getpid())}
-	if code != exitError || !containsAll(stderr, want) {
-		t.Errorf("db migrate while two serves run: exit %d, want %d with %q:\n%s", code, exitError, want, stderr)
+	// Each holder is named by its host and PID. How much of a long host
+	// name is kept depends on the PID's length, which store's
+	// TestApplicationName checks, so this checks only the name's form.
+	holders := regexp.MustCompile(fmt.Sprintf(`host (\S+), PID %d, since `, os.Getpid())).FindAllStringSubmatch(stderr, -1)
+	named := len(holders) == 2
+	for _, h := range holders {
+		named = named && namesHost(h[1], host)
+	}
+	if code != exitError || !strings.Contains(stderr, "2 other nbpdns processes hold the database's lock: host ") || !named {
+		t.Errorf("db migrate while two serves run: exit %d, want %d, naming two holders on host %s with PID %d:\n%s",
+			code, exitError, host, os.Getpid(), stderr)
 	}
 	pages.WriteString(stderr)
 
@@ -508,6 +514,18 @@ func (s *served) statusWhen(t *testing.T, cond func(service.Status) bool) servic
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
+}
+
+// namesHost reports whether name, a lock holder's host in an error, is
+// host, or host cut short in its middle at "...", as a host name too long
+// to fit beside the PID in PostgreSQL's application_name is.
+func namesHost(name, host string) bool {
+	if name == host {
+		return true
+	}
+	head, tail, cut := strings.Cut(name, "...")
+	return cut && head != "" && tail != "" && len(name) < len(host) &&
+		strings.HasPrefix(host, head) && strings.HasSuffix(host, tail)
 }
 
 // containsAll reports whether s contains each of subs.
