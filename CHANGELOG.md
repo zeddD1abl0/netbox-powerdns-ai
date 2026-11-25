@@ -87,6 +87,10 @@ All notable changes to this project are recorded here. The format follows
   time, which lowers their peak memory by a third, and GitLab's
   memory-heavy jobs request memory from the Kubernetes runner, so that
   each runs only on a node with room for it.
+- The API's spec is now version 1.3.0, for this release's additions:
+  `/api/status`'s `database.backend`, `database.url` and `database.tls`,
+  `replica` and `leader`, and `/api/netbox-events`'s `503` response, for an
+  event that the database can't take.
 
 ### Fixed
 

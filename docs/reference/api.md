@@ -9,7 +9,7 @@ weight: 45
 # API
 
 `nbpdns serve` serves its API at `/api`, on `server.listen`. This page is
-generated from `api/openapi.yaml`, the API's source of truth, version 1.2.0.
+generated from `api/openapi.yaml`, the API's source of truth, version 1.3.0.
 The service serves the same document at `/api/openapi.yaml`, and a
 reference to browse at `/api/docs`.
 [How nbpdns's API is designed](../explanation/how-nbpdns-api-is-designed.md)
