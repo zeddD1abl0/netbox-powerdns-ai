@@ -116,6 +116,9 @@ All notable changes to this project are recorded here. The format follows
     a request's body, as nbpdns does for NetBox's webhooks, could crash if a
     handler wrote the response's headers while it still read the body.
     nbpdns reads a webhook's whole body before it answers.
+- nbpdns is built with `golang.org/x/net` v0.62.0, which fixes GO-2026-6860
+  and GO-2026-6866 in its `html` package. nbpdns doesn't use that package,
+  but scanners that go by a module's version no longer flag it.
 
 ## [0.8.0] - 2026-10-17
 

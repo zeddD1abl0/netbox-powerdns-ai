@@ -18,7 +18,7 @@
 | [M06](milestones/M06-rest-api.md) | REST API | done | 10 of 10 |
 | [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | done | 9 of 9 |
 | [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | done | 19 of 19 |
-| [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | in-progress | 18 of 20 |
+| [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | in-progress | 19 of 21 |
 | [M10](milestones/M10-authentication.md) | Authentication | planned | 1 of 2 |
 | [M11](milestones/M11-roles-and-permissions.md) | Roles and permissions | planned | 1 of 1 |
 | [M12](milestones/M12-sign-in.md) | Sign-in | planned | 1 of 1 |
@@ -55,6 +55,7 @@
 | [ITEM-0124](items/ITEM-0124-expect-the-cut-host-name-in-testserveonpostgres-fo.md) | Expect the cut host name in TestServeOnPostgres for a PID of any length | bug | done 2026-11-25 | — |
 | [ITEM-0125](items/ITEM-0125-update-go-to-1-27-4-for-go-2026-6859.md) | Update Go to 1.27.4 for GO-2026-6859 | debt | done 2026-11-25 | — |
 | [ITEM-0126](items/ITEM-0126-end-a-lost-leader-s-open-transaction-so-that-it-ca.md) | End a lost leader's open transaction, so that it can't hold the write lock | bug | done 2026-11-25 | — |
+| [ITEM-0127](items/ITEM-0127-update-golang-org-x-net-to-v0-62-0-for-go-2026-686.md) | Update golang.org/x/net to v0.62.0 for GO-2026-6860 and GO-2026-6866 | debt | done 2026-11-25 | — |
 
 ## Open items in other milestones
 
