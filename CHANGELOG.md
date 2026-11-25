@@ -113,6 +113,10 @@ explains the leader. SQLite stays a single `serve`.
 - `make lint` no longer stops golangci-lint after 5 minutes, which failed
   clean code on CI's 2-CPU runner, and holds it to 1.5 GiB of memory, within
   what GitLab's heavy jobs request.
+- GitLab's `vuln` job requests 3 GiB of memory from the Kubernetes runner,
+  and `make vuln` lowers govulncheck's peak from 3.5 to 2.8 GiB, so that a
+  scan that traces calls into a vulnerable package no longer takes most of
+  the job's hour on a busy node.
 - `nbpdns audit verify` counts a trail of one event as `1 event`, and names
   that event once, where it said `1 events`, from the event to itself.
 

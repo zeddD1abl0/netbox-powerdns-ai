@@ -308,9 +308,15 @@ lab-down: $(DOCKER_COMPOSE) ## Remove the NetBox lab and its data, in every prof
 
 ##@ Security
 
+# GOMEMLIMIT lowers govulncheck's peak. When an imported package has a known
+# vulnerability, govulncheck traces the calls into it, keeps about 2.6 GiB
+# live, and otherwise peaks at 3.5 GiB, more than CI's vuln job can request;
+# at this limit it peaks at 2.8 GiB, and the scan takes a third longer. With
+# no such package it doesn't trace, and peaks at about 2.5 GiB either way
+# (ITEM-0128).
 .PHONY: vuln
 vuln: ## Check dependencies for known vulnerabilities (needs network for the vuln DB)
-	$(call each_module,$(call tool,govulncheck) ./...)
+	$(call each_module,GOMEMLIMIT=2560MiB $(call tool,govulncheck) ./...)
 
 GITLEAKS_GIT = $(GITLEAKS) git --no-banner --redact
 

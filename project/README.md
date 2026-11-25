@@ -36,7 +36,7 @@
 | Item | Title | Type | Status | Waiting on |
 |---|---|---|---|---|
 | [ITEM-0100](items/ITEM-0100-keep-concurrent-pipelines-from-running-the-runner.md) | Keep concurrent pipelines from running the runner out of memory | bug | in-progress | — |
-| [ITEM-0128](items/ITEM-0128-keep-the-vuln-job-well-inside-its-hour-on-ci-s-run.md) | Keep the vuln job well inside its hour on CI's runner | bug | open | — |
+| [ITEM-0128](items/ITEM-0128-keep-the-vuln-job-well-inside-its-hour-on-ci-s-run.md) | Keep the vuln job well inside its hour on CI's runner | bug | in-progress | — |
 | [ITEM-0095](items/ITEM-0095-roadmap-m09-postgresql-and-ha.md) | Roadmap M09: PostgreSQL and HA | task | done 2026-10-09 | — |
 | [ITEM-0109](items/ITEM-0109-design-m09-postgresql-and-ha.md) | Design M09: PostgreSQL and HA | task | done 2026-10-18 | — |
 | [ITEM-0110](items/ITEM-0110-the-store-on-postgresql-pgx-sqlc-s-postgresql-pack.md) | The store on PostgreSQL: pgx, sqlc's PostgreSQL package and tests on both | feature | done 2026-10-18 | — |

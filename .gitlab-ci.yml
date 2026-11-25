@@ -42,8 +42,9 @@ workflow:
 # 1.60 GiB for the linter, and 0.82 GiB for the release. The runner's nodes
 # have 2 CPUs, so the jobs compile less at once there, but golangci-lint
 # alone peaks at about 2 GiB on 2 CPUs, so `make lint` holds it to 1.5 GiB
-# (ITEM-0122). The request takes effect only up to the runner's
-# memory_request_overwrite_max_allowed.
+# (ITEM-0122). The runner takes a request only because its
+# memory_request_overwrite_max_allowed is set, to 3 GiB, and fails a job that
+# requests more.
 .heavy:
   resource_group: runner-memory
   variables:
@@ -132,9 +133,19 @@ docs-site:
   script:
     - make docs-links
 
+# govulncheck type-checks every package that the code imports, then traces
+# the calls into any of them that has a known vulnerability. Tracing, it
+# keeps about 2.6 GiB live, mostly on one CPU, and `make vuln` holds its peak
+# to 2.8 GiB. With no memory request, the job ran on a busy node, where such
+# a scan took 22 to 54 minutes, against a minute and a half on two CPUs
+# locally (ITEM-0128). So it requests 3 GiB, the most the runner allows. It
+# isn't one of .heavy: the request places it on a node with room, and the
+# resource group would hold the other pipelines' heavy jobs while it ran.
 vuln:
   extends: .go
   stage: security
+  variables:
+    KUBERNETES_MEMORY_REQUEST: 3Gi
   script:
     - make vuln
 

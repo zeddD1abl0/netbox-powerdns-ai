@@ -160,3 +160,14 @@ tag no longer fails main.
   1041 (2e2da9f) had passed its lint and test stages, on the same nodes,
   when this was written. Branch pipelines don't count: the item still
   waits for M09's merge and its tag.
+- 2026-11-26: Pipelines 1041 (2e2da9f) and 1042 (d79b08f) passed every
+  job, without an OOM kill or a retry. In both, `go-lint` and `unit-test`
+  ran on `talos-control-2`, and `integration-test` (1101 s and 1090 s) and
+  `release-check` on its CPU, the i5-6260U (their logs name the CPU, not
+  the node), each after its pod waited about 30 s as `Insufficient
+  memory`. `build`, `vuln` and `secrets` ran on `talos-control-3`. `vuln`
+  took 1376 s in 1041, and 142 s in 1042, the first after x/net v0.62.0,
+  since its scan no longer traces calls into a vulnerable package
+  (ITEM-0128). The user has removed `talos-control-temp` from the cluster,
+  so no job can run there again. Branch pipelines don't count: the item
+  still waits for M09's merge and its tag.
