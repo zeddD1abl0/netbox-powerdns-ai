@@ -142,3 +142,13 @@ tag no longer fails main.
   to the end, but failed one test on its own expectation (ITEM-0124), so
   it doesn't count as a pass. Later stages were skipped. The item still
   waits for a merge and its tag.
+- 2026-11-25: Pipeline 1039 (e1b7805) passed every job, without an OOM
+  kill or a retry, the first branch pipeline to reach its last stage
+  since M09 started. No job ran on `talos-control-temp`. `go-lint` (359
+  s), `unit-test` (400 s), `integration-test` (1028 s), `release-check`
+  (303 s) and `docs-site` ran on `talos-control-2`; `vuln` (1362 s) and
+  `secrets` on `talos-control-3`, where govulncheck alone took 22 min.
+  The `integration-test` and `release-check` pods each waited about 30 s
+  as `0/3 nodes are available: 3 Insufficient memory` before they were
+  scheduled. A branch pipeline doesn't count: the item still waits for
+  M09's merge and its tag.

@@ -73,6 +73,15 @@ func startServe(t *testing.T, env map[string]string) *served {
 	ctx, cancel := context.WithCancel(t.Context())
 	s := &served{t: t, stderr: &lockedBuffer{}, cancel: cancel, done: make(chan int, 1)}
 	go func() { s.done <- Main(ctx, []string{"serve"}, io.Discard, s.stderr) }()
+	s.listening()
+	t.Cleanup(func() { s.stop() })
+	return s
+}
+
+// listening waits until serve logs that it's listening, for up to 30
+// seconds, and records its address.
+func (s *served) listening() {
+	s.t.Helper()
 	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
 		for l := range strings.Lines(s.stderr.String()) {
@@ -82,18 +91,17 @@ func startServe(t *testing.T, env map[string]string) *served {
 			}
 			if json.Unmarshal([]byte(l), &rec) == nil && rec.Msg == "serving" {
 				s.addr = rec.Address
-				t.Cleanup(func() { s.stop() })
-				return s
+				return
 			}
 		}
 		select {
 		case code := <-s.done:
-			t.Fatalf("serve exited %d before listening:\n%s", code, s.stderr)
+			s.done <- code
+			s.t.Fatalf("serve exited %d before listening:\n%s", code, s.stderr)
 		case <-time.After(20 * time.Millisecond):
 		}
 	}
-	t.Fatalf("serve didn't listen:\n%s", s.stderr)
-	return nil
+	s.t.Fatalf("serve didn't listen:\n%s", s.stderr)
 }
 
 // get fetches path from the service, and returns its status and body.

@@ -37,3 +37,5 @@ test's connection should wait for serve's writes, as the store's do.
   writes. The store opens SQLite with `_pragma=busy_timeout(5000)`
   (`dsn`, `internal/store/store.go`); the test's connection could use the
   same pragma, or the store's own `Open`.
+- 2026-11-25: Failed again in ITEM-0116's `make check`, at line 131,
+  the test's first write, with `database is locked (5) (SQLITE_BUSY)`.

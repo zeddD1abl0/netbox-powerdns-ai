@@ -28,7 +28,7 @@ the PID.
 
 - [x] A lock holder's name fits in 63 bytes and keeps its PID, with a host name of any length; a host name that's cut short says so.
 - [x] A test names a holder with a host name of 64 characters or more, on PostgreSQL.
-- [ ] `make test-integration` passes, and the branch's next pipeline passes its integration job.
+- [x] `make test-integration` passes, and the branch's next pipeline passes its integration job.
 
 ## Notes
 
@@ -78,3 +78,7 @@ the PID.
   host's first 20 characters, but how many are kept depends on the PID's
   length (ITEM-0124, which fixes the test). The last criterion's pipeline
   half still waits, now for the first pipeline after ITEM-0124.
+- 2026-11-25: Pipeline 1039 (e1b7805, after ITEM-0124 and ITEM-0125)
+  passed every job without a retry. Its integration job, 5711, ran on
+  `talos-control-2`, on the runner's long host name, and passed, with
+  `TestServeOnPostgres` among them: the last criterion is met.

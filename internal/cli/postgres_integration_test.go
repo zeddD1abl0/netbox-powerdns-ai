@@ -362,14 +362,7 @@ func TestReplicasServeTheSameAnswers(t *testing.T) {
 
 	// A record changes in NetBox, and its webhook reaches the follower: the
 	// leader refreshes its zone, which both then serve.
-	id := zoneID(t, nb, f.InSync, f.View)
-	changeRecord(t, nb, id, "www", "A", "192.0.2.10", "192.0.2.11")
-	event := replayed(t, "record-updated.json", func(e map[string]any) {
-		z := obj(t, e, "data", "zone")
-		z["id"], z["name"] = id, strings.TrimSuffix(f.InSync, ".")
-		obj(t, e, "data", "zone", "view")["name"] = f.View
-		obj(t, e, "snapshots", "prechange")["zone"] = id
-	})
+	event := inSyncChanged(t, nb, f, nil)
 	if code, body := follower.postEvent(event, webhookSecret); code != http.StatusAccepted {
 		t.Fatalf("the event to the follower: %d %s", code, body)
 	}
