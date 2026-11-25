@@ -91,3 +91,9 @@ forwarding but keeps its sockets open.
     one.
 - 2026-11-25: ITEM-0126 moved the proxy to `internal/lab/proxy.go`
   (`lab.Proxied`), for its store test too, and gave it `Restore`.
+- 2026-11-25: Pipeline 1040 (7d5f4d6, this item's commit) passed every job
+  without a retry. Its integration job, 5722, ran on `talos-control-2` in
+  1089 s, with `TestTakeovers` among `internal/cli`'s tests, 212 s in all
+  (1039: 150 s), without an OOM kill; its pod first waited for memory, as
+  `Insufficient memory`, as before. Pipeline 1041 (2e2da9f, ITEM-0126)
+  passed its integration job too, 5733, on the same node, in 1101 s.

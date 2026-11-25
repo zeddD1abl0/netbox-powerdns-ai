@@ -152,3 +152,11 @@ tag no longer fails main.
   as `0/3 nodes are available: 3 Insufficient memory` before they were
   scheduled. A branch pipeline doesn't count: the item still waits for
   M09's merge and its tag.
+- 2026-11-25: Pipeline 1040 (7d5f4d6) passed every job, without an OOM
+  kill or a retry: `go-lint`, `unit-test`, `integration-test` (1089 s)
+  and `release-check` on `talos-control-2`, and `build`, `vuln` and
+  `secrets` on `talos-control-3`. `vuln` took 3270 s there, more than
+  twice 1039's 1349 s, and close to the job's hour: ITEM-0128. Pipeline
+  1041 (2e2da9f) had passed its lint and test stages, on the same nodes,
+  when this was written. Branch pipelines don't count: the item still
+  waits for M09's merge and its tag.
