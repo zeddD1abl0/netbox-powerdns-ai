@@ -6,9 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -137,7 +135,7 @@ func TestTakeovers(t *testing.T) {
 			// and frees its lock, once the session has been idle for 30.
 			leader, followers = elected(t, append(followers, startReplicas(t, env, "E")...), 15*time.Second)
 			cut := time.Now()
-			leader.proxy.cut()
+			leader.proxy.Cut()
 			took := takeover(t, leader, followers, cut, 40*time.Second)
 			down := leader.logged("the leader missed its heartbeat, so this replica steps down")
 			t.Logf("the cut-off leader %s stepped down %s after the cut", leader.name, down.Time.Sub(cut).Round(time.Millisecond))
@@ -259,7 +257,7 @@ type replica struct {
 	// elected has read its status.
 	name, id string
 	cmd      *exec.Cmd
-	proxy    *proxy
+	proxy    *lab.Proxy
 }
 
 // startReplicas starts a replica of serve with env for each of names, all at
@@ -280,12 +278,7 @@ func startReplicas(t *testing.T, env map[string]string, names ...string) []*repl
 // startReplica starts the replica name, without waiting for it to listen.
 func startReplica(t *testing.T, name string, env map[string]string) *replica {
 	t.Helper()
-	db, err := url.Parse(env["NBPDNS_DATABASE_URL"])
-	if err != nil {
-		t.Fatal(err)
-	}
-	p := newProxy(t, db.Host)
-	db.Host = p.addr()
+	db, p := lab.Proxied(t, env["NBPDNS_DATABASE_URL"])
 	exe, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -301,7 +294,7 @@ func startReplica(t *testing.T, name string, env map[string]string) *replica {
 			cmd.Env = append(cmd.Env, kv)
 		}
 	}
-	for k, v := range with(env, "NBPDNS_DATABASE_URL", db.String(), "NBPDNS_SERVER_LISTEN", "127.0.0.1:0", "NBPDNS_LOG_FORMAT", "json") {
+	for k, v := range with(env, "NBPDNS_DATABASE_URL", db, "NBPDNS_SERVER_LISTEN", "127.0.0.1:0", "NBPDNS_LOG_FORMAT", "json") {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
 	s := &served{t: t, stderr: &lockedBuffer{}, done: make(chan int, 1)}
@@ -346,8 +339,8 @@ func (r *replica) end() {
 	case code := <-r.done:
 		r.done <- code
 	default:
-		if r.proxy.isCut() {
-			r.proxy.close()
+		if r.proxy.IsCut() {
+			r.proxy.Close()
 		}
 		r.cancel()
 		select {
@@ -393,134 +386,5 @@ func (r *replica) logged(msg string) record {
 			r.t.Fatalf("%s didn't log %q:\n%s", r.name, msg, r.stderr)
 		}
 		time.Sleep(20 * time.Millisecond)
-	}
-}
-
-// A proxy forwards a replica's connections to its database until it's cut
-// off. Then it forwards nothing more, either way, and answers no new
-// connection, but keeps every connection open, as a hung host's kernel
-// does, so that PostgreSQL ends the replica's sessions on its own timeouts
-// alone (ADR-0047).
-type proxy struct {
-	ln     net.Listener
-	target string
-	// ctx ends as the proxy closes.
-	ctx                context.Context
-	cancel             context.CancelFunc
-	cutOff             chan struct{}
-	cutOnce, closeOnce sync.Once
-	// mu guards conns, the connections that the proxy holds, both ways.
-	mu    sync.Mutex
-	conns []net.Conn
-	wg    sync.WaitGroup
-}
-
-// newProxy starts a proxy to target, a host and port, on a free port of
-// 127.0.0.1. It closes as the test ends.
-func newProxy(t *testing.T, target string) *proxy {
-	t.Helper()
-	ctx, cancel := context.WithCancel(context.WithoutCancel(t.Context()))
-	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
-	if err != nil {
-		cancel()
-		t.Fatal(err)
-	}
-	p := &proxy{ln: ln, target: target, ctx: ctx, cancel: cancel, cutOff: make(chan struct{})}
-	p.wg.Go(p.accept)
-	t.Cleanup(p.close)
-	return p
-}
-
-// addr returns the proxy's address.
-func (p *proxy) addr() string { return p.ln.Addr().String() }
-
-// cut cuts the proxy off.
-func (p *proxy) cut() { p.cutOnce.Do(func() { close(p.cutOff) }) }
-
-// isCut reports whether the proxy is cut off.
-func (p *proxy) isCut() bool {
-	select {
-	case <-p.cutOff:
-		return true
-	default:
-		return false
-	}
-}
-
-// close closes the proxy, and every connection that it holds.
-func (p *proxy) close() {
-	p.closeOnce.Do(func() {
-		p.cancel()
-		_ = p.ln.Close()
-		p.mu.Lock()
-		for _, c := range p.conns {
-			_ = c.Close()
-		}
-		p.conns = nil
-		p.mu.Unlock()
-		p.wg.Wait()
-	})
-}
-
-// keep holds c, for close to close, and reports whether it does: if the
-// proxy has closed, it closes c instead.
-func (p *proxy) keep(c net.Conn) bool {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.ctx.Err() != nil {
-		_ = c.Close()
-		return false
-	}
-	p.conns = append(p.conns, c)
-	return true
-}
-
-// accept accepts connections until the proxy closes, and forwards each,
-// unless the proxy is cut off: then it holds them, unanswered.
-func (p *proxy) accept() {
-	for {
-		c, err := p.ln.Accept()
-		if err != nil {
-			return
-		}
-		if p.keep(c) && !p.isCut() {
-			p.wg.Go(func() { p.forward(c) })
-		}
-	}
-}
-
-// forward connects c to the target, and copies between them, both ways.
-func (p *proxy) forward(c net.Conn) {
-	var d net.Dialer
-	up, err := d.DialContext(p.ctx, "tcp", p.target)
-	if err != nil || !p.keep(up) {
-		_ = c.Close()
-		return
-	}
-	p.wg.Go(func() { p.pipe(up, c) })
-	p.pipe(c, up)
-}
-
-// pipe copies from src to dst until either fails, then closes both, so that
-// a close at one end reaches the other. Once the proxy is cut off, it
-// forwards nothing more, and holds both open until the proxy closes.
-func (p *proxy) pipe(dst, src net.Conn) {
-	buf := make([]byte, 32<<10)
-	for {
-		n, err := src.Read(buf)
-		if p.isCut() {
-			<-p.ctx.Done()
-			return
-		}
-		if n > 0 {
-			if _, werr := dst.Write(buf[:n]); werr != nil {
-				err = werr
-			}
-		}
-		if err != nil {
-			_ = src.Close()
-			_ = dst.Close()
-			return
-		}
 	}
 }

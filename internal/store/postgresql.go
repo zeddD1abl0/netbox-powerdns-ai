@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
@@ -24,6 +25,16 @@ import (
 // takes on PostgreSQL: "nbpdns" in ASCII, then 1. Advisory locks belong to
 // their database, so two databases on one server never share it.
 const writeLockKey int64 = 0x6e62_7064_6e73_0001
+
+// writeIdleTimeout is how long PostgreSQL lets a write transaction wait for
+// its replica's next statement before it ends the transaction, and its
+// connection, and frees the write lock (ADR-0049). Without it, a replica
+// lost inside a write, whose sockets stay open, as a hung process's do, or
+// across a lost network, holds the write lock until the server's keepalives
+// end the connection, hours later. It ends no later than a lost leader's
+// session, which ends 20 to 30 seconds after the loss (ADR-0047), so that
+// the replica that takes over can write.
+const writeIdleTimeout = 20 * time.Second
 
 // migrateLockPeriod is how often, in seconds, a migration that another one
 // holds up tries for goose's lock again, and migrateLockTries how many times
@@ -168,9 +179,11 @@ func WriteReference(w io.Writer) error {
 // the transaction's end releases, so that writes run one at a time, as
 // SQLite's immediate transactions do (ADR-0046): the audit trail reads its
 // last event, then appends the next one, and a sequence's users read it,
-// then write. It waits for busyTimeout, as SQLite does.
+// then write. It waits for busyTimeout, as SQLite does, and the transaction
+// ends if its replica goes quiet for writeIdleTimeout.
 func lockWrites(ctx context.Context, tx *sql.Tx) error {
-	if _, err := tx.ExecContext(ctx, "SET LOCAL lock_timeout = "+strconv.FormatInt(busyTimeout.Milliseconds(), 10)); err != nil {
+	if _, err := tx.ExecContext(ctx, "SELECT set_config('lock_timeout', $1, true), set_config('idle_in_transaction_session_timeout', $2, true)",
+		strconv.FormatInt(busyTimeout.Milliseconds(), 10), strconv.FormatInt(writeIdleTimeout.Milliseconds(), 10)); err != nil {
 		return err
 	}
 	_, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock($1)", writeLockKey)

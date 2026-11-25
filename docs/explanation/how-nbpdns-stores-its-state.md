@@ -73,13 +73,19 @@ refreshes and prunes:
 - A refresh's history and the prune check, as they write, that the
   writer still holds the leader's lock. A leader that lost it, but hasn't
   noticed, such as a process that resumes after a pause, can't write.
+- Writes take turns, under a lock that each one holds until it ends. A
+  write whose replica goes quiet for 20 seconds, as a lost one does, is
+  ended, and frees that lock before PostgreSQL can free the leader's, so
+  the replica that takes over can write. A replica that resumes then
+  finds its write undone.
 - Each follower tries for the lock at each of its polls, every
   `database.poll_interval`. A leader that stops releases the lock, and
   sends a notification, so that a follower that listens takes over at
   once, and one that doesn't at its next poll.
 
-[ADR-0046](../adr/0046-the-store-on-postgresql-18-with-pgx-and-a-second-s.md)
-and [ADR-0047](../adr/0047-elect-the-leader-with-a-postgresql-session-advisor.md)
+[ADR-0046](../adr/0046-the-store-on-postgresql-18-with-pgx-and-a-second-s.md),
+[ADR-0047](../adr/0047-elect-the-leader-with-a-postgresql-session-advisor.md)
+and [ADR-0049](../adr/0049-end-a-lost-replica-s-write-transaction-after-20-se.md)
 record the decisions.
 
 ## Migrations

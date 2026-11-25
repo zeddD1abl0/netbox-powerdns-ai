@@ -89,3 +89,5 @@ forwarding but keeps its sockets open.
   - `make check` passes; its first run failed once on ITEM-0123's flake.
     `make test-integration` passes, with an empty build cache and a warm
     one.
+- 2026-11-25: ITEM-0126 moved the proxy to `internal/lab/proxy.go`
+  (`lab.Proxied`), for its store test too, and gave it `Restore`.

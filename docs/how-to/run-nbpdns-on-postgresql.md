@@ -243,7 +243,9 @@ middle, at `...`.
 
 PostgreSQL releases a replica's locks when its session ends, however it
 ends: when the replica stops, or within about 30 seconds of its host
-dying, its network failing, or its process hanging.
+dying, its network failing, or its process hanging. A write that the
+replica was making ends sooner, within 20 seconds, so that the others can
+write again.
 
 ## Have the replicas hear of changes at once
 

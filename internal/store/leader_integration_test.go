@@ -265,6 +265,82 @@ func TestFence(t *testing.T) {
 	}
 }
 
+// TestLeaderLostInAWrite checks that a leader cut off inside a leader-only
+// write, which holds the write lock, doesn't keep that lock past the leader's
+// lock (ADR-0047). The cut is a proxy that keeps the leader's sockets open, as
+// a hung host does, so PostgreSQL's own timeouts alone end its sessions. It
+// ends the leader's transaction first, so that another replica writes again,
+// then its session, so that the other replica takes over, and writes as the
+// leader. The leader's write isn't committed once it resumes.
+func TestLeaderLostInAWrite(t *testing.T) {
+	where := lab.NewPostgresDatabase(t)
+	through, proxy := lab.Proxied(t, where)
+	a, b := postgresBackend.connect(t, through), postgresBackend.connect(t, where)
+	if _, err := b.Migrate(t.Context(), "test"); err != nil {
+		t.Fatal(err)
+	}
+	sa, sb := join(t, a, "a"), join(t, b, "b")
+	if ta, err := sa.TryLead(t.Context(), time.Time{}); err != nil || ta == nil {
+		t.Fatalf("a's TryLead() = %+v, %v, want a takeover", ta, err)
+	}
+
+	in, resume, wrote := make(chan struct{}), make(chan struct{}), make(chan error, 1)
+	go func() {
+		_, err := a.leaderTx(t.Context(), func(tx *Tx) error {
+			if _, err := tx.Audit(t.Context(), started(time.Now(), "a")); err != nil {
+				return err
+			}
+			close(in)
+			<-resume
+			return nil
+		})
+		wrote <- err
+	}()
+	<-in
+	proxy.Cut()
+	cut := time.Now()
+
+	// b writes again once PostgreSQL ends a's transaction, before it ends a's
+	// session, at least 25 seconds after the session's last query.
+	for {
+		if _, err := b.Audit(t.Context(), started(time.Now(), "b")); err == nil {
+			break
+		}
+		if time.Since(cut) > 25*time.Second {
+			t.Fatalf("b couldn't write within 25 seconds of the cut, while a's transaction held the write lock")
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Logf("b wrote %s after the cut", time.Since(cut).Round(time.Millisecond))
+
+	// b takes over, trying at each of its polls, once a's session has ended.
+	for {
+		tb, err := sb.TryLead(t.Context(), time.Time{})
+		if err == nil && tb != nil {
+			break
+		}
+		if time.Since(cut) > 40*time.Second {
+			t.Fatalf("b didn't take over within 40 seconds of the cut: %v", err)
+		}
+		time.Sleep(time.Second)
+	}
+	t.Logf("b took over %s after the cut", time.Since(cut).Round(time.Millisecond))
+	if _, err := b.RecordRefresh(t.Context(), full(time.Now())); err != nil {
+		t.Errorf("the new leader's RecordRefresh() = %v", err)
+	}
+
+	// a resumes, and finishes its write, which PostgreSQL ended.
+	proxy.Restore()
+	close(resume)
+	if err := <-wrote; err == nil {
+		t.Error("the lost leader's write committed")
+	}
+	events, err := b.ListAudit(t.Context(), AuditFilter{Action: audit.ServiceStarted, TargetType: "service", TargetID: "a"})
+	if err != nil || len(events) != 0 {
+		t.Errorf("the lost leader's events: %+v, %v, want none", events, err)
+	}
+}
+
 // waitFor waits up to 10 seconds for cond.
 func waitFor(t *testing.T, cond func() bool) {
 	t.Helper()

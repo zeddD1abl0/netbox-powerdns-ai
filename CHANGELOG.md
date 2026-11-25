@@ -31,7 +31,8 @@ All notable changes to this project are recorded here. The format follows
   down if it can't, before PostgreSQL, which ends a lost replica's session
   within about 30 seconds, frees its lock for another replica to take. A
   refresh's history and the prune refuse to write once their replica has
-  lost the lock. `nbpdns db migrate` and `nbpdns secrets rotate-master-key`
+  lost the lock. A write that a lost replica leaves open ends within 20
+  seconds, so that it holds up no other replica's writes. `nbpdns db migrate` and `nbpdns secrets rotate-master-key`
   refuse while any replica runs. `/status` and `/api/status` gain `replica`
   and `leader`; the metrics `nbpdns_leader`,
   `nbpdns_leader_since_timestamp_seconds` and `nbpdns_leader_changes_total`

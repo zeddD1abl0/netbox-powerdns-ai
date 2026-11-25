@@ -62,5 +62,6 @@ from [`template.md`](template.md).
 | [0046](0046-the-store-on-postgresql-18-with-pgx-and-a-second-s.md) | The store on PostgreSQL 18, with pgx and a second sqlc package | accepted |
 | [0047](0047-elect-the-leader-with-a-postgresql-session-advisor.md) | Elect the leader with a PostgreSQL session advisory lock | accepted |
 | [0048](0048-replicas-share-their-state-through-the-database.md) | Replicas share their state through the database | accepted |
+| [0049](0049-end-a-lost-replica-s-write-transaction-after-20-se.md) | End a lost replica's write transaction after 20 seconds idle | proposed |
 
 <!-- projctl:adr-index:end -->
