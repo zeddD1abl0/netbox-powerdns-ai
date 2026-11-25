@@ -18,7 +18,7 @@
 | [M06](milestones/M06-rest-api.md) | REST API | done | 10 of 10 |
 | [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | done | 9 of 9 |
 | [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | done | 19 of 19 |
-| [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | in-progress | 16 of 20 |
+| [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | in-progress | 17 of 20 |
 | [M10](milestones/M10-authentication.md) | Authentication | planned | 1 of 2 |
 | [M11](milestones/M11-roles-and-permissions.md) | Roles and permissions | planned | 1 of 1 |
 | [M12](milestones/M12-sign-in.md) | Sign-in | planned | 1 of 1 |
@@ -37,7 +37,6 @@
 |---|---|---|---|---|
 | [ITEM-0100](items/ITEM-0100-keep-concurrent-pipelines-from-running-the-runner.md) | Keep concurrent pipelines from running the runner out of memory | bug | in-progress | — |
 | [ITEM-0117](items/ITEM-0117-the-m09-docs-several-replicas-on-postgresql-and-ho.md) | The M09 docs: several replicas on PostgreSQL, and how the leader is chosen | task | open | — |
-| [ITEM-0123](items/ITEM-0123-stop-testserveretriesafailedreload-failing-on-a-lo.md) | Stop TestServeRetriesAFailedReload failing on a locked database | bug | open | — |
 | [ITEM-0126](items/ITEM-0126-end-a-lost-leader-s-open-transaction-so-that-it-ca.md) | End a lost leader's open transaction, so that it can't hold the write lock | bug | open | — |
 | [ITEM-0095](items/ITEM-0095-roadmap-m09-postgresql-and-ha.md) | Roadmap M09: PostgreSQL and HA | task | done 2026-10-09 | — |
 | [ITEM-0109](items/ITEM-0109-design-m09-postgresql-and-ha.md) | Design M09: PostgreSQL and HA | task | done 2026-10-18 | — |
@@ -53,6 +52,7 @@
 | [ITEM-0120](items/ITEM-0120-keep-the-lock-holder-s-pid-when-the-host-name-is-l.md) | Keep the lock holder's PID when the host name is long | bug | done 2026-11-05 | — |
 | [ITEM-0121](items/ITEM-0121-bump-the-api-spec-s-version-for-m09-s-additions.md) | Bump the API spec's version for M09's additions | debt | done 2026-11-25 | — |
 | [ITEM-0122](items/ITEM-0122-give-golangci-lint-enough-time-on-ci-s-runner.md) | Give golangci-lint enough time on CI's runner | bug | done 2026-11-06 | — |
+| [ITEM-0123](items/ITEM-0123-stop-testserveretriesafailedreload-failing-on-a-lo.md) | Stop TestServeRetriesAFailedReload failing on a locked database | bug | done 2026-11-25 | — |
 | [ITEM-0124](items/ITEM-0124-expect-the-cut-host-name-in-testserveonpostgres-fo.md) | Expect the cut host name in TestServeOnPostgres for a PID of any length | bug | done 2026-11-25 | — |
 | [ITEM-0125](items/ITEM-0125-update-go-to-1-27-4-for-go-2026-6859.md) | Update Go to 1.27.4 for GO-2026-6859 | debt | done 2026-11-25 | — |
 

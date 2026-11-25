@@ -2,12 +2,12 @@
 id: ITEM-0123
 title: Stop TestServeRetriesAFailedReload failing on a locked database
 type: bug # feature | bug | debt | task
-status: open # open | in-progress | blocked | done | wontfix
+status: done # open | in-progress | blocked | done | wontfix
 milestone: M09
 requirements: []
 depends_on: []
 created: 2026-11-06
-closed:
+closed: 2026-11-25
 ---
 
 # ITEM-0123: Stop TestServeRetriesAFailedReload failing on a locked database
@@ -25,8 +25,8 @@ test's connection should wait for serve's writes, as the store's do.
 
 ## Acceptance criteria
 
-- [ ] The test's own connection waits for serve's writes, with the store's busy timeout.
-- [ ] `go test -race -count=30 -run TestServeRetriesAFailedReload ./internal/cli/` passes every time.
+- [x] The test's own connection waits for serve's writes, with the store's busy timeout.
+- [x] `go test -race -count=30 -run TestServeRetriesAFailedReload ./internal/cli/` passes every time.
 
 ## Notes
 
@@ -39,3 +39,13 @@ test's connection should wait for serve's writes, as the store's do.
   same pragma, or the store's own `Open`.
 - 2026-11-25: Failed again in ITEM-0116's `make check`, at line 131,
   the test's first write, with `database is locked (5) (SQLITE_BUSY)`.
+- 2026-11-25: Done. Before the fix, `-count=30` failed twice, at line 131,
+  with SQLITE_BUSY. The three tests that edit a SQLite database behind
+  nbpdns's back, `TestServeRetriesAFailedReload`,
+  `TestServeRecordsItsStartAndStop` and `TestServeRestarts`, now open it
+  with `rawSQLite` (`internal/cli/serve_test.go`), whose
+  `_pragma=busy_timeout(5000)` waits as the store's `dsn` does; the store
+  keeps `busyTimeout` unexported, so the helper's comment names it. The
+  blank import of the driver moved there. After it, `-count=30` passed 30
+  times, and `-count=60` on 2 CPUs (`taskset -c 0,1`) 60 times. No
+  CHANGELOG line: only tests change.

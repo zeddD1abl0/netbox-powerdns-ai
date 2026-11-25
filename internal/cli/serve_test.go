@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"encoding/pem"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,6 +25,8 @@ import (
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/config"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/service"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/tracing"
+
+	_ "modernc.org/sqlite" // the database/sql driver "sqlite", for rawSQLite
 )
 
 // lockedBuffer is a bytes.Buffer that's safe for concurrent use.
@@ -102,6 +106,20 @@ func (s *served) listening() {
 		}
 	}
 	s.t.Fatalf("serve didn't listen:\n%s", s.stderr)
+}
+
+// rawSQLite opens the SQLite database at path, for a test that edits it
+// behind nbpdns's back. Its writes wait for serve's, for 5 seconds, as the
+// store's own do (busyTimeout, internal/store), rather than fail at once
+// with SQLITE_BUSY. It closes as the test ends.
+func rawSQLite(t *testing.T, path string) *sql.DB {
+	t.Helper()
+	db, err := sql.Open("sqlite", (&url.URL{Scheme: "file", Path: path}).String()+"?_pragma=busy_timeout(5000)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	return db
 }
 
 // get fetches path from the service, and returns its status and body.

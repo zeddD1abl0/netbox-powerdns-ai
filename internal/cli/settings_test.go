@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"database/sql"
 	"encoding/json"
 	"path/filepath"
 	"regexp"
@@ -117,11 +116,8 @@ func TestServeRetriesAFailedReload(t *testing.T) {
 	env["NBPDNS_DATABASE_URL"] = "sqlite://" + db
 	env["NBPDNS_DATABASE_POLL_INTERVAL"] = "100ms"
 	s := startServe(t, env)
-	raw, err := sql.Open("sqlite", db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer raw.Close()
+	// serve writes as it starts, and at its first refresh.
+	raw := rawSQLite(t, db)
 	exec := func(query string) {
 		t.Helper()
 		if _, err := raw.ExecContext(t.Context(), query); err != nil {

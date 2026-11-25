@@ -1,15 +1,12 @@
 package cli
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
-
-	_ "modernc.org/sqlite" // the database/sql driver "sqlite", to tamper with the trail
 )
 
 // TestAuditVerifyCounts checks how audit verify counts the events of an
@@ -110,11 +107,7 @@ func TestServeRecordsItsStartAndStop(t *testing.T) {
 		t.Errorf("audit verify: exit %d:\n%s%s", code, stdout, stderr)
 	}
 
-	raw, err := sql.Open("sqlite", db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer raw.Close()
+	raw := rawSQLite(t, db)
 	if _, err := raw.ExecContext(t.Context(), "UPDATE audit_events SET actor = 'os-user:mallory' WHERE seq = 3"); err != nil {
 		t.Fatal(err)
 	}

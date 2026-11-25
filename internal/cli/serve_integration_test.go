@@ -3,7 +3,6 @@
 package cli
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -13,8 +12,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	_ "modernc.org/sqlite" // the database/sql driver "sqlite", to tamper with the trail
 
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/audit"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/drift"
@@ -332,11 +329,7 @@ func TestServeRestarts(t *testing.T) {
 		t.Fatalf("the drifted zone's events: exit %d, %v, want one %s to drift:\n%s%s", code, err, audit.ZoneDriftChanged, stdout, stderr)
 	}
 	// An event edited to say the zone was in sync breaks the chain there.
-	raw, err := sql.Open("sqlite", db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer raw.Close()
+	raw := rawSQLite(t, db)
 	if _, err := raw.ExecContext(t.Context(), `UPDATE audit_events SET after_json = '{"changes":0,"policy":"report","state":"in_sync"}' WHERE seq = ?`,
 		events[0].Seq); err != nil {
 		t.Fatal(err)
