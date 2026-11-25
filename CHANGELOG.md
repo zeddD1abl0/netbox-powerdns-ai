@@ -99,11 +99,16 @@ All notable changes to this project are recorded here. The format follows
 
 ### Security
 
-- nbpdns is built with Go 1.27.3, which fixes GO-2026-6809: when nbpdns
-  checks the certificate of a server that it connects to over TLS, such as
-  NetBox or PowerDNS, Go now refuses a chain through any of the known
-  intermediate certificates that are no longer trustworthy, even where the
-  system's trust store hasn't been updated to distrust them.
+- nbpdns is built with Go 1.27.4, which fixes:
+  - GO-2026-6809: when nbpdns checks the certificate of a server that it
+    connects to over TLS, such as NetBox or PowerDNS, Go now refuses a chain
+    through any of the known intermediate certificates that are no longer
+    trustworthy, even where the system's trust store hasn't been updated to
+    distrust them.
+  - GO-2026-6859 (CVE-2026-97054): an HTTP/1 server that limits the size of
+    a request's body, as nbpdns does for NetBox's webhooks, could crash if a
+    handler wrote the response's headers while it still read the body.
+    nbpdns reads a webhook's whole body before it answers.
 
 ## [0.8.0] - 2026-10-17
 

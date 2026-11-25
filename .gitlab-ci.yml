@@ -21,9 +21,9 @@ workflow:
     - if: $CI_COMMIT_TAG
 
 # Every job: the official Go image (Debian, glibc: ADR-0031), pinned by digest.
-# It ships Go 1.27.3, go.mod's toolchain, so no other Go is ever downloaded.
+# It ships Go 1.27.4, go.mod's toolchain, so no other Go is ever downloaded.
 .go:
-  image: golang:1.27.3@sha256:f20d83a83e18dbd2a4714b8ffd4b30b287b6243962dd75608e86abcc63ba4efc
+  image: golang:1.27.4@sha256:5f1b98fa02fe396ebce2a0227a0e08309e11792915b9dd2e1f71053d7e7e6666
   variables:
     GOTOOLCHAIN: local
 
