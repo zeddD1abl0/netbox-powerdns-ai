@@ -2,12 +2,12 @@
 id: ITEM-0128
 title: Keep the vuln job well inside its hour on CI's runner
 type: bug # feature | bug | debt | task
-status: in-progress # open | in-progress | blocked | done | wontfix
+status: done # open | in-progress | blocked | done | wontfix
 milestone: M09
 requirements: []
 depends_on: []
 created: 2026-11-25
-closed:
+closed: 2026-11-26
 ---
 
 # ITEM-0128: Keep the vuln job well inside its hour on CI's runner
@@ -25,8 +25,8 @@ and tag pipelines must pass without a retry (ITEM-0100).
 ## Acceptance criteria
 
 - [x] govulncheck's time and peak memory are measured on 2 CPUs with an empty cache, as ITEM-0100 measured the other jobs.
-- [ ] The `vuln` job requests what it needs, or runs where it's measured to fit, so that it finishes well inside its hour on the runner.
-- [ ] A branch pipeline shows it, and its node and duration are recorded here and in ITEM-0100.
+- [x] The `vuln` job requests what it needs, or runs where it's measured to fit, so that it finishes well inside its hour on the runner.
+- [x] A branch pipeline shows it, and its node and duration are recorded here and in ITEM-0100.
 
 ## Notes
 
@@ -88,3 +88,12 @@ and tag pipelines must pass without a retry (ITEM-0100).
   its duration, and record them here and in ITEM-0100. That pipeline won't
   trace, since no imported package has a known vulnerability, so it shows
   the request and the job's placement, not how long a traced scan takes.
+- 2026-11-26: Pipeline 1047 (d67ed82), the first with this fix, passed
+  every job without a retry. Its `vuln` job, 5775, ran: the runner logged
+  `"MemoryRequest" overwritten with "3Gi"`, so the request is within the
+  maximum, and the pod was placed on `talos-control-2` after 4 s as
+  `Pending`, with no `Insufficient memory` wait. The job took 72 s, and
+  `make vuln` 64 s of it, against 142 s for 1042's on `talos-control-3`.
+  The scan didn't trace, as expected, so a traced scan's time on the runner
+  is still unmeasured; with the limit it took 85 to 97 s on two local CPUs.
+  Done.

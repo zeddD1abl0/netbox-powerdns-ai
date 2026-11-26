@@ -171,3 +171,12 @@ tag no longer fails main.
   (ITEM-0128). The user has removed `talos-control-temp` from the cluster,
   so no job can run there again. Branch pipelines don't count: the item
   still waits for M09's merge and its tag.
+- 2026-11-26: Pipeline 1047 (d67ed82, ITEM-0128's fix) passed every job,
+  without an OOM kill or a retry. `go-lint` (342 s), `unit-test` (401 s)
+  and `vuln` (72 s) ran on `talos-control-2`; `vuln` now requests 3Gi, which
+  the runner applied, and its pod didn't wait for memory. `integration-test`
+  (1099 s) and `release-check` (263 s) ran on its CPU, the i5-6260U, after
+  their pods waited 28 s and 31 s as `Insufficient memory`. The other lint
+  jobs, `build`, `docs-site` and `secrets` ran on `talos-control-3`, or on
+  its QEMU CPU. Branch pipelines don't count: the item still waits for
+  M09's merge and its tag.

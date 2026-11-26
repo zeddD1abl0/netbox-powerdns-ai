@@ -18,7 +18,7 @@
 | [M06](milestones/M06-rest-api.md) | REST API | done | 10 of 10 |
 | [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | done | 9 of 9 |
 | [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | done | 19 of 19 |
-| [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | in-progress | 20 of 22 |
+| [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | in-progress | 21 of 22 |
 | [M10](milestones/M10-authentication.md) | Authentication | planned | 1 of 2 |
 | [M11](milestones/M11-roles-and-permissions.md) | Roles and permissions | planned | 1 of 1 |
 | [M12](milestones/M12-sign-in.md) | Sign-in | planned | 1 of 1 |
@@ -36,7 +36,6 @@
 | Item | Title | Type | Status | Waiting on |
 |---|---|---|---|---|
 | [ITEM-0100](items/ITEM-0100-keep-concurrent-pipelines-from-running-the-runner.md) | Keep concurrent pipelines from running the runner out of memory | bug | in-progress | — |
-| [ITEM-0128](items/ITEM-0128-keep-the-vuln-job-well-inside-its-hour-on-ci-s-run.md) | Keep the vuln job well inside its hour on CI's runner | bug | in-progress | — |
 | [ITEM-0095](items/ITEM-0095-roadmap-m09-postgresql-and-ha.md) | Roadmap M09: PostgreSQL and HA | task | done 2026-10-09 | — |
 | [ITEM-0109](items/ITEM-0109-design-m09-postgresql-and-ha.md) | Design M09: PostgreSQL and HA | task | done 2026-10-18 | — |
 | [ITEM-0110](items/ITEM-0110-the-store-on-postgresql-pgx-sqlc-s-postgresql-pack.md) | The store on PostgreSQL: pgx, sqlc's PostgreSQL package and tests on both | feature | done 2026-10-18 | — |
@@ -57,6 +56,7 @@
 | [ITEM-0125](items/ITEM-0125-update-go-to-1-27-4-for-go-2026-6859.md) | Update Go to 1.27.4 for GO-2026-6859 | debt | done 2026-11-25 | — |
 | [ITEM-0126](items/ITEM-0126-end-a-lost-leader-s-open-transaction-so-that-it-ca.md) | End a lost leader's open transaction, so that it can't hold the write lock | bug | done 2026-11-25 | — |
 | [ITEM-0127](items/ITEM-0127-update-golang-org-x-net-to-v0-62-0-for-go-2026-686.md) | Update golang.org/x/net to v0.62.0 for GO-2026-6860 and GO-2026-6866 | debt | done 2026-11-25 | — |
+| [ITEM-0128](items/ITEM-0128-keep-the-vuln-job-well-inside-its-hour-on-ci-s-run.md) | Keep the vuln job well inside its hour on CI's runner | bug | done 2026-11-26 | — |
 
 ## Open items in other milestones
 
