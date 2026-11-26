@@ -43,10 +43,13 @@ const (
 	// WebhookInvalid is a signed request that wasn't an event NetBox sends,
 	// or was too large.
 	WebhookInvalid = "invalid"
+	// WebhookFailed is an event that couldn't be written to the database,
+	// so that nothing was queued (ADR-0048).
+	WebhookFailed = "failed"
 )
 
 // WebhookResults are the values of the result label.
-var WebhookResults = []string{WebhookAccepted, WebhookIgnored, WebhookBadSignature, WebhookInvalid}
+var WebhookResults = []string{WebhookAccepted, WebhookIgnored, WebhookBadSignature, WebhookInvalid, WebhookFailed}
 
 // The writes to the database that serve counts the failures of.
 const (
@@ -57,10 +60,13 @@ const (
 	// WritePrune is the daily prune of the audit trail and the drift
 	// history.
 	WritePrune = "prune"
+	// WriteWebhook is a NetBox webhook's event, and the refresh it asks for,
+	// written to the refresh queue (ADR-0048).
+	WriteWebhook = "webhook"
 )
 
 // WriteOps are the values of the op label.
-var WriteOps = []string{WriteHistory, WriteAudit, WritePrune}
+var WriteOps = []string{WriteHistory, WriteAudit, WritePrune, WriteWebhook}
 
 // The outcomes of a reload of the runtime settings (ADR-0040).
 const (
@@ -108,25 +114,26 @@ var (
 var (
 	defRefreshes = def{name: "nbpdns_drift_refreshes_total", kind: counter, labels: []string{"outcome"},
 		values: map[string][]string{"outcome": Outcomes},
-		help:   "Drift refreshes finished, by outcome. A refresh is incomplete if a server group couldn't be read, and failed if NetBox couldn't be read."}
+		help:   "Drift refreshes that this replica ran, which finished, by outcome. A refresh is incomplete if a server group couldn't be read, and failed if NetBox couldn't be read."}
 	defRefreshDuration = def{name: "nbpdns_drift_refresh_duration_seconds", kind: histogram,
 		buckets: []float64{1, 5, 10, 30, 60, 120, 300, 600, 1200},
 		help:    "How long each drift refresh took."}
 	defZoneRefreshes = def{name: "nbpdns_drift_zone_refreshes_total", kind: counter, labels: []string{"outcome"},
 		values: map[string][]string{"outcome": Outcomes},
-		help: "Zone refreshes finished, by outcome: refreshes of only the zones that NetBox's webhooks named. " +
+		help: "Zone refreshes that this replica ran, which finished, by outcome: refreshes of only the zones that NetBox's webhooks named. " +
 			"Incomplete if a server group couldn't be read, and failed if NetBox couldn't be read. " +
 			"A webhook that asks for a full refresh is counted in `nbpdns_drift_refreshes_total`."}
 	defZoneRefreshDuration = def{name: "nbpdns_drift_zone_refresh_duration_seconds", kind: histogram,
 		buckets: []float64{0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60},
 		help:    "How long each zone refresh took."}
 	defPendingZones = def{name: "nbpdns_drift_pending_zones", kind: gauge,
-		help: "The zones that NetBox's webhooks named, waiting for their refresh. " +
+		help: "The zones that NetBox's webhooks named, waiting in the database's queue for their refresh, whichever replica took them. " +
+			"A refresh's zones wait until it's recorded. " +
 			"Once a full refresh waits instead, for a view or past 100 zones, no more are added."}
 	defLastRefresh = def{name: "nbpdns_drift_last_refresh_timestamp_seconds", kind: gauge,
-		help: "When the last drift refresh finished, whatever its outcome, as a Unix time. It has no value before the first."}
+		help: "When the last full drift refresh that the database holds finished, whatever its outcome, as a Unix time. It has no value before the first."}
 	defLastComplete = def{name: "nbpdns_drift_last_complete_refresh_timestamp_seconds", kind: gauge,
-		help: "When the last complete drift refresh finished, as a Unix time. It has no value before the first."}
+		help: "When the last complete full drift refresh that the database holds finished, as a Unix time. It has no value before the first."}
 	defZones = def{name: "nbpdns_drift_zones", kind: gauge, labels: []string{"group", "state"},
 		values: map[string][]string{"state": zoneStates},
 		help:   "The server group's zones, by state, as of its primary's last successful read."}
@@ -166,9 +173,10 @@ var (
 		help:    "How long the API took to answer each request."}
 	defWebhooks = def{name: "nbpdns_netbox_webhooks_total", kind: counter, labels: []string{"result"},
 		values: map[string][]string{"result": WebhookResults},
-		help: "Requests to `/api/netbox-events`, NetBox's webhooks, by result: `accepted` if the event queued a refresh, " +
+		help: "Requests to `/api/netbox-events`, NetBox's webhooks, to this replica, by result: `accepted` if the event queued a refresh, " +
 			"`ignored` if it named nothing that a server group serves, `bad_signature` if its signature didn't verify, " +
-			"and `invalid` if it wasn't an event that NetBox sends, or was over 1 MiB. Requests while webhooks are off aren't counted."}
+			"`invalid` if it wasn't an event that NetBox sends, or was over 1 MiB, " +
+			"and `failed` if it couldn't be written to the database, so that nothing was queued. Requests while webhooks are off aren't counted."}
 	defAuditEvents = def{name: "nbpdns_audit_events_total", kind: counter, labels: []string{"action"},
 		values: map[string][]string{"action": auditActions()},
 		help: "Audit events that `nbpdns serve` recorded, by action. Those that the command line records, " +
@@ -176,12 +184,23 @@ var (
 	defDBWriteFailures = def{name: "nbpdns_db_write_failures_total", kind: counter, labels: []string{"op"},
 		values: map[string][]string{"op": WriteOps},
 		help: "Writes to the database that failed, by what they wrote: `history`, a refresh, to the drift history; " +
-			"`audit`, an audit event of serve's own, such as its stop; and `prune`, the daily prune of the audit trail and the drift history. " +
-			"A refresh whose history couldn't be written is still served."}
+			"`audit`, an audit event of serve's own, such as its stop; `prune`, the daily prune of the audit trail and the drift history; " +
+			"and `webhook`, a NetBox webhook's event, and the refresh it asks for, to the refresh queue. " +
+			"A refresh whose history couldn't be written isn't served by any replica."}
 	defSettingsReloads = def{name: "nbpdns_settings_reloads_total", kind: counter, labels: []string{"outcome"},
 		values: map[string][]string{"outcome": ReloadOutcomes},
 		help: "Reloads of the runtime settings or the server groups, after `nbpdns settings` or `nbpdns groups` changed them, by outcome: " +
 			"`applied`, or `failed` if a stored value wasn't valid, or a group's API key didn't open, and serve kept what it had."}
+	defLeader = def{name: "nbpdns_leader", kind: gauge,
+		help: "1 if this replica of `nbpdns serve` leads, and so refreshes and prunes, else 0 (ADR-0047). " +
+			"On SQLite, where serve always leads, 1."}
+	defLeaderSince = def{name: "nbpdns_leader_since_timestamp_seconds", kind: gauge,
+		help: "When the leader took over, as a Unix time, as this replica last saw it: on the leader, its own takeover; " +
+			"on a follower, the leader's row in the database. On SQLite, when serve started. It has no value until a replica leads."}
+	defLeaderChanges = def{name: "nbpdns_leader_changes_total", kind: counter,
+		help: "Changes of leader that this replica saw: its own takeovers from another replica, and, while it follows, " +
+			"each new leader that it found in the database. The leader that it finds when it starts isn't a change. " +
+			"Every replica counts each change, so take the `max` across them. It stays 0 on SQLite."}
 	defBuildInfo = def{name: "nbpdns_build_info", kind: gauge, labels: []string{"version", "revision", "goversion"},
 		help: "1, with the running build's version, VCS revision, and Go version."}
 
@@ -191,7 +210,8 @@ var (
 		defZones, defRRsetChanges, defZoneDrifted, defProblems, defWarnings,
 		defNetBoxUp, defGroupUp, defGroupLastSuccess,
 		defRequests, defRequestDuration, defRetries, defAPIRequests, defAPIRequestDuration,
-		defWebhooks, defAuditEvents, defDBWriteFailures, defSettingsReloads, defBuildInfo,
+		defWebhooks, defAuditEvents, defDBWriteFailures, defSettingsReloads,
+		defLeader, defLeaderSince, defLeaderChanges, defBuildInfo,
 	}
 )
 
@@ -227,6 +247,10 @@ type Metrics struct {
 	auditEvents        *prometheus.CounterVec
 	dbWriteFailures    *prometheus.CounterVec
 	settingsReloads    *prometheus.CounterVec
+	leader             prometheus.Gauge
+	// leaderSince has no labels, but is a vector, as LastRefresh is.
+	leaderSince   *prometheus.GaugeVec
+	leaderChanges prometheus.Counter
 }
 
 // New returns nbpdns's metrics for the build info, registered in a new
@@ -260,6 +284,9 @@ func New(info version.Info) *Metrics {
 		auditEvents:         register(reg, prometheus.NewCounterVec(counterOpts(defAuditEvents), defAuditEvents.labels)),
 		dbWriteFailures:     register(reg, prometheus.NewCounterVec(counterOpts(defDBWriteFailures), defDBWriteFailures.labels)),
 		settingsReloads:     register(reg, prometheus.NewCounterVec(counterOpts(defSettingsReloads), defSettingsReloads.labels)),
+		leader:              register(reg, prometheus.NewGauge(gaugeOpts(defLeader))),
+		leaderSince:         register(reg, prometheus.NewGaugeVec(gaugeOpts(defLeaderSince), nil)),
+		leaderChanges:       register(reg, prometheus.NewCounter(counterOpts(defLeaderChanges))),
 	}
 	build := register(reg, prometheus.NewGaugeVec(gaugeOpts(defBuildInfo), defBuildInfo.labels))
 	build.WithLabelValues(info.Version, info.Commit, info.GoVersion).Set(1)
@@ -317,6 +344,22 @@ func (m *Metrics) SettingsReload(outcome string) { m.settingsReloads.WithLabelVa
 // DBWriteFailure counts a write to the database that failed, with one of
 // WriteOps.
 func (m *Metrics) DBWriteFailure(op string) { m.dbWriteFailures.WithLabelValues(op).Inc() }
+
+// Leader sets whether this replica leads, and since when the leader has led,
+// if it's known (ADR-0047).
+func (m *Metrics) Leader(leads bool, since time.Time) {
+	v := 0.0
+	if leads {
+		v = 1
+	}
+	m.leader.Set(v)
+	if !since.IsZero() {
+		m.leaderSince.WithLabelValues().Set(float64(since.UnixNano()) / 1e9)
+	}
+}
+
+// LeaderChanged counts a change of leader.
+func (m *Metrics) LeaderChanged() { m.leaderChanges.Inc() }
 
 // AuditEvents counts the events that serve recorded.
 func (m *Metrics) AuditEvents(events []audit.Event) {

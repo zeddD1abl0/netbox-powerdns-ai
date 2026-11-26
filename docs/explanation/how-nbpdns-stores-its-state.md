@@ -6,26 +6,27 @@ weight: 18
 # How nbpdns stores its state
 
 `nbpdns serve` keeps its state in a database: the runtime settings, the
-server groups, the secrets it stores, the audit trail, and the drift history
-of each refresh and each zone. This page explains how that database is
-built, what is in it, and what protects it. It doesn't hold NetBox's
-records: they're a cache, which the first refresh after a restart reads
-again. The one-shot commands, such as `nbpdns drift`, need no database.
+server groups, the secrets it stores, the audit trail, the drift history of
+each refresh and each zone, and NetBox's zones, with their records, as the
+last refresh read them. This page explains how that database is built, what
+is in it, and what protects it. The one-shot commands, such as
+`nbpdns drift`, need no database.
 
 ```mermaid
 flowchart LR
     file[Config file] -->|its server groups, at each start| serve[nbpdns serve]
     cli[nbpdns settings, groups, secrets] -->|each change, with its audit event| db[(Database)]
     serve -->|refreshes, history, audit events| db
-    db -->|changed settings and groups, within 5 seconds| serve
+    db -->|changed settings, groups and refreshes, at each poll| serve
 ```
 
 [ADR-0038](../adr/0038-an-embedded-sqlite-store-with-goose-and-sqlc.md),
 [ADR-0039](../adr/0039-a-hash-chained-audit-trail.md),
 [ADR-0040](../adr/0040-runtime-settings-and-managed-resources.md),
 [ADR-0041](../adr/0041-secrets-encrypted-at-rest.md),
-[ADR-0042](../adr/0042-drift-history.md) and
+[ADR-0042](../adr/0042-drift-history.md),
 [ADR-0045](../adr/0045-rename-a-server-group-by-moving-its-name-keyed-row.md)
+and [ADR-0048](../adr/0048-replicas-share-their-state-through-the-database.md)
 record the decisions.
 
 ## One file, one serve
@@ -53,6 +54,29 @@ promises. `database.url` says where the file is, by default
   `nbpdns secrets rotate-master-key` do take it, and refuse while `serve`
   runs.
 
+The database can be PostgreSQL 18 instead, when `database.url` is a
+`postgres://` URL, as [Run nbpdns on PostgreSQL](../how-to/run-nbpdns-on-postgresql.md)
+sets up. It holds the same tables, from the same migrations. Several
+`serve`s can use it at once, as replicas, and one of them, the leader,
+refreshes and prunes:
+
+- Each replica holds a session advisory lock in the database, shared with
+  the others, on a connection of its own. `nbpdns db migrate` and
+  `nbpdns secrets rotate-master-key` take that lock alone, and refuse while
+  any replica runs.
+- The leader holds a second lock, which a follower takes when the leader
+  stops or is lost.
+  [How nbpdns replicas choose a leader](how-nbpdns-replicas-choose-a-leader.md)
+  explains how, and what keeps a lost leader from writing.
+- Writes take turns, under a lock that each one holds until it ends, as
+  SQLite's writes do. A write whose replica goes quiet for 20 seconds, as
+  a lost one does, is ended, and frees that lock.
+
+[ADR-0046](../adr/0046-the-store-on-postgresql-18-with-pgx-and-a-second-s.md),
+[ADR-0047](../adr/0047-elect-the-leader-with-a-postgresql-session-advisor.md)
+and [ADR-0049](../adr/0049-end-a-lost-replica-s-write-transaction-after-20-se.md)
+record the decisions.
+
 ## Migrations
 
 The schema is built by migrations, which are SQL files embedded in the
@@ -65,9 +89,9 @@ Migrations only move forward. A newer release can migrate a database, but an
 older one refuses a database that a newer one migrated. To go back to an
 older release, restore a copy of the database that was made before the
 upgrade. [Back up nbpdns's database](../how-to/back-up-nbpdns-database.md)
-shows how. The SQL stays portable to PostgreSQL, which M09 adds: `make
-check` compiles every migration and query for PostgreSQL too, and a test
-refuses SQLite's own functions.
+shows how. The same SQL runs on SQLite and PostgreSQL: `make generate`
+makes the queries' code for each database from it, `make check` fails if
+either is stale, and a test refuses SQLite's own functions.
 
 ## Settings in the database
 
@@ -78,7 +102,8 @@ stored in the database. A bootstrap key isn't, because changing it while
 turn it against you:
 
 - `database.url` and `database.master_key` open the database and its
-  secrets, so they can't be inside it.
+  secrets, and `database.poll_interval` and `database.listen` say how
+  `serve` follows it, so they can't be inside it.
 - `server.*`, `log.format` and `otlp.*` set up the listener, the log, and
   the traces, which `serve` makes once, as it starts.
 - `netbox.url` and `netbox.ca_file` decide where nbpdns sends its NetBox
@@ -90,8 +115,11 @@ turn it against you:
 explains how the database fits among the sources, and what it means for a
 runtime key to be pinned by the file, the environment, or a flag.
 
-Each change to the settings raises their version. `serve` checks the version
-every 5 seconds, and applies the keys that changed:
+Each change to the settings raises their version. `serve` polls the
+database for it every `database.poll_interval`, 5 seconds by default. On
+PostgreSQL, each change also sends a notification, with `NOTIFY`, and a
+`serve` with `database.listen` on polls as soon as it hears one. It applies
+the keys that changed:
 
 - the log level, the schedule (`drift.interval`, `drift.timeout` and
   `drift.webhook_delay`), and whether NetBox's webhooks are on, at once;
@@ -211,9 +239,33 @@ the report gets a last row, with the state `removed`.
 history](../how-to/read-a-zones-drift-history.md) shows how to read it.
 
 `serve` keeps each group's last report whole, replaced at each refresh. When
-it starts, it restores the reports and serves them at once, so `/readyz`
+it starts, it loads the reports and serves them at once, so `/readyz`
 answers 200 without waiting for the first refresh, and a restart hides
 nothing that nbpdns knew. The first refresh starts at once and replaces them.
+
+It keeps NetBox's zones too, each with its records, which the API's
+`…/rrsets` serves: a row for each zone in the server groups' views. A
+refresh writes a zone's row only when the zone changed, by the digest of
+its JSON, and deletes it once the zone has left the views. A refresh that
+changes one zone writes that zone's row alone. So a restarted `serve`
+serves NetBox's records at once too, and so does each replica on
+PostgreSQL.
+
+`serve` serves a refresh only once the database has it. A replica on the
+same database, and `serve` after a restart, loads the same refresh, so
+each serves what the leader does
+([ADR-0048](../adr/0048-replicas-share-their-state-through-the-database.md)).
+A replica that loads again reads only NetBox's zones that were written
+since it last loaded them.
+
+NetBox's webhooks wait in the database too: each webhook that asks for a
+refresh is a row of a queue, which any replica writes, and the leader
+gathers. The refresh that covers a row deletes it, in the transaction that
+writes the refresh, so a row outlasts a refresh that isn't written, a
+restart, and a takeover. The database also keeps the last webhook's event
+and the last refresh that webhooks asked for, which `/status` shows, the
+same on every replica. A replica that loads the queue again reads only the
+rows queued since it last loaded it.
 
 A change of a zone's state is also a `zone.drift_changed` audit event. The
 two differ in what they hold and how long they last. The history holds the
@@ -222,15 +274,21 @@ change of state, and last as long as the audit trail.
 
 ## When a write fails
 
-If the history of a refresh can't be written, `serve` still serves the
-refresh from memory. It counts the failure in
-`nbpdns_db_write_failures_total`, logs it, and shows it on `/status`. The
-next refresh that's written compares each zone with its last row, so the
-history catches up. It lacks only the refreshes that failed, and any state
-that a zone held during them alone.
+If a refresh can't be written, no replica serves it: each keeps serving the
+last refresh that was written, so that every replica answers the same. A
+full disk stops the report from moving on, which the last refresh's time on
+`/status` and in `nbpdns_drift_last_refresh_timestamp_seconds` shows. `serve`
+counts the failure in `nbpdns_db_write_failures_total`, logs it, and shows
+it on `/status`. The next refresh that's written compares each zone with its
+last row, so the history catches up. It lacks only the refreshes that
+failed, and any state that a zone held during them alone.
 
 A change from the command line and its audit event are one transaction, so a
 write that fails changes nothing.
+
+A webhook that can't be written to the queue changes nothing either: the
+replica answers NetBox with a `503`, and the next scheduled refresh finds
+the change.
 
 ## Copies of the database
 
@@ -249,7 +307,8 @@ from the copies, and keep it for as long as copies made with it exist.
 
 ## What it doesn't do yet
 
-- **PostgreSQL, and more than one instance.** Both come in M09.
+- **Move from SQLite to PostgreSQL.** An install that changes to
+  PostgreSQL starts with an empty database.
 - **Serve the audit trail through the API.** That comes in M10.
 - **Send the audit trail to a SIEM.** That comes in M17.
 - **Export, import, and back up.** Commands for them come in M18.

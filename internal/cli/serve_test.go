@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"encoding/pem"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,7 +23,10 @@ import (
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/api"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/api/contract"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/config"
+	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/service"
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/tracing"
+
+	_ "modernc.org/sqlite" // the database/sql driver "sqlite", for rawSQLite
 )
 
 // lockedBuffer is a bytes.Buffer that's safe for concurrent use.
@@ -49,6 +54,9 @@ type served struct {
 	stderr *lockedBuffer
 	cancel context.CancelFunc
 	done   chan int
+	// checker checks the API's answers against its spec, once api has made
+	// it: parsing the spec is slow.
+	checker *contract.Checker
 }
 
 // startServe runs `nbpdns serve` with env, listening on a free port of
@@ -69,6 +77,15 @@ func startServe(t *testing.T, env map[string]string) *served {
 	ctx, cancel := context.WithCancel(t.Context())
 	s := &served{t: t, stderr: &lockedBuffer{}, cancel: cancel, done: make(chan int, 1)}
 	go func() { s.done <- Main(ctx, []string{"serve"}, io.Discard, s.stderr) }()
+	s.listening()
+	t.Cleanup(func() { s.stop() })
+	return s
+}
+
+// listening waits until serve logs that it's listening, for up to 30
+// seconds, and records its address.
+func (s *served) listening() {
+	s.t.Helper()
 	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
 		for l := range strings.Lines(s.stderr.String()) {
@@ -78,18 +95,31 @@ func startServe(t *testing.T, env map[string]string) *served {
 			}
 			if json.Unmarshal([]byte(l), &rec) == nil && rec.Msg == "serving" {
 				s.addr = rec.Address
-				t.Cleanup(func() { s.stop() })
-				return s
+				return
 			}
 		}
 		select {
 		case code := <-s.done:
-			t.Fatalf("serve exited %d before listening:\n%s", code, s.stderr)
+			s.done <- code
+			s.t.Fatalf("serve exited %d before listening:\n%s", code, s.stderr)
 		case <-time.After(20 * time.Millisecond):
 		}
 	}
-	t.Fatalf("serve didn't listen:\n%s", s.stderr)
-	return nil
+	s.t.Fatalf("serve didn't listen:\n%s", s.stderr)
+}
+
+// rawSQLite opens the SQLite database at path, for a test that edits it
+// behind nbpdns's back. Its writes wait for serve's, for 5 seconds, as the
+// store's own do (busyTimeout, internal/store), rather than fail at once
+// with SQLITE_BUSY. It closes as the test ends.
+func rawSQLite(t *testing.T, path string) *sql.DB {
+	t.Helper()
+	db, err := sql.Open("sqlite", (&url.URL{Scheme: "file", Path: path}).String()+"?_pragma=busy_timeout(5000)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	return db
 }
 
 // get fetches path from the service, and returns its status and body.
@@ -115,9 +145,12 @@ func (s *served) get(path string) (int, string) {
 // OpenAPI document, and returns its status and body.
 func (s *served) api(path string) (int, string) {
 	s.t.Helper()
-	checker, err := contract.New(api.Spec(), "/api")
-	if err != nil {
-		s.t.Fatal(err)
+	if s.checker == nil {
+		checker, err := contract.New(api.Spec(), "/api")
+		if err != nil {
+			s.t.Fatal(err)
+		}
+		s.checker = checker
 	}
 	req, err := http.NewRequestWithContext(s.t.Context(), http.MethodGet, "http://"+s.addr+path, http.NoBody)
 	if err != nil {
@@ -128,7 +161,7 @@ func (s *served) api(path string) (int, string) {
 		s.t.Fatalf("GET %s: %v", path, err)
 	}
 	defer resp.Body.Close()
-	checker.Check(s.t, req, resp)
+	s.checker.Check(s.t, req, resp)
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		s.t.Fatal(err)
@@ -175,6 +208,7 @@ func TestServeFailures(t *testing.T) {
 	noDir := configFile(t, twoGroups)
 	missing := filepath.Join(t.TempDir(), "missing")
 	noDir["NBPDNS_DATABASE_URL"] = "sqlite://" + filepath.Join(missing, "nbpdns.db")
+	listen := with(two, "NBPDNS_DATABASE_LISTEN", "true")
 	for _, tt := range []struct {
 		name string
 		env  map[string]string
@@ -182,6 +216,8 @@ func TestServeFailures(t *testing.T) {
 	}{
 		{"an address in use", two, "server.listen: listen tcp " + inUse.Addr().String()},
 		{"no database directory", noDir, "the database's directory, " + missing + ", doesn't exist"},
+		{"database.listen on SQLite", listen, "database.listen (from env NBPDNS_DATABASE_LISTEN): only PostgreSQL has LISTEN and NOTIFY, " +
+			"and database.url (from env NBPDNS_DATABASE_URL) names a SQLite database"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			code, _, stderr := run(t, tt.env, "serve")
@@ -210,6 +246,10 @@ func TestServeWithoutNetBox(t *testing.T) {
 		`nbpdns_drift_refreshes_total{outcome="failed"} 1`,
 		`nbpdns_http_client_requests_total{code="error",method="GET",service="NetBox",target="netbox"}`,
 		"nbpdns_build_info{",
+		// On SQLite, serve leads at once (ADR-0047).
+		"nbpdns_leader 1",
+		"nbpdns_leader_since_timestamp_seconds ",
+		"nbpdns_leader_changes_total 0",
 	} {
 		if code != http.StatusOK || !strings.Contains(body, want) {
 			t.Errorf("metrics have no %q:\n%s", want, body)
@@ -229,8 +269,16 @@ func TestServeWithoutNetBox(t *testing.T) {
 	if code, page := s.api("/api/server-groups"); code != http.StatusOK || strings.Count(page, `"status":"unknown"`) != 2 {
 		t.Errorf("/api/server-groups: %d:\n%s", code, page)
 	}
+	var st service.Status
+	if _, page := s.get("/status?json=1"); json.Unmarshal([]byte(page), &st) != nil || st.Replica.Role != service.RoleLeader ||
+		st.Leader == nil || st.Leader.ID != st.Replica.ID || !st.Leader.Since.Equal(st.Started) {
+		t.Errorf("/status names no replica that leads since serve started:\n%s", page)
+	}
 	if code := s.stop(); code != exitOK {
 		t.Errorf("exit %d, want 0:\n%s", code, s.stderr)
+	}
+	if _, stdout, _ := run(t, env, "audit", "list"); strings.Contains(stdout, "service.leader_acquired") || !strings.Contains(stdout, "service.started") {
+		t.Errorf("audit list on SQLite: want service.started, and no leader events:\n%s", stdout)
 	}
 	for _, want := range []string{"couldn't read NetBox", `"msg":"shutting down"`} {
 		if !strings.Contains(s.stderr.String(), want) {

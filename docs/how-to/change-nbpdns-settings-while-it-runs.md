@@ -57,7 +57,10 @@ stores for it, if anything.
    ```
 
    nbpdns checks the value as it would the config file's, and refuses one
-   that isn't valid, or a bootstrap key.
+   that isn't valid, or a bootstrap key. The time it gives is
+   `database.poll_interval`, how often serve checks its database for
+   changes, 5 seconds by default. On PostgreSQL, with `database.listen` on,
+   serve applies the change at once.
 
 2. Check that serve uses it. Its status page shows the new interval:
 

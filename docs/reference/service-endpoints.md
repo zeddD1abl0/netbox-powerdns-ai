@@ -21,12 +21,12 @@ the request's own, if it sent a valid one, or a new one. It's the request's
 
 | Path | Answers |
 |---|---|
-| `/livez` | `200 ok` unless no drift refresh has started for `drift.interval` + `drift.timeout` + 1 minute; then `503`, with when the last one started. |
-| `/readyz` | `200 ready` once the service has restored the reports it kept before it restarted; with none to restore, `503` until the first drift refresh has finished, whatever its outcome, then `200 ready`. |
+| `/livez` | `200 ok` unless no drift refresh has started for `drift.interval` + `drift.timeout` + 1 minute, or, on a follower, it hasn't tried for the leader's lock for a minute; then `503`, with when the last one started, or when it last tried. |
+| `/readyz` | `200 ready` once the service serves a full drift refresh that finished, whatever its outcome: one that the database held when it started, at once; the leader's own first refresh, once the database has it; or, on a follower, the leader's first, once it loads it. `503` until then, with why. |
 | `/status` | The service's state, as text for a person, or as JSON with `?json=1`. |
 | `/metrics` | The metrics, in Prometheus's text format, or in OpenMetrics if the scraper asks for it. The [metrics reference](metrics.md) lists them. |
 | `/api/…` | The API, as JSON: the service's status, at `/api/status`; the server groups, at `/api/server-groups`; each group's zones, filtered by state; each zone's changes; and each zone's records as NetBox defines them, at `…/rrsets`. Everything is last-known state. Lists are paged with `limit` and `cursor`. The [API reference](api.md) lists every operation. |
-| `/api/netbox-events` | `POST` only: NetBox's webhooks, signed with `netbox.webhook_secret`, which queue a refresh of the zones they name. `202` when accepted, `401` for a missing or wrong `X-Hook-Signature`, and `404` while `netbox.webhook_secret` isn't set. [Refresh drift as NetBox changes](../how-to/refresh-drift-as-netbox-changes.md) sets them up. |
+| `/api/netbox-events` | `POST` only: NetBox's webhooks, signed with `netbox.webhook_secret`, which queue a refresh of the zones they name, in the database, for the leader to run. Any replica takes them. `202` when accepted, `401` for a missing or wrong `X-Hook-Signature`, `404` while `netbox.webhook_secret` isn't set, and `503` if the database couldn't be written, so that nothing was queued. [Refresh drift as NetBox changes](../how-to/refresh-drift-as-netbox-changes.md) sets them up. |
 | `/api/openapi.yaml` | The API's OpenAPI 3.1 document, `application/yaml`, which describes every operation under `/api`. |
 | `/api/docs` | The API's reference, for a browser: Scalar's, built into nbpdns, reading `/api/openapi.yaml`. Its Content-Security-Policy lets it reach no other host. |
 
@@ -44,6 +44,15 @@ Fields are only ever added to the JSON, never removed or renamed, so every
 field is always present. A field with nothing to say yet is `null`, such as
 `schedule.last_refresh` before the first refresh finishes. Times are in RFC
 3339 form, in UTC.
+
+The facts are of two kinds. The deployment's come from the database, so
+that every replica on it shows the same, within `database.poll_interval`,
+or at once with `database.listen`: the schedule, but for
+`schedule.refreshes`; `netbox`; `groups`; `webhooks`; and `leader`. The
+rest are the replica's own: its build, uptime, readiness and liveness, the
+refreshes it ran, `tracing`, `database`, and `replica`. A refresh is served
+once the database has it: one that can't be written is served by no
+replica, and counted in `database.history_write_failures`.
 
 This example is from a service with two server groups, one of which can't
 be read:
@@ -164,12 +173,27 @@ be read:
     }
   },
   "database": {
+    "backend": "sqlite",
+    "url": "sqlite:///var/lib/nbpdns/nbpdns.db",
     "path": "/var/lib/nbpdns/nbpdns.db",
+    "tls": null,
     "restored": true,
     "restored_as_of": "2026-10-07T00:55:40.1Z",
     "history_write_failures": 0,
     "last_write_failure": null,
     "last_write_error": ""
+  },
+  "replica": {
+    "name": "nbpdns-0",
+    "id": "KJ4G3RZQ6V7XHN2WYB5T5DM7QE",
+    "role": "leader"
+  },
+  "leader": {
+    "name": "nbpdns-0",
+    "id": "KJ4G3RZQ6V7XHN2WYB5T5DM7QE",
+    "since": "2026-10-07T01:00:00Z",
+    "last_seen": "2026-10-07T02:00:00.5Z",
+    "next_refresh": "2026-10-07T02:00:00Z"
   }
 }
 ```
@@ -180,23 +204,23 @@ be read:
 | `revision` | string | The VCS revision it was built from, if known. |
 | `started` | time | When the service started. |
 | `uptime_seconds` | number | The time since `started`. |
-| `ready` | Boolean | Whether `/readyz` answers `200`. |
+| `ready` | Boolean | Whether `/readyz` answers `200`: whether the service serves a full refresh that finished. |
 | `live` | Boolean | Whether `/livez` answers `200`. |
 | `schedule.interval_seconds` | number | `drift.interval`. |
 | `schedule.timeout_seconds` | number | `drift.timeout`. |
-| `schedule.last_refresh` | object or null | The last refresh that finished, or `null` before the first. |
+| `schedule.last_refresh` | object or null | The last full refresh that finished, as the database holds it, or `null` before the first. |
 | `schedule.last_refresh.started` | time | When it started. |
 | `schedule.last_refresh.finished` | time | When it finished. |
 | `schedule.last_refresh.duration_seconds` | number | How long it took. |
 | `schedule.last_refresh.outcome` | string | `complete`; `incomplete`, if a server group couldn't be read; or `failed`, if NetBox couldn't be read, or the refresh took longer than `drift.timeout`. |
 | `schedule.last_refresh.error` | string | Why a failed refresh failed: NetBox's error, or the timeout. Empty otherwise; a group's error is in `groups[].error`. |
 | `schedule.last_complete_refresh` | time or null | When the last complete refresh finished, or `null` if none has. |
-| `schedule.next_refresh` | time or null | When the next refresh starts, or `null` while one runs. |
-| `schedule.refreshes.complete` | integer | Refreshes that finished complete since the service started. |
+| `schedule.next_refresh` | time or null | When the leader's next refresh starts, or `null` while one runs. A follower has it from the leader's row in the database, as of the leader's last heartbeat. |
+| `schedule.refreshes.complete` | integer | Refreshes that this replica ran, which finished complete, since it started, whether they could be written or not. A follower runs none. |
 | `schedule.refreshes.incomplete` | integer | Refreshes that finished incomplete. |
 | `schedule.refreshes.failed` | integer | Refreshes that failed. |
 | `netbox.url` | string | NetBox's URL, `netbox.url`. |
-| `netbox.up` | Boolean or null | Whether the last refresh that read NetBox could, or `null` until one has. A refresh with no server groups to compare doesn't read NetBox. |
+| `netbox.up` | Boolean or null | Whether the last refresh that tried NetBox could read it, as the database holds it, or `null` until one has. A refresh with no server groups to compare doesn't read NetBox. |
 | `netbox.error` | string | Why NetBox couldn't be read, or empty. |
 | `groups[].name` | string | The server group's name. Groups are in the config file's order. |
 | `groups[].url` | string | The group's primary's URL. |
@@ -220,16 +244,16 @@ be read:
 | `tracing.protocol` | string | `otlp.protocol`. |
 | `webhooks.enabled` | Boolean | Whether `netbox.webhook_secret` is set, so that `/api/netbox-events` takes NetBox's webhooks. |
 | `webhooks.delay_seconds` | number | `drift.webhook_delay`: how long the zones that webhooks name wait for the webhooks to stop coming. |
-| `webhooks.last_event` | object or null | The last event that a signed webhook brought, or `null` before the first. |
+| `webhooks.last_event` | object or null | The last event that a signed webhook brought to any replica, or `null` before the first. |
 | `webhooks.last_event.received` | time | When it came. |
 | `webhooks.last_event.event` | string | What happened to the object: `created`, `updated`, or `deleted`. |
 | `webhooks.last_event.object_type` | string | The object's type, such as `netbox_dns.record`. |
 | `webhooks.last_event.request.id` | string | NetBox's ID for the request that made the change, or empty if no request did. |
 | `webhooks.last_event.request.user` | string | The user who made the request, or empty. |
-| `webhooks.pending.events` | integer | The webhooks whose refresh waits, or 0. |
+| `webhooks.pending.events` | integer | The webhooks whose refresh waits in the database's queue, or 0. A refresh's webhooks wait until it's written, as do those of a refresh that couldn't be: the next refresh, which a later webhook or the schedule starts, covers those. |
 | `webhooks.pending.zones` | array | The zones that webhooks named, waiting, each as `view/name`. Once a full refresh waits, it covers them, and no more are added. |
 | `webhooks.pending.full` | Boolean | Whether a full refresh waits: for a change to a view that a group serves, a zone or a record that moved, or more than 100 zones. |
-| `webhooks.pending.due` | time or null | When the refresh is due, unless the scheduled one comes first: `drift.webhook_delay` after the last webhook, or 30 seconds after the first, whichever is sooner. `null` if nothing waits. |
+| `webhooks.pending.due` | time or null | When the refresh is due, unless the scheduled one comes first: `drift.webhook_delay` after the last webhook, or 30 seconds after the first, whichever is sooner. `null` if nothing waits. A time that has passed means that the leader is refreshing them, or that it hasn't heard of them yet, as it does within `database.poll_interval`. |
 | `webhooks.last_refresh` | object or null | The last refresh that webhooks asked for, or that covered the zones they named, or `null`. |
 | `webhooks.last_refresh.started` | time | When it started. |
 | `webhooks.last_refresh.finished` | time | When it finished. |
@@ -241,9 +265,21 @@ be read:
 | `webhooks.last_refresh.events` | integer | The webhooks it served. |
 | `webhooks.last_refresh.requests[].id` | string | The ID of each NetBox request whose changes it refreshed, up to 128. |
 | `webhooks.last_refresh.requests[].user` | string | The user who made the request. |
-| `database.path` | string | The database's file, from `database.url`. |
-| `database.restored` | Boolean | Whether the service started from the reports it kept before it restarted, which it serves until its first refresh replaces them. The groups' `last_success` say how old each one is. |
-| `database.restored_as_of` | time or null | When the refresh before the restart finished, or `null` if nothing was restored. |
-| `database.history_write_failures` | integer | The refreshes that couldn't be written to the drift history since the service started. Each is still served, and the next refresh writes the zones' changes since their last rows. |
+| `database.backend` | string | The database that `database.url` names: `sqlite` or `postgresql`. |
+| `database.url` | string | `database.url`, with each password in it masked as `xxxxx`. |
+| `database.path` | string | SQLite's file, from `database.url`, or empty on PostgreSQL. |
+| `database.tls` | Boolean or null | Whether the connection to PostgreSQL uses TLS, as it did when the service started, or `null` on SQLite. With `sslmode` at `prefer`, libpq's default, it may not. |
+| `database.restored` | Boolean | Whether the service started from a refresh that the database held, which it served at once, until a later refresh replaced it. The groups' `last_success` say how old each one is. |
+| `database.restored_as_of` | time or null | When that refresh finished, or `null` if the database held none. |
+| `database.history_write_failures` | integer | The refreshes that this replica couldn't write to the drift history since it started. No replica serves them: each keeps serving the last refresh that was written, and the next refresh writes the zones' changes since their last rows. |
 | `database.last_write_failure` | time or null | When the last of them was, or `null`. |
 | `database.last_write_error` | string | Its error, or empty. |
+| `replica.name` | string | This replica's host name. On PostgreSQL, several replicas can run on one database, and one of them leads: it refreshes and prunes. On SQLite, one runs. |
+| `replica.id` | string | A random ID, new at each start, which tells apart two replicas on one host. |
+| `replica.role` | string | `leader` if this replica holds the leader's lock, and so refreshes and prunes, or `follower`. On SQLite, always `leader`. |
+| `leader` | object or null | The replica that leads, as this one last knew it: a follower reads it from the database every `database.poll_interval`, 5 seconds by default, or as soon as it hears of a change, with `database.listen`. `null` if it knows of none: before a replica first leads the database, or just after this one stepped down. |
+| `leader.name` | string | The leader's host name. |
+| `leader.id` | string | The leader's random ID, from its start. |
+| `leader.since` | time | When it took over. On SQLite, when the service started. |
+| `leader.last_seen` | time | When it last confirmed that it led, which it does every 5 seconds. On SQLite, now. More than 10 seconds old means that the leader has stepped down, or is lost: another replica takes over once PostgreSQL frees its lock. |
+| `leader.next_refresh` | time or null | When the leader's next refresh starts, as of `last_seen`, or `null` while one runs. |

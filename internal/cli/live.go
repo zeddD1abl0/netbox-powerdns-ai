@@ -7,7 +7,6 @@ import (
 	"reflect"
 	"slices"
 	"sync/atomic"
-	"time"
 
 	"go.opentelemetry.io/otel/trace"
 
@@ -220,7 +219,9 @@ func diffGroups(prev, next []servedGroup) groupChanges {
 }
 
 // A watcher applies the settings and the groups that the database stores to
-// a running serve, when their versions move on (ADR-0040).
+// a running serve, when the change feed finds that their versions have moved
+// on (ADR-0040, ADR-0048), and has the service load the refreshes that
+// another replica recorded, and the webhooks that another replica took.
 type watcher struct {
 	s    *session
 	st   *store.Store
@@ -234,39 +235,53 @@ type watcher struct {
 	settingsVersion, groupsVersion int64
 }
 
-// run checks the settings' and the groups' versions every settingsPoll,
-// until ctx is done, and when one has moved on, reads them again and
-// applies them. Settings or groups that can't be applied are logged, and
-// serve keeps those it has, and tries again at the next check.
-func (w *watcher) run(ctx context.Context) {
-	t := time.NewTicker(settingsPoll)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-		}
-		if v, ok := w.version(ctx, "settings", w.st.SettingsVersion); ok && v != w.settingsVersion && w.reloadSettings(ctx) {
-			w.settingsVersion = v
-		}
-		if v, ok := w.version(ctx, "server groups", w.st.GroupsVersion); ok && v != w.groupsVersion && w.reloadGroups(ctx) {
-			w.groupsVersion = v
-		}
+// apply reads the settings, or the groups, again, and applies them, if their
+// versions in v have moved on from those applied, then has the service load
+// the refreshes, and NetBox's webhooks, if their versions have moved on
+// from what it serves. The groups come first, so that the service loads the
+// reports of the groups it compares. What can't be applied, or loaded, is
+// logged, and serve keeps what it has, and tries again at the feed's next
+// check.
+func (w *watcher) apply(ctx context.Context, v store.Versions) {
+	if v.Settings != w.settingsVersion && w.reloadSettings(ctx) {
+		w.settingsVersion = v.Settings
+	}
+	if v.Groups != w.groupsVersion && w.reloadGroups(ctx) {
+		w.groupsVersion = v.Groups
+	}
+	if v.Refreshes != w.svc.Version() {
+		w.reloadDrift(ctx)
+	}
+	if v.Webhooks != w.svc.WebhooksVersion() {
+		w.reloadWebhooks(ctx)
 	}
 }
 
-// version returns a version, read by read, or logs why it couldn't be.
-func (w *watcher) version(ctx context.Context, what string, read func(context.Context) (int64, error)) (int64, bool) {
-	v, err := read(ctx)
-	if err != nil {
-		if ctx.Err() == nil {
-			w.s.log.WarnContext(ctx, "couldn't check whether the database's configuration changed; serve checks again soon",
-				"of", what, "err", err)
-		}
-		return 0, false
+// reloadWebhooks has the service load what NetBox's webhooks left, as the
+// database holds it: the leader then refreshes what another replica queued
+// (ADR-0048). Each reload is its own trace.
+func (w *watcher) reloadWebhooks(ctx context.Context) {
+	s := w.s
+	ctx, span := s.tracer.Start(logging.WithRequestID(ctx, rand.Text()), "webhooks reload", trace.WithNewRoot())
+	defer span.End()
+	if err := w.svc.ReloadWebhooks(ctx); err != nil && ctx.Err() == nil {
+		span.RecordError(err)
+		s.log.WarnContext(ctx, "couldn't load NetBox's webhooks' queue from the database, so serve serves what it has, and tries again soon",
+			"err", err)
 	}
-	return v, true
+}
+
+// reloadDrift has the service load what the refreshes found, as the
+// database holds it (ADR-0048). Each reload is its own trace.
+func (w *watcher) reloadDrift(ctx context.Context) {
+	s := w.s
+	ctx, span := s.tracer.Start(logging.WithRequestID(ctx, rand.Text()), "drift reload", trace.WithNewRoot())
+	defer span.End()
+	if err := w.svc.Reload(ctx); err != nil && ctx.Err() == nil {
+		span.RecordError(err)
+		s.log.WarnContext(ctx, "couldn't load the drift reports that the database holds, so serve serves those it has, and tries again soon",
+			"err", err)
+	}
 }
 
 // reloadSettings reads the settings that the database stores, and applies

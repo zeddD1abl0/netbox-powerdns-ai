@@ -38,8 +38,8 @@ const (
 	maxRequests = 128
 )
 
-// A batch is what NetBox's webhooks asked to refresh, gathered until its
-// refresh runs.
+// A batch is what NetBox's webhooks asked to refresh, gathered from the
+// queue's rows, in order (ADR-0036, ADR-0048).
 type batch struct {
 	// events counts the webhooks gathered: the first came at first, and the
 	// last at last.
@@ -53,6 +53,124 @@ type batch struct {
 	// told of, each once, up to maxRequests.
 	links    []trace.Link
 	requests []Request
+	// through is the last row gathered.
+	through int64
+}
+
+// add gathers the queue's row r, which comes after every row that b holds.
+// More than maxZones zones make a full refresh instead.
+func (b *batch) add(r store.QueuedRefresh) {
+	if b.events == 0 {
+		b.first, b.last, b.zones = r.Received, r.Received, map[drift.ZoneRef]bool{}
+	}
+	b.events++
+	// The replicas' clocks may differ a little, and a row's ID is its
+	// commit's place, not its webhook's.
+	b.first, b.last, b.through = minTime(b.first, r.Received), maxTime(b.last, r.Received), r.ID
+	if r.Full && !b.full {
+		b.full, b.reason = true, r.Reason
+	}
+	for _, z := range r.Zones {
+		if b.full {
+			break
+		}
+		b.zones[z] = true
+		if len(b.zones) > maxZones {
+			b.full, b.reason = true, fmt.Sprintf("more than %d zones changed", maxZones)
+		}
+	}
+	if l, ok := linkOf(r); ok && len(b.links) < maxRequests {
+		b.links = append(b.links, l)
+	}
+	if id := r.RequestID; id != "" && len(b.requests) < maxRequests &&
+		!slices.ContainsFunc(b.requests, func(q Request) bool { return q.ID == id }) {
+		b.requests = append(b.requests, Request{ID: id, User: r.User})
+	}
+}
+
+// clone returns a copy of b that shares nothing with it.
+func (b batch) clone() batch {
+	b.zones, b.links, b.requests = maps.Clone(b.zones), slices.Clone(b.links), slices.Clone(b.requests)
+	return b
+}
+
+// linkOf returns the link to the span of r's webhook, if it had one.
+func linkOf(r store.QueuedRefresh) (trace.Link, bool) {
+	tid, err := trace.TraceIDFromHex(r.TraceID)
+	if err != nil {
+		return trace.Link{}, false
+	}
+	sid, err := trace.SpanIDFromHex(r.SpanID)
+	if err != nil {
+		return trace.Link{}, false
+	}
+	return trace.Link{SpanContext: trace.NewSpanContext(trace.SpanContextConfig{TraceID: tid, SpanID: sid, Remote: true})}, true
+}
+
+// hooks are what NetBox's webhooks left, as the database holds them, or,
+// without a history, as this replica took them (ADR-0048). They're guarded
+// by Service.mu.
+type hooks struct {
+	// version is the webhooks' version in the history that they're as of.
+	version int64
+	// covered is the queue's mark, the last row that a recorded refresh
+	// covered, or -1 until they're gathered; seen is the last row gathered.
+	covered, seen int64
+	// queue gathers the rows after the mark, which /status shows, and which
+	// the leader's next refresh takes, whole. pending gathers those after
+	// taken, the last row that this replica's refreshes took, whose delay
+	// says when the next zone refresh is due: rows up to it that are still
+	// queued, as they are after a refresh that couldn't be written, wait
+	// for a later webhook, or the schedule, rather than make another
+	// refresh at once.
+	queue, pending batch
+	taken          int64
+	// lastEvent is the last webhook's event, and lastRefresh the last
+	// refresh that webhooks asked for, or nil.
+	lastEvent   *Event
+	lastRefresh *WebhookRefresh
+}
+
+// add gathers the queue's row r, the next after seen.
+func (h *hooks) add(r store.QueuedRefresh) {
+	h.queue.add(r)
+	if r.ID > h.taken {
+		h.pending.add(r)
+	}
+	h.seen = r.ID
+}
+
+// load makes w, which the history holds, the webhooks' state. If the
+// queue's mark has moved, it gathers the queue again, from w's rows, which
+// are then every row after the mark; otherwise, it gathers w's rows, which
+// come after seen.
+func (h *hooks) load(w store.WebhookState) {
+	h.version = w.Version
+	h.lastEvent, h.lastRefresh = nil, nil
+	if e := w.LastEvent; e != nil {
+		h.lastEvent = &Event{Received: e.Received, Event: e.Event, ObjectType: e.ObjectType, Request: Request{ID: e.RequestID, User: e.User}}
+	}
+	if r := w.LastRefresh; r != nil {
+		h.lastRefresh = &WebhookRefresh{Started: r.Started, Finished: r.Finished, Zones: r.Zones, Full: r.Full, Reason: r.Reason,
+			Outcome: r.Outcome, Error: r.Error, Events: r.Events, Requests: []Request{}}
+		for _, q := range r.Requests {
+			h.lastRefresh.Requests = append(h.lastRefresh.Requests, Request(q))
+		}
+	}
+	if w.Covered != h.covered {
+		h.covered, h.seen, h.taken = w.Covered, w.Covered, max(h.taken, w.Covered)
+		h.queue, h.pending = batch{}, batch{}
+	}
+	for _, r := range w.Queued {
+		h.add(r)
+	}
+}
+
+// retake has the leader's next refresh take every row queued, such as
+// those that a refresh that this replica didn't record took, as when it
+// stepped down.
+func (h *hooks) retake() {
+	h.pending, h.taken = h.queue.clone(), h.covered
 }
 
 // A Request is a NetBox request whose changes a webhook told of.
@@ -88,11 +206,11 @@ type WebhookRefresh struct {
 	Requests []Request `json:"requests"`
 }
 
-// noteWebhookRefresh keeps b's refresh, which finished, as the last one
-// that webhooks asked for. full marks a full refresh, which b may not have
-// asked for: a scheduled one that covered b's zones.
-func (s *Service) noteWebhookRefresh(b batch, full bool, start, end time.Time, outcome string, err error) {
-	w := &WebhookRefresh{Started: start.UTC(), Finished: end.UTC(), Full: full, Reason: b.reason,
+// webhookRefresh returns b's refresh, which finished, as the webhooks' last
+// refresh, as the history keeps it. full marks a full refresh, which b may
+// not have asked for: a scheduled one that covered b's zones.
+func (s *Service) webhookRefresh(b batch, full bool, start, end time.Time, outcome string, err error) *WebhookRefresh {
+	w := &WebhookRefresh{Started: s.kept(start), Finished: s.kept(end), Full: full, Reason: b.reason,
 		Outcome: outcome, Events: b.events, Requests: slices.Clone(b.requests)}
 	switch {
 	case !full:
@@ -106,9 +224,45 @@ func (s *Service) noteWebhookRefresh(b batch, full bool, start, end time.Time, o
 	if w.Requests == nil {
 		w.Requests = []Request{}
 	}
+	return w
+}
+
+// coveredQueue returns what a refresh of b, w, covered of the queue, for the
+// history to record, or nil if b is empty.
+func coveredQueue(b batch, w *WebhookRefresh) *store.CoveredQueue {
+	if b.events == 0 {
+		return nil
+	}
+	c := &store.CoveredQueue{Through: b.through, Refresh: store.WebhookRefresh{Started: w.Started, Finished: w.Finished,
+		Zones: w.Zones, Full: w.Full, Reason: w.Reason, Outcome: w.Outcome, Error: w.Error, Events: w.Events}}
+	for _, r := range w.Requests {
+		c.Refresh.Requests = append(c.Refresh.Requests, store.WebhookRequest(r))
+	}
+	return c
+}
+
+// cover serves what a refresh of b, w, which is recorded, covered of the
+// queue: the rows up to b's last go, and w is the webhooks' last refresh.
+func (s *Service) cover(b batch, w *WebhookRefresh) {
+	if b.events == 0 {
+		return
+	}
 	s.mu.Lock()
-	s.st.lastWebhookRefresh = w
-	s.mu.Unlock()
+	defer s.mu.Unlock()
+	h := &s.st.hooks
+	h.lastRefresh = w
+	// What came since the refresh took b is what's left. Otherwise, the
+	// queue's mark moved meanwhile, and the next reload gathers it again.
+	if h.taken == b.through {
+		h.covered, h.queue = b.through, h.pending.clone()
+	}
+	s.setPending()
+}
+
+// setPending sets the pending zones' gauge from the queue. It's called with
+// s.mu held.
+func (s *Service) setPending() {
+	s.o.Metrics.PendingZones.Set(float64(len(s.st.hooks.queue.zones)))
 }
 
 // due returns when b's refresh is due: once no webhook has come for delay,
@@ -182,15 +336,51 @@ func (b *batch) attributes() []attribute.KeyValue {
 
 // Notify queues the refresh that a NetBox event, e, asks for, r (ADR-0036),
 // and reports whether it queued anything: not if r asks for nothing, or
-// names only zones, or a view, that no group serves. It implements
-// api.Notifier. ctx carries the webhook's span, which the refresh links
-// to.
-func (s *Service) Notify(ctx context.Context, e webhook.Event, r webhook.Refresh) bool {
-	now := s.o.now()
+// names only zones, or a view, that no group serves. Either way, e is the
+// last event. With a history, it writes them there, for whichever replica
+// leads to refresh (ADR-0048), and its error says that it couldn't. It
+// implements api.Notifier. ctx carries the webhook's span, which the
+// refresh links to.
+func (s *Service) Notify(ctx context.Context, e webhook.Event, r webhook.Refresh) (bool, error) {
+	now := s.kept(s.o.now())
+	ev := store.WebhookEvent{Received: now, Event: e.Event, ObjectType: e.ObjectType, RequestID: e.RequestID(), User: e.User()}
 	s.mu.Lock()
 	views := s.views
-	s.st.lastEvent = &Event{Received: now.UTC(), Event: e.Event, ObjectType: e.ObjectType, Request: Request{ID: e.RequestID(), User: e.User()}}
 	s.mu.Unlock()
+	q := queued(ctx, now, e, r, views)
+	if s.o.History != nil {
+		if err := s.o.History.RecordWebhook(ctx, ev, q); err != nil {
+			s.o.Metrics.DBWriteFailure(metrics.WriteWebhook)
+			return false, err
+		}
+		// This replica shows it at once, and gathers it if it leads.
+		if err := s.reloadWebhooks(ctx); err != nil && ctx.Err() == nil {
+			s.o.Log.WarnContext(ctx, "queued a webhook's refresh, but couldn't load the queue back from the database; "+
+				"serve loads it at its next check", "err", err)
+		}
+	} else {
+		s.mu.Lock()
+		h := &s.st.hooks
+		h.lastEvent = &Event{Received: now, Event: ev.Event, ObjectType: ev.ObjectType, Request: Request{ID: ev.RequestID, User: ev.User}}
+		if q != nil {
+			q.ID = h.seen + 1
+			h.add(*q)
+			s.setPending()
+		}
+		s.mu.Unlock()
+	}
+	if q == nil {
+		return false, nil
+	}
+	s.poke()
+	return true, nil
+}
+
+// queued returns the refresh that a NetBox event, e, received at now, asks
+// for, r, to queue: of the zones it names, those in views, the views that
+// the groups serve. It's nil if r asks for nothing, or names only zones, or
+// a view, that no group serves. ctx carries the webhook's span.
+func queued(ctx context.Context, now time.Time, e webhook.Event, r webhook.Refresh, views map[string]bool) *store.QueuedRefresh {
 	var zones []drift.ZoneRef
 	for _, z := range r.Zones {
 		if views[z.View] {
@@ -198,62 +388,45 @@ func (s *Service) Notify(ctx context.Context, e webhook.Event, r webhook.Refresh
 		}
 	}
 	if !r.Full && len(zones) == 0 {
-		return false
+		return nil
 	}
 	// A view that no group serves changes nothing that nbpdns compares.
 	if r.Views != nil && !slices.ContainsFunc(r.Views, func(v string) bool { return views[v] }) {
-		return false
+		return nil
 	}
-	s.mu.Lock()
-	b := &s.st.pending
-	if b.events == 0 {
-		b.first, b.zones = now, map[drift.ZoneRef]bool{}
+	q := &store.QueuedRefresh{Received: now, Full: r.Full, Reason: r.Reason, RequestID: e.RequestID(), User: e.User()}
+	if !r.Full {
+		q.Zones = zones
 	}
-	b.events++
-	b.last = now
-	if r.Full && !b.full {
-		b.full, b.reason = true, r.Reason
+	if sc := trace.SpanContextFromContext(ctx); sc.IsValid() {
+		q.TraceID, q.SpanID = sc.TraceID().String(), sc.SpanID().String()
 	}
-	for _, z := range zones {
-		if b.full {
-			break
-		}
-		b.zones[z] = true
-		if len(b.zones) > maxZones {
-			b.full, b.reason = true, fmt.Sprintf("more than %d zones changed", maxZones)
-		}
-	}
-	if sc := trace.SpanContextFromContext(ctx); sc.IsValid() && len(b.links) < maxRequests {
-		b.links = append(b.links, trace.Link{SpanContext: sc})
-	}
-	if id := e.RequestID(); id != "" && len(b.requests) < maxRequests &&
-		!slices.ContainsFunc(b.requests, func(r Request) bool { return r.ID == id }) {
-		b.requests = append(b.requests, Request{ID: id, User: e.User()})
-	}
-	pending := len(b.zones)
-	s.mu.Unlock()
-	s.o.Metrics.PendingZones.Set(float64(pending))
-	// The loop may be waiting for the next scheduled refresh.
+	return q
+}
+
+// poke tells Run to work out when its next refresh is due.
+func (s *Service) poke() {
 	select {
 	case s.wake <- struct{}{}:
 	default:
 	}
-	return true
 }
 
-// take returns what's waiting for a refresh, and empties the queue.
-func (s *Service) take() batch {
+// take returns what the leader's next refresh covers of the queue, every
+// row queued, and reports whether it's a full refresh: the scheduled one,
+// if scheduled is set, or one that the queue asks for.
+func (s *Service) take(scheduled bool) (batch, bool) {
 	s.mu.Lock()
-	b := s.st.pending
-	s.st.pending = batch{}
-	s.mu.Unlock()
-	s.o.Metrics.PendingZones.Set(0)
-	return b
+	defer s.mu.Unlock()
+	h := &s.st.hooks
+	b := h.queue.clone()
+	h.pending, h.taken = batch{}, h.seen
+	return b, scheduled || b.full
 }
 
 // refreshZones runs b's zone refresh, as its own trace, linked to the
-// webhooks that asked for it, and records it. A refresh cut short by ctx's
-// cancellation isn't recorded.
+// webhooks that asked for it, and serves it once it's recorded (ADR-0048).
+// A refresh cut short by ctx's cancellation isn't recorded.
 func (s *Service) refreshZones(ctx context.Context, start time.Time, b batch) {
 	log := s.o.Log.With("netbox_request_ids", b.requestIDs())
 	rctx := logging.WithRequestID(ctx, rand.Text())
@@ -277,57 +450,54 @@ func (s *Service) refreshZones(ctx context.Context, start time.Time, b batch) {
 		span.SetStatus(codes.Error, err.Error())
 	}
 	end := s.o.now()
-	outcome, changes := s.recordZones(rctx, log, r, err, start, end)
-	s.noteWebhookRefresh(b, false, start, end, outcome, err)
-	s.keep(rctx, log, store.RefreshRecord{Kind: store.RefreshZones, Cause: store.CauseWebhook, Started: start, Finished: end,
-		Outcome: outcome, Error: errText(err), Zones: b.names(), NetBoxRequestIDs: b.requestIDs()}, changes)
+	res := s.foundZones(rctx, log, r, err, start, end)
+	w := s.webhookRefresh(b, false, start, end, res.outcome, err)
+	if !s.commit(rctx, log, res, store.RefreshRecord{Kind: store.RefreshZones, Cause: store.CauseWebhook, Started: start, Finished: end,
+		Outcome: res.outcome, Error: errText(err), Zones: b.names(), NetBoxRequestIDs: b.requestIDs(), Queue: coveredQueue(b, w)}) {
+		return
+	}
+	s.cover(b, w)
 }
 
-// recordZones keeps what a zone refresh found, merged into the last-known
-// state, sets the metrics, and logs it, as record does for a full refresh,
-// and returns its outcome, and what it kept. A zone refresh merges only into what a full
-// refresh has kept: a group with no report, or NetBox's records before
-// NetBox was first read, wait for the next full refresh.
-func (s *Service) recordZones(ctx context.Context, log *slog.Logger, r drift.Report, err error, start, end time.Time) (string, []change) {
+// foundZones returns what a zone refresh found, r, or err, merged into the
+// last-known state, as the service would keep it, without keeping it yet,
+// as found does for a full refresh; counts it; and logs what it found. A
+// zone refresh merges only into what a full refresh has kept: a group with
+// no report, or NetBox's records before NetBox was first read, wait for the
+// next full refresh.
+func (s *Service) foundZones(ctx context.Context, log *slog.Logger, r drift.Report, err error, start, end time.Time) result {
 	m := s.o.Metrics
-	outcome := outcomeOf(r, err)
-	m.ZoneRefreshes.WithLabelValues(outcome).Inc()
+	m.ZoneRefreshes.WithLabelValues(outcomeOf(r, err)).Inc()
 	m.ZoneRefreshDuration.Observe(end.Sub(start).Seconds())
+	start, end = s.kept(start), s.kept(end)
+	res := result{start: start, end: end, outcome: outcomeOf(r, err), err: err}
 	var te *TimeoutError
 	if errors.As(err, &te) {
 		log.WarnContext(ctx, "the zone refresh took longer than drift.timeout, so it was stopped; its zones wait for the next scheduled refresh",
 			"timeout_seconds", te.Timeout.Seconds())
-		return outcome, nil
+		return res
 	}
 	if err != nil {
-		s.mu.Lock()
-		s.st.netboxRead, s.st.netboxUp, s.st.netboxError = true, false, err.Error()
-		s.mu.Unlock()
-		m.NetBoxUp.WithLabelValues().Set(0)
+		res.netbox = store.NetBoxDown
 		log.WarnContext(ctx, "the zone refresh couldn't read NetBox; its zones wait for the next scheduled refresh", "err", err)
-		return outcome, nil
+		return res
+	}
+	// With no group serving its zones, the zone refresh read nothing.
+	if len(r.Groups) > 0 {
+		res.netbox = store.NetBoxUp
 	}
 	s.mu.Lock()
-	st := &s.st
-	// With no group serving its zones, the zone refresh read nothing.
-	read := len(r.Groups) > 0
-	if read {
-		st.netboxRead, st.netboxUp, st.netboxError = true, true, ""
+	if r.NetBoxErr == nil && r.NetBox != nil && r.Scope != nil && !s.st.netbox.AsOf.IsZero() {
+		res.zones = &store.NetBoxZones{Zones: r.NetBox, Scope: r.Scope}
 	}
-	switch {
-	case r.NetBoxErr != nil:
+	res.changes = s.changes(r.Groups, end, true)
+	s.mu.Unlock()
+	if r.NetBoxErr != nil {
 		log.WarnContext(ctx, "couldn't read the records of NetBox's zones that aren't compared, so the API keeps NetBox's last records",
 			"err", r.NetBoxErr)
-	case r.NetBox != nil && r.Scope != nil && !st.netbox.AsOf.IsZero():
-		st.netbox = mergeNetBox(st.netbox, r.NetBox, r.Scope)
 	}
-	changes := s.apply(r.Groups, end, true)
-	s.mu.Unlock()
-	if read {
-		m.NetBoxUp.WithLabelValues().Set(1)
-	}
-	s.publish(ctx, log, changes, end)
-	return outcome, changes
+	logChanges(ctx, log, res.changes)
+	return res
 }
 
 // outcomeOf returns a refresh's outcome, one of metrics.Outcomes.

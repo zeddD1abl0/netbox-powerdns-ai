@@ -20,6 +20,13 @@
 # nbt_nbpdnslabadm.nbpdnsLabAdminTokenNotForProduction00000. The PowerDNS API
 # listens on port 8151 (5.1, lab-a), over plain HTTP, with the API key
 # nbpdns-lab-powerdns-api-key-not-for-production.
+# NetBox 4.7's PostgreSQL 18 listens on port 5418, without TLS, with the
+# superuser netbox and its password nbpdns-lab-db. It also holds nbpdns's
+# own database, nbpdns, owned by the role nbpdns, with the password
+# nbpdns-lab-nbpdns-db (ADR-0046), which make lab-up creates if they're
+# missing (nbpdns-database.sql), since an existing volume never runs the
+# image's init scripts again. The store's integration tests create and drop
+# a database of their own for each test.
 # The ports are published on LAB_BIND_ADDRESS, which the Makefile sets:
 # 127.0.0.1 on a local Docker host, and every interface on a remote one.
 #
@@ -109,6 +116,8 @@ services:
     <<: *postgres
     volumes:
       - postgres-47:/var/lib/postgresql
+    ports:
+      - "${LAB_BIND_ADDRESS:-127.0.0.1}:5418:5432"
 
   valkey:
     image: docker.io/valkey/valkey:9.1-trixie@sha256:418652cfb58ef879d4978c33553735d7147016032d5aefaa14c828e611eb9dfd

@@ -28,9 +28,12 @@ in the [configuration reference](configuration.md).
 |---|---|---|---|
 | `--audit-retention-days` | `integer` | `2557` | How many days the audit trail keeps an event. |
 | `--config` | `string` | none | The YAML config file to read, instead of `$NBPDNS_CONFIG`. |
+| `--database-listen` | `boolean` | `false` | Whether `nbpdns serve` also listens for the database's changes, with PostgreSQL's `LISTEN`, so that it applies them at once, rather than at its next check. |
 | `--database-master-key` | `string` | none | The master key that seals the secrets the database stores, such as a `netbox.token` that `nbpdns settings set` stores: 32 random bytes, in base64. |
 | `--database-master-key-file` | `path` | none | Read `database.master_key` from this file. |
-| `--database-url` | `url` | `sqlite:///var/lib/nbpdns/nbpdns.db` | Where `nbpdns serve` keeps its state, such as `sqlite:///var/lib/nbpdns/nbpdns.db`. |
+| `--database-poll-interval` | `duration` | `5s` | How often `nbpdns serve` checks the database for the changes that it follows: the runtime settings, the server groups and, on PostgreSQL, the leader. |
+| `--database-url` | `url` | `sqlite:///var/lib/nbpdns/nbpdns.db` | Where `nbpdns serve` keeps its state: a SQLite file, such as `sqlite:///var/lib/nbpdns/nbpdns.db`, or a PostgreSQL database, such as `postgres://nbpdns@db.example.com/nbpdns?sslmode=verify-full`. |
+| `--database-url-file` | `path` | none | Read `database.url` from this file. |
 | `--drift-group-concurrency` | `integer` | `4` | How many server groups are read and compared at once. |
 | `--drift-history-retention-days` | `integer` | `400` | How many days the drift history keeps each refresh, and each zone's changes. |
 | `--drift-interval` | `duration` | `5m` | How often `nbpdns serve` refreshes the drift report, from the start of one refresh to the start of the next. |
@@ -203,9 +206,10 @@ Subcommands: [`migrate`](#nbpdns-db-migrate) and [`status`](#nbpdns-db-status).
 
 ### `nbpdns db migrate`
 
-Create the database at database.url if it doesn't exist, and apply the
-migrations it lacks, each in its own transaction. It refuses while nbpdns
-serve runs on the database, since serve applies them itself when it starts,
+Apply the migrations that the database at database.url lacks, each in its own
+transaction, and create a SQLite database if it doesn't exist. A PostgreSQL
+database must exist. It refuses while nbpdns serve runs on the database, any
+of its replicas on PostgreSQL, since serve applies them itself when it starts,
 and on a database that a newer nbpdns has migrated.
 
 ```text
@@ -214,8 +218,9 @@ nbpdns db migrate
 
 ### `nbpdns db status`
 
-Show the database at database.url: its file, its identity, and each migration
-that this nbpdns knows, with when it was applied, or that it's pending.
+Show the database at database.url: its file, or its URL, with any password
+masked, its identity, and each migration that this nbpdns knows, with when it
+was applied, or that it's pending.
 
 ```text
 nbpdns db status [flags]
@@ -579,21 +584,27 @@ Refresh the drift report on a schedule, every drift.interval, as nbpdns drift
 would make it, and keep each server group's last-known state when its primary,
 or NetBox, can't be read. Serve, at server.listen:
 
-  /livez    200 unless no refresh has started for longer than one can take
-  /readyz   200 once it has restored its last reports, or, with none, once
-            the first refresh has finished
+  /livez    200 unless no refresh has started for longer than one can take,
+            or, on a follower, it hasn't tried to lead for a minute
+  /readyz   200 once it serves a refresh that finished: one from the
+            database, or else the first, once the database has it
   /status   the service's state, as text, or as JSON with ?json=1
   /metrics  the drift, refresh and request metrics, for Prometheus
 
 It keeps its state in the database at database.url, which it creates, and
-migrates, when it starts: the audit trail, each refresh, and each zone's
-drift history. It restores its last reports from it at start, and serves
-them until its first refresh replaces them. Only one serve may use a
-database at a time.
+migrates, when it starts: the audit trail, each refresh, each zone's drift
+history, and NetBox's zones. It serves a refresh once the database has it,
+and loads the last one from it at start, which it serves until its next
+refresh replaces it. On SQLite, only one serve may use a database at a time.
+On PostgreSQL, several can, as replicas: one of them, the leader, refreshes
+and prunes, and another takes over within about 30 seconds if it stops, dies
+or is cut off. Every replica serves the refreshes that the database holds.
 
 It compares the config file's server groups, which it mirrors into the
-database at start, and those that nbpdns groups added, whose changes it
-applies within seconds, as it applies the runtime settings.
+database at start, and those that nbpdns groups added. It checks the
+database every database.poll_interval, or at once with database.listen on
+PostgreSQL, and applies the changed groups and runtime settings, and loads
+the leader's refreshes.
 
 With netbox.webhook_secret set, NetBox's signed webhooks at /api/netbox-events
 refresh the zones they name, once they stop coming for drift.webhook_delay.

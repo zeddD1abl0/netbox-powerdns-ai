@@ -17,8 +17,8 @@
 | [M06](milestones/M06-rest-api.md) | REST API | done | 10 of 10 |
 | [M07](milestones/M07-netbox-webhooks.md) | NetBox webhooks | done | 9 of 9 |
 | [M08](milestones/M08-sqlite-persistence.md) | SQLite persistence | done | 19 of 19 |
-| [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | planned | 1 of 2 |
-| [M10](milestones/M10-authentication.md) | Authentication | planned | 1 of 2 |
+| [M09](milestones/M09-postgresql-and-ha.md) | PostgreSQL and HA | done | 21 of 21 |
+| [M10](milestones/M10-authentication.md) | Authentication | planned | 1 of 9 |
 | [M11](milestones/M11-roles-and-permissions.md) | Roles and permissions | planned | 1 of 1 |
 | [M12](milestones/M12-sign-in.md) | Sign-in | planned | 1 of 1 |
 | [M13](milestones/M13-web-ui.md) | Web UI | planned | 1 of 1 |
@@ -38,6 +38,12 @@
 | [ITEM-0040](items/ITEM-0040-write-record-values-to-powerdns-in-its-own-text-fo.md) | Write record values to PowerDNS in its own text form | task | open | — |
 | [ITEM-0062](items/ITEM-0062-keep-the-image-s-latest-tag-on-the-newest-release.md) | Keep the image's latest tag on the newest release | debt | open | — |
 | [ITEM-0074](items/ITEM-0074-refuse-requests-whose-host-isn-t-server-public-url.md) | Refuse requests whose Host isn't server.public_url's | debt | open | — |
+| [ITEM-0129](items/ITEM-0129-keep-a-replica-s-database-session-open-between-its.md) | Keep a replica's database session open between its checks and while it starts | bug | open | — |
+| [ITEM-0130](items/ITEM-0130-keep-a-webhook-from-failing-behind-a-long-refresh.md) | Keep a webhook from failing behind a long refresh's write | bug | open | — |
+| [ITEM-0131](items/ITEM-0131-check-the-leader-s-lock-by-its-session-not-by-its.md) | Check the leader's lock by its session, not by its PID alone | bug | open | — |
+| [ITEM-0132](items/ITEM-0132-don-t-count-a-webhook-whose-sender-left-as-a-datab.md) | Don't count a webhook whose sender left as a database write failure | bug | open | — |
+| [ITEM-0133](items/ITEM-0133-don-t-show-a-replica-that-stepped-down-as-followin.md) | Don't show a replica that stepped down as following itself | bug | open | — |
+| [ITEM-0134](items/ITEM-0134-mask-a-database-url-s-password-as-pgx-reads-it.md) | Mask a database URL's password as pgx reads it | bug | open | — |
 
 ## Open questions
 
@@ -59,4 +65,4 @@
 
 ## Decisions
 
-45 ADRs (36 accepted, 9 superseded), listed in [docs/adr](../docs/adr/_index.md).
+49 ADRs (40 accepted, 9 superseded), listed in [docs/adr](../docs/adr/_index.md).

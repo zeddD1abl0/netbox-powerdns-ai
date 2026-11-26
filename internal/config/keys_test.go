@@ -30,8 +30,12 @@ func TestKeysAreWellFormed(t *testing.T) {
 		if k.typ == "" || k.flagType == "" || k.parse == nil || k.show == nil {
 			t.Errorf("%s: declared without a constructor", k.Name)
 		}
+		// A default is no secret, so a secret may have one only if it shows
+		// as itself, as database.url's does, masked rather than redacted.
 		if k.Secret && k.Default != "" {
-			t.Errorf("%s: a secret mustn't have a default", k.Name)
+			if err := k.parse(k.Default); err != nil || k.show() != k.Default {
+				t.Errorf("%s: a secret's default must show as itself, not %q (%v)", k.Name, k.show(), err)
+			}
 		}
 		claim("key", k.Name, k.Name)
 		claim("env", k.Env(), k.Name)

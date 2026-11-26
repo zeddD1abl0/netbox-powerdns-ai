@@ -1,15 +1,47 @@
 package cli
 
 import (
-	"database/sql"
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
-
-	_ "modernc.org/sqlite" // the database/sql driver "sqlite", to tamper with the trail
 )
+
+// TestAuditVerifyCounts checks how audit verify counts the events of an
+// intact trail, as each change adds one: none, one, then several.
+func TestAuditVerifyCounts(t *testing.T) {
+	env := map[string]string{"NBPDNS_DATABASE_URL": "sqlite://" + filepath.Join(t.TempDir(), "nbpdns.db")}
+	if code, _, stderr := run(t, env, "db", "migrate"); code != exitOK {
+		t.Fatalf("db migrate: exit %d:\n%s", code, stderr)
+	}
+	tests := []struct {
+		name string
+		// changes is how many settings to set before audit verify runs.
+		changes int
+		want    string
+	}{
+		{name: "no events", want: `^The audit trail is empty\.\n$`},
+		{name: "one event", changes: 1, want: `^The audit trail is intact: 1 event, event 1, at \S+Z\.\n$`},
+		{name: "two events", changes: 1, want: `^The audit trail is intact: 2 events, from event 1, at \S+Z, to event 2, at \S+Z\.\n$`},
+	}
+	interval := 1
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			for range tc.changes {
+				interval++
+				if code, _, stderr := run(t, env, "settings", "set", "drift.interval", fmt.Sprintf("%dm", interval), "--reason", "test"); code != exitOK {
+					t.Fatalf("settings set: exit %d:\n%s", code, stderr)
+				}
+			}
+			code, stdout, stderr := run(t, env, "audit", "verify")
+			if code != exitOK || !regexp.MustCompile(tc.want).MatchString(stdout) {
+				t.Errorf("audit verify: exit %d, want %d and a match for %s:\n%s%s", code, exitOK, tc.want, stdout, stderr)
+			}
+		})
+	}
+}
 
 // TestServeRecordsItsStartAndStop runs serve, stops it, and reads its two
 // events back, then tampers with the trail and sees audit verify fail.
@@ -75,11 +107,7 @@ func TestServeRecordsItsStartAndStop(t *testing.T) {
 		t.Errorf("audit verify: exit %d:\n%s%s", code, stdout, stderr)
 	}
 
-	raw, err := sql.Open("sqlite", db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer raw.Close()
+	raw := rawSQLite(t, db)
 	if _, err := raw.ExecContext(t.Context(), "UPDATE audit_events SET actor = 'os-user:mallory' WHERE seq = 3"); err != nil {
 		t.Fatal(err)
 	}

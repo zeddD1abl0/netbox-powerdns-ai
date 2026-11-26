@@ -3,6 +3,7 @@
 package lab
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -79,5 +80,35 @@ func TestLabPowerDNSes(t *testing.T) {
 			}
 			NewPowerDNSFixture(t, p)
 		})
+	}
+}
+
+// TestLabPostgres checks that the lab's PostgreSQL runs its release, that
+// nbpdns's role owns its database, which it can connect to, and that a
+// test's database is nbpdns's to write.
+func TestLabPostgres(t *testing.T) {
+	ctx := t.Context()
+	db, err := sql.Open("pgx", PostgresURL(PostgresUser, PostgresPassword, PostgresDatabase))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var version, owner string
+	err = db.QueryRowContext(ctx, `SELECT current_setting('server_version'), pg_get_userbyid(datdba)
+		FROM pg_database WHERE datname = current_database()`).Scan(&version, &owner)
+	if err != nil {
+		t.Fatalf("connecting as %s to %s (is the lab up? make lab-up): %v", PostgresUser, PostgresDatabase, err)
+	}
+	if !strings.HasPrefix(version, PostgresVersion+".") || owner != PostgresUser {
+		t.Errorf("PostgreSQL %s, the database owned by %s; want %s.x, owned by %s", version, owner, PostgresVersion, PostgresUser)
+	}
+
+	fresh, err := sql.Open("pgx", NewPostgresDatabase(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fresh.Close()
+	if _, err := fresh.ExecContext(ctx, "CREATE TABLE t (n BIGINT)"); err != nil {
+		t.Errorf("creating a table in a test's database: %v", err)
 	}
 }

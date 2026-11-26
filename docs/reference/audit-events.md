@@ -37,6 +37,7 @@ inserted. `nbpdns audit list` reads the trail.
 |---|---|---|---|
 | [`service.started`](#servicestarted) | `service` | `system` | `nbpdns serve` started, and opened its database. |
 | [`service.stopped`](#servicestopped) | `service` | `system` | `nbpdns serve` stopped, on SIGINT or SIGTERM, or because it failed after it started, such as when it couldn't listen. A serve that's killed, or crashes, records nothing. |
+| [`service.leader_acquired`](#serviceleader_acquired) | `service` | `system` | A replica of `nbpdns serve` on PostgreSQL took the leader's lock, and with it the refreshes and the prune (ADR-0047): the first to start, or a follower that took over from a leader that stopped, died or was cut off. On SQLite, where `serve` always leads, there's none. |
 | [`audit.pruned`](#auditpruned) | `audit` | `system` | `nbpdns serve` deleted the events older than `audit.retention_days`, as it does daily. |
 | [`zone.drift_changed`](#zonedrift_changed) | `zone` | `system` | A refresh of `nbpdns serve` found a zone in another drift state than its last, a new zone that drifted, or that a zone left its group's report. A zone whose changes differ, in the same state, has a new row in its drift history, but no event. |
 | [`setting.set`](#settingset) | `setting` | `os-user:<name>` | `nbpdns settings set` stored a runtime setting's value in the database, which `nbpdns serve` applies within seconds, unless the key is pinned. |
@@ -64,6 +65,15 @@ inserted. `nbpdns audit list` reads the trail.
 - **Actor:** `system`
 - **Before:** nothing.
 - **After:** `uptime_seconds`, how long it ran, and `error`, why it failed, if it did.
+
+### `service.leader_acquired`
+
+A replica of `nbpdns serve` on PostgreSQL took the leader's lock, and with it the refreshes and the prune (ADR-0047): the first to start, or a follower that took over from a leader that stopped, died or was cut off. On SQLite, where `serve` always leads, there's none.
+
+- **Target:** type `service`, named by the host's name
+- **Actor:** `system`
+- **Before:** `replica`, the previous leader's host name, `instance_id`, its random ID from its start, and `last_seen`, when it last confirmed that it led, unless no replica had led the database before.
+- **After:** `replica` and `instance_id`, the new leader's.
 
 ### `audit.pruned`
 

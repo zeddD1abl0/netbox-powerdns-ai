@@ -19,23 +19,36 @@ const verifyPage = 1000
 // A Tx is a transaction on the store: a change, and the audit events that
 // record it, which commit or roll back together (ADR-0039).
 type Tx struct {
-	q *sqlite.Queries
+	tx *sql.Tx
+	q  sqlite.Querier
 	// appended are the events appended, for InTx's caller once it commits.
 	appended []audit.Event
 }
 
-// InTx runs fn in a transaction, which it commits if fn returns nil, and
-// rolls back otherwise. It returns the audit events that fn appended, once
+// InTx runs fn in a write transaction, which it commits if fn returns nil,
+// and rolls back otherwise. Write transactions run one at a time, on either
+// database. On PostgreSQL, each notifies the replicas of its change, as it
+// commits (ADR-0048). It returns the audit events that fn appended, once
 // they're committed.
 func (s *Store) InTx(ctx context.Context, fn func(tx *Tx) error) ([]audit.Event, error) {
-	sqlTx, err := s.db.BeginTx(ctx, nil)
+	sqlTx, err := s.db.BeginTx(ctx, s.dialect.write)
 	if err != nil {
 		return nil, fmt.Errorf("starting a transaction: %w", err)
 	}
 	defer func() { _ = sqlTx.Rollback() }() // after Commit, it does nothing
-	tx := &Tx{q: s.q.WithTx(sqlTx)}
+	if s.dialect.lockWrites != nil {
+		if err := s.dialect.lockWrites(ctx, sqlTx); err != nil {
+			return nil, fmt.Errorf("waiting for the other writes: %w", err)
+		}
+	}
+	tx := &Tx{tx: sqlTx, q: s.dialect.queries(sqlTx)}
 	if err := fn(tx); err != nil {
 		return nil, err
+	}
+	if s.dialect.notify != "" {
+		if _, err := sqlTx.ExecContext(ctx, s.dialect.notify); err != nil {
+			return nil, fmt.Errorf("notifying the change: %w", err)
+		}
 	}
 	if err := sqlTx.Commit(); err != nil {
 		return nil, fmt.Errorf("committing a transaction: %w", err)
@@ -128,11 +141,11 @@ func (s *Store) ListAudit(ctx context.Context, f AuditFilter) ([]audit.Event, er
 	if limit <= 0 {
 		limit = 100
 	}
-	timeArg := func(t time.Time) any {
+	timeArg := func(t time.Time) sql.NullString {
 		if t.IsZero() {
-			return nil
+			return sql.NullString{}
 		}
-		return t.UTC().Format(TimeLayout)
+		return textArg(t.UTC().Format(TimeLayout))
 	}
 	rows, err := s.q.ListAuditEvents(ctx, sqlite.ListAuditEventsParams{
 		Since: timeArg(f.Since), Until: timeArg(f.Until), Action: textArg(string(f.Action)), Actor: textArg(f.Actor),
@@ -165,12 +178,11 @@ type AuditSummary struct {
 // checks each event's hash and its link to the event before it. It returns a
 // *audit.BrokenError where the chain breaks.
 func (s *Store) VerifyAudit(ctx context.Context) (AuditSummary, error) {
-	sqlTx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	sqlTx, q, err := s.readTx(ctx)
 	if err != nil {
 		return AuditSummary{}, fmt.Errorf("starting a transaction: %w", err)
 	}
 	defer func() { _ = sqlTx.Rollback() }()
-	q := s.q.WithTx(sqlTx)
 	var sum AuditSummary
 	switch a, err := q.GetAuditAnchor(ctx); {
 	case err == nil:
@@ -208,11 +220,12 @@ func (s *Store) VerifyAudit(ctx context.Context) (AuditSummary, error) {
 // PruneAudit deletes the events before cutoff, from the trail's start up to
 // the first one at or after it, so that none younger than cutoff goes,
 // keeps the last one it deletes as the trail's anchor, and records the
-// prune as an event, all in one transaction. It returns how many it deleted, and the prune's event,
-// if it deleted any.
+// prune as an event, all in one transaction. It's a leader-only write, as
+// RecordRefresh is. It returns how many it deleted, and the prune's event, if
+// it deleted any.
 func (s *Store) PruneAudit(ctx context.Context, cutoff time.Time, retentionDays int) (int64, []audit.Event, error) {
 	var deleted int64
-	events, err := s.InTx(ctx, func(tx *Tx) error {
+	events, err := s.leaderTx(ctx, func(tx *Tx) error {
 		last, err := tx.q.LastAuditEventBefore(ctx, cutoff.UTC().Format(TimeLayout))
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil
@@ -280,11 +293,8 @@ func nullJSON(j json.RawMessage) sql.NullString {
 	return sql.NullString{String: string(j), Valid: j != nil}
 }
 
-// textArg returns s for an optional filter: nil, which selects everything,
+// textArg returns s for an optional filter: NULL, which selects everything,
 // if it's empty.
-func textArg(s string) any {
-	if s == "" {
-		return nil
-	}
-	return s
+func textArg(s string) sql.NullString {
+	return sql.NullString{String: s, Valid: s != ""}
 }

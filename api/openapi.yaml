@@ -5,7 +5,7 @@
 openapi: 3.1.0
 info:
   title: nbpdns API
-  version: 1.2.0
+  version: 1.3.0
   description: >-
     The API of nbpdns, which compares the DNS data in NetBox's DNS plugin
     with what each PowerDNS server group's primary serves. It serves the
@@ -47,9 +47,10 @@ paths:
       summary: Get the service's status
       description: >-
         Returns the service's build, uptime, readiness and liveness, the
-        refresh schedule and how the last refresh went, NetBox's state, and
-        where spans are exported. Each server group's state is a resource
-        of its own, under `/server-groups`.
+        refresh schedule and how the last refresh went, NetBox's state,
+        where spans are exported, and which replica answers and which one
+        leads. Each server group's state is a resource of its own, under
+        `/server-groups`.
       tags: [service]
       parameters:
         - $ref: "#/components/parameters/FlowID"
@@ -121,12 +122,25 @@ paths:
                       - id: 3bd63b08-a526-45f3-a819-aa7c507dd31f
                         user: admin
                 database:
+                  backend: sqlite
+                  url: sqlite:///var/lib/nbpdns/nbpdns.db
                   path: /var/lib/nbpdns/nbpdns.db
+                  tls: null
                   restored: true
                   restored_as_of: "2026-10-08T00:55:40Z"
                   history_write_failures: 0
                   last_write_failure: null
                   last_write_error: null
+                replica:
+                  name: nbpdns-0
+                  id: KJ4G3RZQ6V7XHN2WYB5T5DM7QE
+                  role: leader
+                leader:
+                  name: nbpdns-0
+                  id: KJ4G3RZQ6V7XHN2WYB5T5DM7QE
+                  since: "2026-10-08T01:00:00Z"
+                  last_seen: "2026-10-08T01:12:34Z"
+                  next_refresh: "2026-10-08T01:15:00Z"
         default:
           $ref: "#/components/responses/Problem"
   /server-groups:
@@ -568,8 +582,10 @@ paths:
         record moved to another zone, and more than 100 zones at once each
         make a full refresh instead. Events for other object types, and for
         zones and views that no server group serves, are accepted and
-        ignored. The endpoint is off until `netbox.webhook_secret` is
-        set.
+        ignored. Any replica takes events: it writes them to the database,
+        whose queue the leader refreshes, so that a queued refresh survives
+        a restart or a takeover. The endpoint is off until
+        `netbox.webhook_secret` is set.
       tags: [netbox]
       security:
         - netboxSignature: []
@@ -616,8 +632,8 @@ paths:
       responses:
         "202":
           description: >-
-            The event is accepted. The refresh it asks for runs later, if it
-            asks for one.
+            The event is accepted, and written to the database. The refresh
+            it asks for runs later, on the leader, if it asks for one.
           headers:
             X-Flow-ID:
               $ref: "#/components/headers/FlowID"
@@ -629,6 +645,8 @@ paths:
           $ref: "#/components/responses/WebhooksOff"
         "413":
           $ref: "#/components/responses/EventTooLarge"
+        "503":
+          $ref: "#/components/responses/EventNotQueued"
         default:
           $ref: "#/components/responses/Problem"
 components:
@@ -799,6 +817,25 @@ components:
             status: 413
             detail: The body is over 1 MiB.
             instance: /api/netbox-events
+    EventNotQueued:
+      description: >-
+        The event couldn't be written to the database, so its refresh isn't
+        queued. The next scheduled refresh finds its change.
+      headers:
+        X-Flow-ID:
+          $ref: "#/components/headers/FlowID"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: about:blank
+            title: Service Unavailable
+            status: 503
+            detail: >-
+              The event couldn't be queued, as the database couldn't be
+              written. The next scheduled refresh finds its change.
+            instance: /api/netbox-events
     Problem:
       description: Any other error.
       headers:
@@ -855,8 +892,17 @@ components:
           examples: [/api/server-groups/site-z]
     Status:
       type: object
-      description: The nbpdns service's state.
-      required: [version, revision, started, uptime_seconds, ready, live, schedule, netbox, tracing, webhooks, database]
+      description: >-
+        The nbpdns service's state. Its facts are of two kinds. The
+        deployment's come from the database, and every replica shows the
+        same, within `database.poll_interval`, 5 seconds by default, or as
+        soon as it hears of a change, with `database.listen`: the
+        schedule's interval and timeout, and its last and next refresh;
+        `netbox`; `webhooks`; `leader`; and the server groups, which
+        `/api/server-groups` serves. The rest are this replica's own: its
+        build, uptime, readiness and liveness, the refreshes it ran,
+        `tracing`, `database` and `replica`.
+      required: [version, revision, started, uptime_seconds, ready, live, schedule, netbox, tracing, webhooks, database, replica, leader]
       properties:
         version:
           type: string
@@ -880,15 +926,18 @@ components:
         ready:
           type: boolean
           description: >-
-            Whether the service has restored the reports it kept before it
-            restarted, or, with none to restore, whether its first refresh has
-            finished, whatever its outcome, as `/readyz` reports.
+            Whether this replica serves a full refresh that finished,
+            whatever its outcome, as `/readyz` reports: its own, once the
+            database has it, or one that it loaded from the database, as it
+            started, or from the leader.
           examples: [true]
         live:
           type: boolean
           description: >-
-            Whether a refresh has started within `drift.interval` +
-            `drift.timeout` + 1 minute, as `/livez` reports.
+            On the leader, whether a refresh has started within
+            `drift.interval` + `drift.timeout` + 1 minute, or since it took
+            over. On a follower, whether it has tried for the leader's lock
+            within the last minute. As `/livez` reports.
           examples: [true]
         schedule:
           $ref: "#/components/schemas/Schedule"
@@ -900,33 +949,119 @@ components:
           $ref: "#/components/schemas/Webhooks"
         database:
           $ref: "#/components/schemas/Database"
+        replica:
+          $ref: "#/components/schemas/Replica"
+        leader:
+          description: >-
+            The replica that leads, as this replica last knew it: from the
+            database, on a follower, which reads it every
+            `database.poll_interval`, 5 seconds by default, or as soon as it
+            hears of a change, with `database.listen`. Null if it knows of
+            none, before a replica first leads the database, or just after
+            this one stepped down.
+          oneOf:
+            - $ref: "#/components/schemas/Leader"
+            - type: "null"
+    Replica:
+      type: object
+      description: >-
+        This replica of the service, one of those on its database. On
+        PostgreSQL, several can run, and one of them leads: it refreshes and
+        prunes. On SQLite, one runs, and it always leads.
+      required: [name, id, role]
+      properties:
+        name:
+          type: string
+          description: The replica's host name.
+          examples: [nbpdns-0]
+        id:
+          type: string
+          description: A random ID, new at each start, which tells apart two replicas on one host.
+          examples: [KJ4G3RZQ6V7XHN2WYB5T5DM7QE]
+        role:
+          type: string
+          x-extensible-enum: [leader, follower]
+          description: >-
+            `leader` if this replica holds the leader's lock, and so refreshes
+            and prunes; `follower` if it doesn't.
+          examples: [leader]
+    Leader:
+      type: object
+      description: The replica that leads, which refreshes and prunes.
+      required: [name, id, since, last_seen, next_refresh]
+      properties:
+        name:
+          type: string
+          description: The leader's host name.
+          examples: [nbpdns-0]
+        id:
+          type: string
+          description: The leader's random ID, from its start.
+          examples: [KJ4G3RZQ6V7XHN2WYB5T5DM7QE]
+        since:
+          type: string
+          format: date-time
+          description: When it took over. On SQLite, when the service started.
+          examples: ["2026-10-08T01:00:00Z"]
+        last_seen:
+          type: string
+          format: date-time
+          description: >-
+            When it last confirmed that it led, which it does every 5 seconds.
+            On SQLite, now.
+          examples: ["2026-10-08T01:12:34Z"]
+        next_refresh:
+          type: [string, "null"]
+          format: date-time
+          description: When its next refresh starts, as of `last_seen`, or null while one runs.
+          examples: ["2026-10-08T01:15:00Z"]
     Database:
       type: object
-      description: The database that the service keeps its state in.
-      required: [path, restored, restored_as_of, history_write_failures, last_write_failure, last_write_error]
+      description: The database that the service keeps its state in, as this replica connects to it.
+      required: [backend, url, path, tls, restored, restored_as_of, history_write_failures, last_write_failure, last_write_error]
       properties:
+        backend:
+          type: string
+          x-extensible-enum: [sqlite, postgresql]
+          description: The database that `database.url` names.
+          examples: [postgresql]
+        url:
+          type: string
+          description: >-
+            `database.url`, with each password in it, the URL's own and the
+            values of its `password` and `sslpassword` parameters, masked as
+            `xxxxx`.
+          examples: ["postgres://nbpdns:xxxxx@db.example.com/nbpdns?sslmode=verify-full"]
         path:
           type: string
-          description: The database's file, from `database.url`.
+          description: SQLite's file, from `database.url`, or empty on PostgreSQL.
           examples: [/var/lib/nbpdns/nbpdns.db]
+        tls:
+          type: [boolean, "null"]
+          description: >-
+            Whether the connection to PostgreSQL uses TLS, as it did when the
+            service started, or null on SQLite. With `sslmode` at `prefer`,
+            libpq's default, it may not.
+          examples: [true]
         restored:
           type: boolean
           description: >-
-            Whether the service started from the reports it kept before it
-            restarted, which it serves until its first refresh replaces them.
+            Whether this replica started from a refresh that the database
+            held, which it served at once, until a later refresh replaced it.
           examples: [true]
         restored_as_of:
           type: [string, "null"]
           format: date-time
-          description: When the refresh before the restart finished, or null if nothing was restored.
+          description: When that refresh finished, or null if the database held none.
           examples: ["2026-10-08T00:55:40Z"]
         history_write_failures:
           type: integer
           format: int64
           minimum: 0
           description: >-
-            The refreshes that couldn't be written to the drift history since
-            the service started. Each is still served.
+            The refreshes that this replica couldn't write to the drift
+            history since it started. No replica serves them: the last
+            refresh that was written is served until another is.
           examples: [0]
         last_write_failure:
           type: [string, "null"]
@@ -939,7 +1074,9 @@ components:
           examples: [null]
     Schedule:
       type: object
-      description: The refreshes' schedule, and how they went.
+      description: >-
+        The refreshes' schedule, and how they went: the deployment's, but
+        for `refreshes`, which counts this replica's own.
       required: [interval_seconds, timeout_seconds, last_refresh, last_complete_refresh, next_refresh, refreshes]
       properties:
         interval_seconds:
@@ -955,7 +1092,10 @@ components:
           description: How long a refresh may take, `drift.timeout`.
           examples: [600]
         last_refresh:
-          description: The last refresh that finished, or null before the first.
+          description: >-
+            The last full refresh that finished, as the database holds it, or
+            null before the first. A refresh that couldn't be written isn't
+            there.
           oneOf:
             - $ref: "#/components/schemas/Refresh"
             - type: "null"
@@ -967,7 +1107,10 @@ components:
         next_refresh:
           type: [string, "null"]
           format: date-time
-          description: When the next refresh starts, or null while one runs.
+          description: >-
+            When the leader's next refresh starts, or null while one runs. On
+            a follower, as the leader's row in the database had it at the
+            leader's last heartbeat, or null if it knows no leader.
           examples: ["2026-10-08T01:15:00Z"]
         refreshes:
           $ref: "#/components/schemas/RefreshCounts"
@@ -1008,7 +1151,10 @@ components:
           examples: [null]
     RefreshCounts:
       type: object
-      description: The refreshes that finished since the service started, by outcome.
+      description: >-
+        The refreshes that this replica ran, and that finished, since it
+        started, by outcome, whether they could be written or not. A
+        follower runs none.
       required: [complete, incomplete, failed]
       properties:
         complete:
@@ -1031,7 +1177,7 @@ components:
           examples: [0]
     NetBoxState:
       type: object
-      description: NetBox's state, as of the last refresh.
+      description: NetBox's state, as the last refresh that tried it found it, which the database holds.
       required: [url, up, error]
       properties:
         url:
@@ -1067,7 +1213,11 @@ components:
             - type: "null"
     Webhooks:
       type: object
-      description: The state of NetBox's webhooks, which refresh the zones they name.
+      description: >-
+        The state of NetBox's webhooks, which refresh the zones they name,
+        as the database holds it: the deployment's, the same on every
+        replica, whichever replica took each webhook, and the refreshes
+        that the leader ran for them.
       required: [enabled, delay_seconds, last_event, pending, last_refresh]
       properties:
         enabled:
@@ -1085,7 +1235,7 @@ components:
             stop coming, `drift.webhook_delay`.
           examples: [3]
         last_event:
-          description: The last event that a signed webhook brought, or null before the first.
+          description: The last event that a signed webhook brought to any replica, or null before the first.
           oneOf:
             - $ref: "#/components/schemas/WebhookEvent"
             - type: "null"
@@ -1133,7 +1283,11 @@ components:
           examples: [admin]
     PendingRefresh:
       type: object
-      description: What NetBox's webhooks queued, waiting for its refresh.
+      description: >-
+        What NetBox's webhooks queued in the database, waiting for its
+        refresh. A refresh's webhooks wait until it's written, as do those
+        of a refresh that couldn't be: the next refresh, which a later
+        webhook or the schedule starts, covers those.
       required: [events, zones, full, due]
       properties:
         events:
@@ -1162,7 +1316,9 @@ components:
           format: date-time
           description: >-
             When the refresh is due, unless the scheduled one comes first,
-            or null if nothing waits.
+            or null if nothing waits. A time that has passed means that the
+            leader is refreshing them, or hasn't heard of them yet, as it
+            does within `database.poll_interval`.
           examples: ["2026-10-08T01:12:01.2Z"]
     WebhookRefresh:
       type: object
@@ -1235,8 +1391,9 @@ components:
     ServerGroup:
       type: object
       description: >-
-        A PowerDNS server group, with its last-known state. The counts are
-        as of `last_success`.
+        A PowerDNS server group, with its last-known state, as the database
+        holds it, which every replica serves alike. The counts are as of
+        `last_success`.
       required: [name, primary_url, views, drift_policy, managed_by, status, error, last_success, counts, problem_count, warning_count]
       properties:
         name:

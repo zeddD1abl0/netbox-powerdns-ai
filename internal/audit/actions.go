@@ -10,7 +10,9 @@ type Action string
 const (
 	ServiceStarted Action = "service.started"
 	ServiceStopped Action = "service.stopped"
-	AuditPruned    Action = "audit.pruned"
+	// ServiceLeaderAcquired is ADR-0047's takeover.
+	ServiceLeaderAcquired Action = "service.leader_acquired"
+	AuditPruned           Action = "audit.pruned"
 	// ZoneDriftChanged is ADR-0008's drift detection.
 	ZoneDriftChanged Action = "zone.drift_changed"
 	SettingSet       Action = "setting.set"
@@ -53,6 +55,16 @@ var defs = []Def{
 		Summary: "`nbpdns serve` stopped, on SIGINT or SIGTERM, or because it failed after it started, such as when it couldn't listen. " +
 			"A serve that's killed, or crashes, records nothing.",
 		After: "`uptime_seconds`, how long it ran, and `error`, why it failed, if it did.",
+	},
+	{
+		Action: ServiceLeaderAcquired, Target: "service", TargetID: "the host's name",
+		Actor: "`system`",
+		Summary: "A replica of `nbpdns serve` on PostgreSQL took the leader's lock, and with it the refreshes and the prune (ADR-0047): " +
+			"the first to start, or a follower that took over from a leader that stopped, died or was cut off. " +
+			"On SQLite, where `serve` always leads, there's none.",
+		Before: "`replica`, the previous leader's host name, `instance_id`, its random ID from its start, and `last_seen`, " +
+			"when it last confirmed that it led, unless no replica had led the database before.",
+		After: "`replica` and `instance_id`, the new leader's.",
 	},
 	{
 		Action: AuditPruned, Target: "audit", TargetID: "`trail`",

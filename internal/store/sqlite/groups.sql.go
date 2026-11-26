@@ -142,9 +142,11 @@ func (q *Queries) InsertGroup(ctx context.Context, arg InsertGroupParams) error 
 }
 
 const listGroups = `-- name: ListGroups :many
-SELECT id, name, managed_by, spec_json, api_key, created_at, created_by, updated_at, updated_by FROM server_groups ORDER BY name
+SELECT id, name, managed_by, spec_json, api_key, created_at, created_by, updated_at, updated_by FROM server_groups
 `
 
+// Unordered: the store sorts the names in Go, byte by byte, so that they
+// come in one order on either database, whatever its collation (ADR-0046).
 func (q *Queries) ListGroups(ctx context.Context) ([]ServerGroup, error) {
 	rows, err := q.db.QueryContext(ctx, listGroups)
 	if err != nil {

@@ -1,7 +1,9 @@
-# Checks that PostgreSQL takes the same schema and queries as sqlc.yaml
-# (ADR-0038): `make generate` and `make generate-check` run `sqlc compile`
-# on it, which parses them as PostgreSQL would and writes nothing. M09
-# generates its PostgreSQL package from it.
+# sqlc generates the store's queries for PostgreSQL, into ./postgres, from
+# the same schema and queries as sqlc.yaml (ADR-0046). sqlc types LIMIT's
+# parameters as integer, PostgreSQL's int4, which maps to int64, as on
+# SQLite, so that each struct has the same fields as its SQLite twin, and the
+# store's adapter converts one to the other. `make generate` runs it, and
+# `make generate-check` runs `sqlc diff`. Never edit ./postgres by hand.
 version: "2"
 sql:
   - engine: postgresql
@@ -11,3 +13,6 @@ sql:
       go:
         package: postgres
         out: postgres
+        overrides:
+          - db_type: integer
+            go_type: int64

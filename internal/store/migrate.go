@@ -64,7 +64,11 @@ func (s *Store) provider() (*goose.Provider, error) {
 	if err != nil {
 		return nil, err
 	}
-	p, err := goose.NewProvider(goose.DialectSQLite3, s.db, fsys, goose.WithDisableGlobalRegistry(true))
+	opts, err := s.dialect.gooseOptions()
+	if err != nil {
+		return nil, err
+	}
+	p, err := goose.NewProvider(s.dialect.goose, s.db, fsys, append(opts, goose.WithDisableGlobalRegistry(true))...)
 	if err != nil {
 		return nil, fmt.Errorf("reading the migrations: %w", err)
 	}
@@ -99,8 +103,10 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 }
 
 // Migrate applies the migrations that the database lacks, in order, each in
-// its own transaction, and returns them. It fails, changing nothing, on a
-// database whose schema is newer than this nbpdns knows. version, the
+// its own transaction, and returns them. On PostgreSQL, it holds goose's
+// advisory lock while it migrates, so that replicas that migrate at once
+// apply each migration once. It fails, changing nothing, on a database
+// whose schema is newer than this nbpdns knows. version, the
 // running nbpdns's, is recorded if Migrate creates the database's identity.
 func (s *Store) Migrate(ctx context.Context, version string) ([]Migration, error) {
 	st, err := s.Status(ctx)

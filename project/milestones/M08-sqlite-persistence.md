@@ -78,7 +78,7 @@ ITEM-0085 recorded this design.
 - [x] The docs exist, the references are regenerated, and the CHANGELOG is
   updated.
 - [x] `/code-review high` and `/security-review` have run.
-- [ ] The manual verification is recorded, the pipelines pass, and the user
+- [x] The manual verification is recorded, the pipelines pass, and the user
   has merged through an MR with a merge commit, and tagged `v0.8.0`.
 
 ## Verification log
@@ -216,6 +216,31 @@ Append-only and dated. Record what was run and what was seen.
   ITEM-0100, whose last criterion is that the merge's and the tag's
   pipelines pass without a retry, moved to M09, as the user chose: a done
   milestone can't hold an item in progress.
+- 2026-10-17: **Merged.** The user merged `m08-sqlite-persistence` through
+  GitLab merge request !10, with a merge commit, not a squash: `main` is at
+  `894e117`, whose parents are the old `main`, `55a06c9`, and the branch
+  tip, `c02b846`, so every per-item commit is kept (ADR-0018). The user
+  tagged it `v0.8.0`, an annotated tag.
+  - GitLab: the branch's push pipeline, 818, was canceled in its first
+    stage, and the merge request's, 819, ran instead. 819 passed once
+    `release-check` ran again: its first attempt, job 4523, was killed for
+    memory (exit 137, a runner system failure) while goreleaser built the
+    linux/amd64 and linux/arm64 binaries. `main`'s pipeline, 822, passed
+    with every job first time, in 62 minutes. The tag's, 824, passed after
+    the same retry (job 4561, exit 137), and its `release` job published
+    v0.8.0: the GitLab release, with its three asset links, and the image,
+    `sha256:d0aac334…`, with its SBOMs. `secrets`, which now scans what
+    isn't committed too, passed in all three, with nothing to scan beyond
+    the history.
+  - GitHub Actions: runs 39013469014 (the branch), 39026764133 (`main`) and
+    39031715461 (the tag) passed, every job on its first attempt.
+  - Every job killed for memory, pipeline 795's `unit-test` too, ran on the
+    Kubernetes node `talos-control-temp`, and every heavy job on
+    `talos-control-1` or `talos-control-3` passed, both retries included.
+    822 and 824 didn't overlap: 824 started 17 minutes after 822 ended. So
+    the kills don't need two pipelines at once, and ITEM-0100, now M09's,
+    stays open.
+  The last criterion is ticked, and GitLab milestone 10 is closed.
 
 ## Approved design
 

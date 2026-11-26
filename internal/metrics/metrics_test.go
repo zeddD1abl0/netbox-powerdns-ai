@@ -37,6 +37,7 @@ func filled(t *testing.T) *Metrics {
 	o.Request(http.MethodGet, 200, 30*time.Millisecond)
 	o.Retry()
 	m.APIRequest("getStatus", 200, time.Millisecond)
+	m.Leader(true, time.Now())
 	return m
 }
 
@@ -99,6 +100,38 @@ func TestNetBoxWebhook(t *testing.T) {
 		if got := testutil.ToFloat64(m.webhooks.WithLabelValues(tt.result)); got != tt.want {
 			t.Errorf("webhooks with result %s: %v, want %v", tt.result, got, tt.want)
 		}
+	}
+}
+
+func TestLeader(t *testing.T) {
+	m := New(info)
+	if n := testutil.CollectAndCount(m.leaderSince); n != 0 {
+		t.Errorf("before a leader is known, nbpdns_leader_since_timestamp_seconds has %d series, want none", n)
+	}
+	since := time.Unix(1_791_000_000, 500_000_000)
+	for _, tt := range []struct {
+		leads     bool
+		since     time.Time
+		want      float64
+		wantSince float64
+	}{
+		{leads: false, since: since, want: 0, wantSince: 1_791_000_000.5},
+		{leads: true, since: since.Add(time.Minute), want: 1, wantSince: 1_791_000_060.5},
+		// A replica that steps down knows no leader, and keeps the last.
+		{leads: false, want: 0, wantSince: 1_791_000_060.5},
+	} {
+		m.Leader(tt.leads, tt.since)
+		if got := testutil.ToFloat64(m.leader); got != tt.want {
+			t.Errorf("Leader(%t, %v): nbpdns_leader = %v, want %v", tt.leads, tt.since, got, tt.want)
+		}
+		if got := testutil.ToFloat64(m.leaderSince.WithLabelValues()); got != tt.wantSince {
+			t.Errorf("Leader(%t, %v): nbpdns_leader_since_timestamp_seconds = %v, want %v", tt.leads, tt.since, got, tt.wantSince)
+		}
+	}
+	m.LeaderChanged()
+	m.LeaderChanged()
+	if got := testutil.ToFloat64(m.leaderChanges); got != 2 {
+		t.Errorf("nbpdns_leader_changes_total = %v, want 2", got)
 	}
 }
 

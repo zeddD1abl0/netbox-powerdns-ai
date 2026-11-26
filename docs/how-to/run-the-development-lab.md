@@ -5,10 +5,11 @@ weight: 10
 
 # Run the development lab
 
-The development lab runs NetBox 4.7, with the NetBox DNS plugin, and a
-PowerDNS 5.1 server, in containers. The integration tests run against it, and
-the tutorials use it. This guide starts the lab, reaches NetBox and PowerDNS,
-and removes the lab again.
+The development lab runs NetBox 4.7, with the NetBox DNS plugin, a
+PowerDNS 5.1 server, and NetBox's PostgreSQL 18, which holds a database for
+nbpdns too, in containers. The integration tests run against it, and the
+tutorials use it. This guide starts the lab, reaches NetBox, PowerDNS and
+PostgreSQL, and removes the lab again.
 
 ## Before you start
 
@@ -31,7 +32,8 @@ first use.
 
    The first start downloads the images and applies every NetBox database
    migration, which takes several minutes. Later starts take seconds. The
-   command returns once every container reports healthy.
+   command returns once every container reports healthy, and nbpdns's
+   database exists.
 
 2. Check that NetBox 4.7 answers with its version and the plugin's:
 
@@ -70,6 +72,17 @@ It has the API key `nbpdns-lab-powerdns-api-key-not-for-production`, and keeps
 its zones inside its container. Its API uses plain HTTP, so nbpdns warns that
 the key crosses the network unencrypted.
 
+NetBox 4.7's PostgreSQL 18 server listens on port 5418, without TLS. Its
+superuser is `netbox`, with the password `nbpdns-lab-db`. It also holds
+nbpdns's own database:
+
+| Database | Role | Password | URL |
+|---|---|---|---|
+| `nbpdns` | `nbpdns`, which owns it | `nbpdns-lab-nbpdns-db` | `postgres://nbpdns:nbpdns-lab-nbpdns-db@localhost:5418/nbpdns?sslmode=disable` |
+
+`make lab-up` creates the role and the database if they're missing, in a
+lab started before they existed too, and leaves them alone otherwise.
+
 > [!WARNING]
 > These credentials are published in the repository, so the lab is for
 > development only. On a local Docker host, its ports listen on `127.0.0.1`
@@ -95,6 +108,11 @@ package's, which `make test` covers. The tests use every NetBox and PowerDNS
 server in the lab. Each test creates its own DNS data, and in NetBox users with their own API
 tokens, with names that contain a random ID, and removes them when it ends.
 Data you add to the lab yourself isn't touched.
+
+The store's tests run on SQLite, and on the lab's PostgreSQL too. Each of
+them creates a database of its own, named `nbpdns_test_` and a random ID,
+owned by the role `nbpdns`, and drops it when it ends. A test run that's
+killed leaves its databases behind, until `make lab-down`.
 
 The integration tests replay NetBox's webhooks, signed, rather than have
 NetBox send them, which takes NetBox's worker.
@@ -133,5 +151,5 @@ up webhooks outside the lab.
 make lab-down
 ```
 
-This removes the containers, the worker's too, and their data. The
-downloaded images stay, so the next start is faster.
+This removes the containers, the worker's too, and their data, nbpdns's
+database included. The downloaded images stay, so the next start is faster.

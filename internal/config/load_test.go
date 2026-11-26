@@ -1,9 +1,11 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -85,7 +87,7 @@ func TestLoadDefaults(t *testing.T) {
 	}
 	want := Config{
 		Audit:    AuditConfig{RetentionDays: 2557},
-		Database: DatabaseConfig{URL: "sqlite:///var/lib/nbpdns/nbpdns.db"},
+		Database: DatabaseConfig{URL: NewSecret("sqlite:///var/lib/nbpdns/nbpdns.db"), PollInterval: 5 * time.Second},
 		Log:      LogConfig{Level: "info", Format: "json"},
 		NetBox:   NetBoxConfig{Timeout: 30 * time.Second, PageSize: 500, Concurrency: 4},
 		PowerDNS: PowerDNSConfig{Timeout: 30 * time.Second, Concurrency: 4},
@@ -244,14 +246,36 @@ func TestLoadErrors(t *testing.T) {
 			[]string{"netbox.webhook_secret (from env NBPDNS_NETBOX_WEBHOOK_SECRET)", "at least 16 characters"}},
 		{"URL with a query", "", map[string]string{"NBPDNS_NETBOX_URL": "https://netbox.example.com/?x=1"}, nil,
 			[]string{"mustn't have a query"}},
-		{"a database URL with another scheme", "", map[string]string{"NBPDNS_DATABASE_URL": "postgres://db.example.com/nbpdns"}, nil,
-			[]string{"database.url (from env NBPDNS_DATABASE_URL)", "isn't a sqlite: URL"}},
+		{"a database URL with another scheme", "", map[string]string{"NBPDNS_DATABASE_URL": "mysql://nbpdns:s3cret@db.example.com/nbpdns"}, nil,
+			[]string{"database.url (from env NBPDNS_DATABASE_URL)", `"mysql://nbpdns:xxxxx@db.example.com/nbpdns" isn't a sqlite: URL`}},
+		{"a PostgreSQL URL in capitals, which pgx doesn't read", "", map[string]string{"NBPDNS_DATABASE_URL": "POSTGRES://db.example.com/nbpdns"}, nil,
+			[]string{"isn't a sqlite: URL", "or a postgres:// or postgresql:// URL"}},
+		{"a PostgreSQL URL that isn't one", "", nil, []string{"--database-url", "postgres://nbpdns:s3cret%zz@db.example.com/nbpdns"},
+			[]string{"database.url (from flag --database-url): it isn't a URL; percent-encode"}},
+		{"a PostgreSQL URL with an unencoded # in its password", "", map[string]string{"NBPDNS_DATABASE_URL": "postgres://nbpdns:s3#cret@db/nbpdns"}, nil,
+			[]string{"database.url", "it isn't a URL"}},
+		{"a PostgreSQL URL with a fragment", "", map[string]string{"NBPDNS_DATABASE_URL": "postgres://nbpdns:s3cret@db/nbpdns#x"}, nil,
+			[]string{`"postgres://nbpdns:xxxxx@db/nbpdns#x" mustn't have a fragment`}},
+		{"an empty database URL", "database:\n  url: \"\"\n", nil, nil,
+			[]string{"database.url (from file", "it's empty; give a sqlite:, postgres:// or postgresql:// URL"}},
+		{"a database URL with credentials", "", map[string]string{"NBPDNS_DATABASE_URL": "sqlite://nbpdns:s3cret@/x.db"}, nil,
+			[]string{`"sqlite://nbpdns:xxxxx@/x.db" mustn't have credentials`}},
 		{"a database URL with a host", "database:\n  url: sqlite://nbpdns.db\n", nil, nil,
 			[]string{"database.url (from file", "names a host; write sqlite:/// and an absolute path"}},
 		{"a database URL with a query", "", nil, []string{"--database-url", "sqlite:///x.db?mode=ro"},
 			[]string{"mustn't have credentials, a query or a fragment"}},
 		{"a database URL naming a directory", "", map[string]string{"NBPDNS_DATABASE_URL": "sqlite:///var/lib/nbpdns/"}, nil,
 			[]string{"doesn't name a file"}},
+		{"database.listen on SQLite", "database:\n  listen: true\n", nil, nil,
+			[]string{"database.listen (from file", "only PostgreSQL has LISTEN and NOTIFY, and database.url (from default) names a SQLite database"}},
+		{"database.listen that isn't a boolean", "", map[string]string{"NBPDNS_DATABASE_LISTEN": "yes"}, nil,
+			[]string{"database.listen (from env NBPDNS_DATABASE_LISTEN)", `"yes" isn't true or false`}},
+		{"database.listen as a number", "database:\n  listen: 1\n", nil, nil,
+			[]string{"database.listen (from file", "want true or false, not 1"}},
+		{"too short a poll", "", nil, []string{"--database-poll-interval", "10ms"},
+			[]string{"database.poll_interval (from flag --database-poll-interval): 10ms is shorter than 100ms"}},
+		{"too long a poll", "", map[string]string{"NBPDNS_DATABASE_POLL_INTERVAL": "1m"}, nil,
+			[]string{"database.poll_interval (from env NBPDNS_DATABASE_POLL_INTERVAL): 1m0s is longer than 30s"}},
 		{"a mapping for a string", "netbox:\n  url:\n    host: x\n", nil, nil,
 			[]string{"netbox.url (from file", "want a string, not a mapping"}},
 		{
@@ -287,11 +311,50 @@ func TestLoadAcceptsGoodValues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
+	if d := cfg.Database; d.Listen || d.PollInterval != 5*time.Second {
+		t.Errorf("Load().Database = %+v, want the defaults", d)
+	}
 	n := cfg.NetBox
 	if cfg.Log.Format != "text" || n.URL != "http://netbox.lab:8047" || n.PageSize != 1000 ||
 		n.Timeout != 2*time.Minute || n.CAFile != "/etc/ssl/netbox.pem" || n.Concurrency != 32 ||
 		n.WebhookSecret.Reveal() != "0123456789abcdef" {
 		t.Errorf("Load() = %+v", *cfg)
+	}
+}
+
+// TestDatabaseListen checks that database.listen and database.poll_interval
+// take their values from each source, with a PostgreSQL database.url.
+func TestDatabaseListen(t *testing.T) {
+	const url = "postgres://nbpdns@db.example.com/nbpdns"
+	tests := []struct {
+		name string
+		file string
+		env  map[string]string
+		args []string
+		want DatabaseConfig
+	}{
+		{"the defaults", "", map[string]string{"NBPDNS_DATABASE_URL": url}, nil, DatabaseConfig{PollInterval: 5 * time.Second}},
+		{"the file", "database:\n  url: " + url + "\n  listen: true\n  poll_interval: 30s\n", nil, nil,
+			DatabaseConfig{Listen: true, PollInterval: 30 * time.Second}},
+		{"the environment", "", map[string]string{"NBPDNS_DATABASE_URL": url, "NBPDNS_DATABASE_LISTEN": " true ",
+			"NBPDNS_DATABASE_POLL_INTERVAL": "100ms"}, nil, DatabaseConfig{Listen: true, PollInterval: 100 * time.Millisecond}},
+		{"flags, over the file", "database:\n  url: " + url + "\n  listen: true\n", nil,
+			[]string{"--database-listen", "false", "--database-poll-interval=2s"}, DatabaseConfig{PollInterval: 2 * time.Second}},
+		{"off, on SQLite", "", map[string]string{"NBPDNS_DATABASE_LISTEN": "false"}, nil, DatabaseConfig{PollInterval: 5 * time.Second}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, settings, err := load(t, tt.file, tt.env, tt.args...)
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+			if d := cfg.Database; d.Listen != tt.want.Listen || d.PollInterval != tt.want.PollInterval {
+				t.Errorf("Load().Database = %+v, want %+v", d, tt.want)
+			}
+			if st := setting(t, settings, "database.listen"); st.Value != strconv.FormatBool(tt.want.Listen) {
+				t.Errorf("database.listen's setting = %+v", st)
+			}
+		})
 	}
 }
 
@@ -303,11 +366,85 @@ func TestSQLitePath(t *testing.T) {
 		{"sqlite:nbpdns.db", "nbpdns.db"},
 		{"sqlite:data/nbpdns.db", "data/nbpdns.db"},
 		{"sqlite:///srv/my%20state/nbpdns.db", "/srv/my state/nbpdns.db"},
+		{"postgres://db.example.com/nbpdns", ""},
+		{"postgresql:///nbpdns?host=/var/run/postgresql", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.url, func(t *testing.T) {
-			if got := (DatabaseConfig{URL: tt.url}).SQLitePath(); got != tt.want {
+			if got := (DatabaseConfig{URL: NewSecret(tt.url)}).SQLitePath(); got != tt.want {
 				t.Errorf("SQLitePath() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestDatabaseURL checks that database.url takes PostgreSQL's URLs, from a
+// file too, and shows them with their passwords masked, in its setting,
+// which the configuration's fingerprint covers (ADR-0046).
+func TestDatabaseURL(t *testing.T) {
+	const pg = "postgres://nbpdns:s3cret@db.example.com:5432/nbpdns?sslmode=verify-full&sslrootcert=/etc/nbpdns/ca.pem"
+	const shown = "postgres://nbpdns:xxxxx@db.example.com:5432/nbpdns?sslmode=verify-full&sslrootcert=/etc/nbpdns/ca.pem"
+	tests := []struct {
+		name       string
+		env        map[string]string
+		want, show string
+		source     string
+	}{
+		{"a PostgreSQL URL", map[string]string{"NBPDNS_DATABASE_URL": pg}, pg, shown, "env NBPDNS_DATABASE_URL"},
+		{"a PostgreSQL URL from a file", map[string]string{"NBPDNS_DATABASE_URL_FILE": secretFile(t, pg+"\n")}, pg, shown,
+			"env NBPDNS_DATABASE_URL_FILE"},
+		{"a Unix socket, and the password from a passfile", map[string]string{
+			"NBPDNS_DATABASE_URL": "postgresql:///nbpdns?host=/var/run/postgresql&passfile=/etc/nbpdns/pgpass",
+		}, "postgresql:///nbpdns?host=/var/run/postgresql&passfile=/etc/nbpdns/pgpass",
+			"postgresql:///nbpdns?host=/var/run/postgresql&passfile=/etc/nbpdns/pgpass", "env NBPDNS_DATABASE_URL"},
+		{"the host and the rest from PG variables", map[string]string{"NBPDNS_DATABASE_URL": "postgres://"},
+			"postgres://", "postgres://", "env NBPDNS_DATABASE_URL"},
+		{"SQLite, shown as it is", nil, "sqlite:///var/lib/nbpdns/nbpdns.db", "sqlite:///var/lib/nbpdns/nbpdns.db", "default"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, settings, err := load(t, "", tt.env)
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+			if got := cfg.Database.URL.Reveal(); got != tt.want {
+				t.Errorf("database.url = %q, want %q", got, tt.want)
+			}
+			if got := cfg.Database.ShownURL(); got != tt.show {
+				t.Errorf("ShownURL() = %q, want %q", got, tt.show)
+			}
+			st := setting(t, settings, "database.url")
+			if st.Value != tt.show || st.Source.String() != tt.source {
+				t.Errorf("setting = %+v, want %q from %s", st, tt.show, tt.source)
+			}
+			if b, err := json.Marshal(cfg); err != nil || strings.Contains(string(b), "s3cret") {
+				t.Errorf("the configuration's JSON shows the password, or doesn't encode (%v):\n%s", err, b)
+			}
+		})
+	}
+}
+
+// TestMaskURL covers the passwords that a database URL can hold.
+func TestMaskURL(t *testing.T) {
+	tests := []struct{ url, want string }{
+		{"postgres://nbpdns:s3cret@db/nbpdns", "postgres://nbpdns:xxxxx@db/nbpdns"},
+		{"postgres://nbpdns:s3%40cret@db/nbpdns", "postgres://nbpdns:xxxxx@db/nbpdns"},
+		{"postgres://nbpdns:@db/nbpdns", "postgres://nbpdns:xxxxx@db/nbpdns"},
+		{"postgres://nbpdns@db/nbpdns?password=s3cret&sslmode=require", "postgres://nbpdns@db/nbpdns?password=xxxxx&sslmode=require"},
+		{"postgres://db/nbpdns?sslkey=/k.pem&sslpassword=s3cret", "postgres://db/nbpdns?sslkey=/k.pem&sslpassword=xxxxx"},
+		{"postgres://db/nbpdns?pass%77ord=s3cret", "postgres://db/nbpdns?pass%77ord=xxxxx"},
+		{"postgres://db/nbpdns?PASSWORD=s3cret", "postgres://db/nbpdns?PASSWORD=xxxxx"},
+		{"postgres://db/nbpdns?%zz=s3cret&sslmode=require", "postgres://db/nbpdns?xxxxx&sslmode=require"},
+		{"postgres://u:s3cret@h1:5432,h2:5433/nbpdns", "postgres://u:xxxxx@h1:5432,h2:5433/nbpdns"},
+		{"postgres://nbpdns:s3cret%zz@db/nbpdns", Redacted},
+		{"postgres://db.example.com/nbpdns?sslmode=verify-full", "postgres://db.example.com/nbpdns?sslmode=verify-full"},
+		{"sqlite:nbpdns.db", "sqlite:nbpdns.db"},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.url, func(t *testing.T) {
+			if got := maskURL(tt.url); got != tt.want {
+				t.Errorf("maskURL() = %q, want %q", got, tt.want)
 			}
 		})
 	}

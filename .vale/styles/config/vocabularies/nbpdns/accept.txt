@@ -135,3 +135,13 @@ sqlc
 sqlx
 templ
 htmx
+pgx('s)?
+libpq('s)?
+[Kk]eepalives?
+[Pp]oolers?
+etcd
+URL's
+[Rr]efresh's
+PostgreSQL
+psql('s)?
+CAs

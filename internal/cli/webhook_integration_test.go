@@ -75,6 +75,24 @@ func changeRecord(t *testing.T, nb lab.NetBox, zone int, name, typ, from, to str
 	lab.AdminDo(t, nb, http.MethodPatch, fmt.Sprintf("plugins/netbox-dns/records/%d/", page.Results[0].ID), map[string]any{"value": to}, nil)
 }
 
+// inSyncChanged changes www's A record in the drift fixture's in-sync zone
+// in NetBox, and returns NetBox's event for the change, with edit, if not
+// nil, applied to it.
+func inSyncChanged(t *testing.T, nb lab.NetBox, f *lab.DriftFixture, edit func(e map[string]any)) []byte {
+	t.Helper()
+	id := zoneID(t, nb, f.InSync, f.View)
+	changeRecord(t, nb, id, "www", "A", "192.0.2.10", "192.0.2.11")
+	return replayed(t, "record-updated.json", func(e map[string]any) {
+		z := obj(t, e, "data", "zone")
+		z["id"], z["name"] = id, strings.TrimSuffix(f.InSync, ".")
+		obj(t, e, "data", "zone", "view")["name"] = f.View
+		obj(t, e, "snapshots", "prechange")["zone"] = id
+		if edit != nil {
+			edit(e)
+		}
+	})
+}
+
 // replayed returns a NetBox 4.7 event, captured from the lab, from
 // internal/webhook's test data, with edit applied to it, as JSON.
 func replayed(t *testing.T, file string, edit func(e map[string]any)) []byte {
@@ -108,10 +126,12 @@ func obj(t *testing.T, e map[string]any, keys ...string) map[string]any {
 	return e
 }
 
-// post sends body to path, signed with secret, and checks the response
-// against the API's OpenAPI document.
-func (s *served) post(path string, body []byte, secret string) (int, string) {
+// postEvent sends body to /api/netbox-events, signed with secret, as
+// NetBox's webhook does, and checks the response against the API's OpenAPI
+// document.
+func (s *served) postEvent(body []byte, secret string) (int, string) {
 	s.t.Helper()
+	const path = "/api/netbox-events"
 	checker, err := contract.New(api.Spec(), "/api")
 	if err != nil {
 		s.t.Fatal(err)
@@ -194,17 +214,9 @@ func TestServeWebhooks(t *testing.T) {
 	}
 
 	// The record changes in NetBox, and NetBox's event for it comes.
-	id := zoneID(t, nb, f.InSync, f.View)
-	changeRecord(t, nb, id, "www", "A", "192.0.2.10", "192.0.2.11")
 	const requestID = "7d1b8a52-1f0e-4f43-9b7e-6a2f43c7c111"
-	event := replayed(t, "record-updated.json", func(e map[string]any) {
-		z := obj(t, e, "data", "zone")
-		z["id"], z["name"] = id, strings.TrimSuffix(f.InSync, ".")
-		obj(t, e, "data", "zone", "view")["name"] = f.View
-		obj(t, e, "snapshots", "prechange")["zone"] = id
-		obj(t, e, "request")["id"] = requestID
-	})
-	if code, body := s.post("/api/netbox-events", event, webhookSecret); code != http.StatusAccepted {
+	event := inSyncChanged(t, nb, f, func(e map[string]any) { obj(t, e, "request")["id"] = requestID })
+	if code, body := s.postEvent(event, webhookSecret); code != http.StatusAccepted {
 		t.Fatalf("the event: %d %s", code, body)
 	}
 	eventually(t, 15*time.Second, "the zone refresh", func() bool { return refreshes("zone_", "complete") == 1 })
@@ -242,7 +254,7 @@ func TestServeWebhooks(t *testing.T) {
 	}
 
 	// A forged event changes nothing.
-	if code, body := s.post("/api/netbox-events", event, "a-secret-that-isnt-nbpdnss"); code != http.StatusUnauthorized {
+	if code, body := s.postEvent(event, "a-secret-that-isnt-nbpdnss"); code != http.StatusUnauthorized {
 		t.Errorf("a forged event: %d %s", code, body)
 	}
 	time.Sleep(time.Second)
@@ -254,7 +266,7 @@ func TestServeWebhooks(t *testing.T) {
 	view := replayed(t, "view-renamed.json", func(e map[string]any) {
 		obj(t, e, "data")["name"] = f.View
 	})
-	if code, body := s.post("/api/netbox-events", view, webhookSecret); code != http.StatusAccepted {
+	if code, body := s.postEvent(view, webhookSecret); code != http.StatusAccepted {
 		t.Fatalf("the view's event: %d %s", code, body)
 	}
 	eventually(t, 30*time.Second, "the full refresh", func() bool { return refreshes("", "complete") == 2 })

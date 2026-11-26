@@ -1,9 +1,11 @@
-// Package store keeps the state of `nbpdns serve` in a database (ADR-0038):
-// embedded SQLite, through the pure-Go modernc.org/sqlite driver, in WAL
-// mode, so that the command line can write while serve runs. Its schema
-// comes from goose's forward-only migrations, embedded in the binary, and
-// its queries from sqlc, which generates ./sqlite from the .sql files here.
-// The SQL is portable, so that M09 can run it on PostgreSQL.
+// Package store keeps the state of `nbpdns serve` in a database: embedded
+// SQLite (ADR-0038), through the pure-Go modernc.org/sqlite driver, in WAL
+// mode, so that the command line can write while serve runs; or PostgreSQL
+// (ADR-0046), through pgx's database/sql driver, for several replicas. Its
+// schema comes from goose's forward-only migrations, embedded in the binary,
+// and its queries from sqlc, which generates ./sqlite and ./postgres from
+// the same .sql files here. The store calls the SQLite package's Querier on
+// either database.
 package store
 
 import (
@@ -17,8 +19,10 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync/atomic"
 	"time"
 
+	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite" // the database/sql driver "sqlite"
 
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/audit"
@@ -26,7 +30,7 @@ import (
 )
 
 // busyTimeout is how long a write waits for another one to finish, such as
-// the command line's while serve writes a refresh.
+// the command line's while serve writes a refresh, on either database.
 const busyTimeout = 5 * time.Second
 
 // TimeLayout is how times are stored: in UTC, to the microsecond, at a fixed
@@ -34,11 +38,87 @@ const busyTimeout = 5 * time.Second
 // audit trail's, whose hashes cover times as stored.
 const TimeLayout = audit.TimeLayout
 
+// Stored returns t as the store keeps it, and reads it back: in UTC, to the
+// microsecond.
+func Stored(t time.Time) time.Time { return t.UTC().Truncate(time.Microsecond) }
+
+// The databases that a store can be open on, as Backend names them.
+const (
+	SQLite     = "sqlite"
+	PostgreSQL = "postgresql"
+)
+
 // A Store is an open database.
 type Store struct {
-	db   *sql.DB
-	q    *sqlite.Queries
+	db      *sql.DB
+	dialect *dialect
+	q       sqlite.Querier
+	// path is SQLite's file, or empty on PostgreSQL.
 	path string
+	// On PostgreSQL, conn is the connection that the store opened with,
+	// and release is the server's, such as 18.1.
+	conn    connection
+	release string
+	// replica is set once a replica of serve has joined the database
+	// through the store, and leading is its session that holds the leader's
+	// lock, if one does, which leader-only writes check (ADR-0047).
+	replica atomic.Bool
+	leading atomic.Pointer[Session]
+}
+
+// A connection says how a store connects to PostgreSQL.
+type connection struct {
+	// encrypted is whether it uses TLS, and socket whether it's through a
+	// Unix socket, which needs none.
+	encrypted, socket bool
+}
+
+// A dialect is what the store does differently on each database.
+type dialect struct {
+	// name is the database's, as Backend returns it.
+	name string
+	// queries returns the store's queries on db, the database or one of its
+	// transactions.
+	queries func(db sqlite.DBTX) sqlite.Querier
+	// goose is goose's name for the database, and gooseOptions returns the
+	// options of a goose provider on it.
+	goose        goose.Dialect
+	gooseOptions func() ([]goose.ProviderOption, error)
+	// write is how a write transaction begins, and lockWrites, if set, runs
+	// first in it, and waits for the other writes to end.
+	write      *sql.TxOptions
+	lockWrites func(ctx context.Context, tx *sql.Tx) error
+	// notify, if set, runs last in each write transaction, to tell the
+	// replicas of its change (ADR-0048).
+	notify string
+}
+
+// readOptions is how a read transaction begins: it reads one snapshot of
+// the database throughout, as SQLite's do in WAL mode. SQLite's driver
+// ignores the isolation level, which PostgreSQL needs.
+var readOptions = &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelRepeatableRead}
+
+// sqliteDialect is SQLite's: its immediate transactions take the write lock
+// as they begin, so writes run one at a time already.
+var sqliteDialect = &dialect{
+	name:         SQLite,
+	queries:      func(db sqlite.DBTX) sqlite.Querier { return sqlite.New(db) },
+	goose:        goose.DialectSQLite3,
+	gooseOptions: func() ([]goose.ProviderOption, error) { return nil, nil },
+}
+
+// newStore returns the store on db.
+func newStore(db *sql.DB, d *dialect, path string) *Store {
+	return &Store{db: db, dialect: d, q: d.queries(db), path: path}
+}
+
+// readTx begins a read transaction, and returns it with the queries on it.
+func (s *Store) readTx(ctx context.Context) (*sql.Tx, sqlite.Querier, error) {
+	tx, err := s.db.BeginTx(ctx, readOptions)
+	if err != nil {
+		return nil, nil, err
+	}
+	return tx, s.dialect.queries(tx), nil
 }
 
 // Options say how to open a database.
@@ -66,11 +146,31 @@ func Open(ctx context.Context, path string, opts Options) (*Store, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("opening the database, %s: %w", abs, err)
 	}
-	return &Store{db: db, q: sqlite.New(db), path: abs}, nil
+	return newStore(db, sqliteDialect, abs), nil
 }
 
-// Path returns the database's file, as an absolute path.
+// Path returns SQLite's file, as an absolute path, or nothing on
+// PostgreSQL.
 func (s *Store) Path() string { return s.path }
+
+// Backend returns the kind of database the store is open on: SQLite or
+// PostgreSQL.
+func (s *Store) Backend() string { return s.dialect.name }
+
+// TLS reports whether the store's connection to PostgreSQL uses TLS, as it
+// did when the store opened it: with sslmode at prefer, libpq's default, it
+// may not. It's false on SQLite, which has no connection.
+func (s *Store) TLS() bool { return s.conn.encrypted }
+
+// Cleartext reports whether the store's connection to PostgreSQL crosses a
+// network unencrypted: over TCP, without TLS.
+func (s *Store) Cleartext() bool {
+	return s.dialect == postgresDialect && !s.conn.encrypted && !s.conn.socket
+}
+
+// ServerRelease returns the PostgreSQL server's release, such as 18.1, or
+// nothing on SQLite.
+func (s *Store) ServerRelease() string { return s.release }
 
 // Close closes the database.
 func (s *Store) Close() error { return s.db.Close() }

@@ -6,6 +6,138 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-26
+
+PostgreSQL and high availability, M09: `nbpdns serve` can keep its state
+in PostgreSQL 18, and run as several replicas on one database. Every
+replica serves the same API answers and status, from the database, and
+takes NetBox's webhooks. One of them, the leader, refreshes and prunes,
+and another takes over within seconds if it stops or dies, and within
+about 30 seconds if its host or network fails.
+[Run several replicas of nbpdns](docs/how-to/run-several-replicas-of-nbpdns.md)
+sets them up, and
+[How nbpdns replicas choose a leader](docs/explanation/how-nbpdns-replicas-choose-a-leader.md)
+explains the leader. SQLite stays a single `serve`.
+
+### Added
+
+- The development lab publishes its PostgreSQL 18 server on port 5418, and
+  `make lab-up` creates a database in it for nbpdns, `nbpdns`, owned by the
+  role `nbpdns`. The store's integration tests run on it as well as on
+  SQLite, each test in a database of its own.
+- `nbpdns serve` and every command that uses its database run on
+  PostgreSQL 18 as well as SQLite: give `database.url` a `postgres://` or
+  `postgresql://` URL, in libpq's form, with its parameters and defaults,
+  such as `sslmode`, `sslrootcert`, `sslcert`, `sslkey` and `passfile`,
+  and its `PG` environment variables. `database.url` is now a secret, so
+  it can come from `NBPDNS_DATABASE_URL_FILE`, and nbpdns shows and logs it
+  with each password masked as `xxxxx`. It warns of a connection that
+  crosses the network unencrypted, and of a PostgreSQL release that it
+  doesn't support. [Run nbpdns on PostgreSQL](docs/how-to/run-nbpdns-on-postgresql.md)
+  sets it up, and [Back up nbpdns's database](docs/how-to/back-up-nbpdns-database.md)
+  copies it with `pg_dump`.
+- `/status`, `/api/status` and `nbpdns db status` show the database's
+  backend, its URL, masked, and whether its connection uses TLS.
+- Several `nbpdns serve`s can run on one PostgreSQL database, as replicas.
+  One of them, the leader, holds a session advisory lock, and only it
+  refreshes and prunes. It confirms its lead every 5 seconds, and steps
+  down if it can't, before PostgreSQL, which ends a lost replica's session
+  within about 30 seconds, frees its lock for another replica to take. A
+  refresh's history and the prune refuse to write once their replica has
+  lost the lock. A write that a lost replica leaves open ends within 20
+  seconds, so that it holds up no other replica's writes. `nbpdns db
+  migrate` and `nbpdns secrets rotate-master-key` refuse while any replica
+  runs. `/status` and `/api/status` gain `replica`
+  and `leader`; the metrics `nbpdns_leader`,
+  `nbpdns_leader_since_timestamp_seconds` and `nbpdns_leader_changes_total`
+  say which replica leads; and each takeover is a `service.leader_acquired`
+  audit event. On SQLite, `serve` always leads.
+- `nbpdns serve` checks its database for changes every
+  `database.poll_interval`, 5 seconds by default: the runtime settings and
+  server groups that the command line changed, and, on PostgreSQL, the
+  leader, whose lock each follower tries for at each check. On PostgreSQL,
+  each change sends `NOTIFY nbpdns`, and with `database.listen: true`,
+  `serve` listens for it on a connection of its own, and acts at once,
+  reconnecting if the connection is lost; the checks go on either way. A
+  leader that stops releases its lock and notifies, so a follower that
+  listens takes over at once. `database.listen` is refused with a SQLite
+  `database.url`. `nbpdns settings` and `nbpdns groups` say that a running
+  `serve` applies a change within `database.poll_interval`.
+- Every replica on one PostgreSQL database serves the same API answers,
+  NetBox's records included, and the same deployment status: the leader
+  writes each refresh to the database, and each follower loads it at its
+  next check, or at once with `database.listen`. A follower is ready once
+  it has loaded a refresh. `/status` and the API's spec say which facts
+  are the deployment's, the same on every replica, and which are each
+  replica's own, such as the refreshes it ran; on a follower,
+  `schedule.next_refresh` is the leader's. Every replica sets the drift
+  gauges from the database, which
+  [Monitor drift with Prometheus](docs/how-to/monitor-drift-with-prometheus.md#monitor-several-replicas)
+  aggregates with `max by`.
+- The database keeps NetBox's zones, with their records, writing a zone's
+  row only when the zone changed, so that a restarted `serve` serves the
+  API's `…/rrsets` at once, rather than after its first refresh.
+- Any replica takes NetBox's webhooks: `/api/netbox-events` writes each
+  event, and the refresh it asks for, to a queue in the database, on
+  SQLite too, and the leader gathers the queue, with `drift.webhook_delay`
+  and the same bounds as before, within `database.poll_interval`, or at
+  once with `database.listen`. A refresh's webhooks leave the queue once
+  it's written, so a queued webhook survives a restart and a takeover, and
+  one whose refresh can't be written waits for the next refresh, which a
+  later webhook or the schedule starts.
+  `/status`'s `webhooks` section and `nbpdns_drift_pending_zones` are the
+  deployment's, the same on every replica. A webhook that can't be written
+  is a `503`, counted as `failed` in `nbpdns_netbox_webhooks_total` and as
+  `webhook` in `nbpdns_db_write_failures_total`.
+
+### Changed
+
+- `nbpdns serve` serves a refresh only once its database has it, on SQLite
+  too: a refresh that can't be written is served by no replica, which
+  keeps serving the last one written, and is counted in
+  `nbpdns_db_write_failures_total` and on `/status`, as before. `/readyz`
+  answers 200 once `serve` serves a refresh that finished, whatever its
+  outcome: its own, or one from the database.
+- `make release-check` and `make release` build one architecture at a
+  time, which lowers their peak memory by a third, and GitLab's
+  memory-heavy jobs request memory from the Kubernetes runner, so that
+  each runs only on a node with room for it.
+- The API's spec is now version 1.3.0, for this release's additions:
+  `/api/status`'s `database.backend`, `database.url` and `database.tls`,
+  `replica` and `leader`, and `/api/netbox-events`'s `503` response, for an
+  event that the database can't take.
+
+### Fixed
+
+- After a restart, `/status`'s `schedule.last_refresh` is the last full
+  refresh, as it was before the restart, not a zone refresh from NetBox's
+  webhooks that came after it.
+- `make lint` no longer stops golangci-lint after 5 minutes, which failed
+  clean code on CI's 2-CPU runner, and holds it to 1.5 GiB of memory, within
+  what GitLab's heavy jobs request.
+- GitLab's `vuln` job requests 3 GiB of memory from the Kubernetes runner,
+  and `make vuln` lowers govulncheck's peak from 3.5 to 2.8 GiB, so that a
+  scan that traces calls into a vulnerable package no longer takes most of
+  the job's hour on a busy node.
+- `nbpdns audit verify` counts a trail of one event as `1 event`, and names
+  that event once, where it said `1 events`, from the event to itself.
+
+### Security
+
+- nbpdns is built with Go 1.27.4, which fixes:
+  - GO-2026-6809: when nbpdns checks the certificate of a server that it
+    connects to over TLS, such as NetBox or PowerDNS, Go now refuses a chain
+    through any of the known intermediate certificates that are no longer
+    trustworthy, even where the system's trust store hasn't been updated to
+    distrust them.
+  - GO-2026-6859 (CVE-2026-97054): an HTTP/1 server that limits the size of
+    a request's body, as nbpdns does for NetBox's webhooks, could crash if a
+    handler wrote the response's headers while it still read the body.
+    nbpdns reads a webhook's whole body before it answers.
+- nbpdns is built with `golang.org/x/net` v0.62.0, which fixes GO-2026-6860
+  and GO-2026-6866 in its `html` package. nbpdns doesn't use that package,
+  but scanners that go by a module's version no longer flag it.
+
 ## [0.8.0] - 2026-10-17
 
 ### Added

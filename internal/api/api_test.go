@@ -137,6 +137,20 @@ func TestStatus(t *testing.T) {
 	fullRefresh := hooked
 	fullRefresh.Webhooks.LastRefresh = &service.WebhookRefresh{Started: at("2026-10-08T01:11:00Z"), Finished: at("2026-10-08T01:11:01Z"),
 		Full: true, Reason: "a view was updated", Outcome: "failed", Error: "NetBox isn't reachable", Requests: []service.Request{}}
+	onSQLite := failed
+	onSQLite.Database = service.Database{DatabaseInfo: service.DatabaseInfo{Backend: "sqlite",
+		URL: "sqlite:///var/lib/nbpdns/nbpdns.db", Path: "/var/lib/nbpdns/nbpdns.db"}}
+	onPostgres := failed
+	onPostgres.Database = service.Database{DatabaseInfo: service.DatabaseInfo{Backend: "postgresql",
+		URL: "postgres://nbpdns:xxxxx@db.example.com/nbpdns?sslmode=verify-full", TLS: ptr(true)}}
+	leading := onPostgres
+	leading.Replica = service.Replica{Name: "nbpdns-0", ID: "KJ4G3RZQ6V7XHN2WYB5T5DM7QE", Role: "leader"}
+	leading.Leader = &service.Leader{Name: "nbpdns-0", ID: "KJ4G3RZQ6V7XHN2WYB5T5DM7QE", Since: at("2026-10-08T01:00:00Z"),
+		LastSeen: at("2026-10-08T01:09:58Z"), NextRefresh: ptr(at("2026-10-08T01:10:00Z"))}
+	following := onPostgres
+	following.Replica = service.Replica{Name: "nbpdns-1", ID: "M5NCAJ2PDB4VE6RXQW7HKTZ3GY", Role: "follower"}
+	following.Leader = &service.Leader{Name: "nbpdns-0", ID: "KJ4G3RZQ6V7XHN2WYB5T5DM7QE", Since: at("2026-10-08T01:00:00Z"),
+		LastSeen: at("2026-10-08T01:09:58Z")}
 
 	tests := []struct {
 		name   string
@@ -166,6 +180,25 @@ func TestStatus(t *testing.T) {
 		{"a full refresh from webhooks", fullRefresh, []string{
 			`"error":"NetBox isn't reachable","events":0,`, `"full":true,"outcome":"failed","reason":"a view was updated","requests":[],`,
 			`"zones":null}`,
+		}},
+		{"on SQLite", onSQLite, []string{
+			`"database":{"backend":"sqlite","history_write_failures":0,"last_write_error":null,"last_write_failure":null,` +
+				`"path":"/var/lib/nbpdns/nbpdns.db","restored":false,"restored_as_of":null,"tls":null,"url":"sqlite:///var/lib/nbpdns/nbpdns.db"}`,
+		}},
+		{"on PostgreSQL", onPostgres, []string{
+			`"database":{"backend":"postgresql","history_write_failures":0,"last_write_error":null,"last_write_failure":null,` +
+				`"path":"","restored":false,"restored_as_of":null,"tls":true,"url":"postgres://nbpdns:xxxxx@db.example.com/nbpdns?sslmode=verify-full"}`,
+		}},
+		{"knowing no leader", before, []string{`"leader":null`}},
+		{"the leader", leading, []string{
+			`"replica":{"id":"KJ4G3RZQ6V7XHN2WYB5T5DM7QE","name":"nbpdns-0","role":"leader"}`,
+			`"leader":{"id":"KJ4G3RZQ6V7XHN2WYB5T5DM7QE","last_seen":"2026-10-08T01:09:58Z","name":"nbpdns-0",` +
+				`"next_refresh":"2026-10-08T01:10:00Z","since":"2026-10-08T01:00:00Z"}`,
+		}},
+		{"a follower", following, []string{
+			`"replica":{"id":"M5NCAJ2PDB4VE6RXQW7HKTZ3GY","name":"nbpdns-1","role":"follower"}`,
+			`"leader":{"id":"KJ4G3RZQ6V7XHN2WYB5T5DM7QE","last_seen":"2026-10-08T01:09:58Z","name":"nbpdns-0",` +
+				`"next_refresh":null,"since":"2026-10-08T01:00:00Z"}`,
 		}},
 	}
 	for _, tt := range tests {

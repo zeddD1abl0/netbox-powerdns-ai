@@ -94,6 +94,9 @@ A systemd unit's `StateDirectory=nbpdns` makes the same directory. The
 commands that only read NetBox or PowerDNS, such as `nbpdns drift`, don't
 use the database.
 
+To keep the state in PostgreSQL instead, skip this step, and follow
+[Run nbpdns on PostgreSQL](run-nbpdns-on-postgresql.md).
+
 ## Pull the image
 
 The image is in the project's container registry, under **Deploy >

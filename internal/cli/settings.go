@@ -18,9 +18,6 @@ import (
 	"github.com/zeddD1abl0/netbox-powerdns-ai/internal/store"
 )
 
-// settingsPoll is how often serve checks whether the settings changed.
-const settingsPoll = 5 * time.Second
-
 func newSettingsCmd(a *app) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "settings",
@@ -279,7 +276,7 @@ func (s *session) changeSetting(ctx context.Context, out io.Writer, c store.Sett
 		fmt.Fprintf(out, "%s pins %s, so nbpdns uses its value until it's unset there.\n", pin, c.Key)
 		return nil
 	}
-	fmt.Fprintf(out, "A running nbpdns serve applies it within %s.\n", settingsPoll)
+	fmt.Fprintf(out, "A running nbpdns serve applies it within %s.\n", s.cfg.Database.PollInterval)
 	return nil
 }
 
@@ -325,11 +322,19 @@ func (s *session) storedConfig(ctx context.Context, st *store.Store) (*config.Co
 	return cfg, settings, version, nil
 }
 
+// storeProbeTimeout bounds how long applyStoredIfAny waits for PostgreSQL.
+const storeProbeTimeout = 10 * time.Second
+
 // applyStoredIfAny is applyStored, for a command that works without a
 // database: if there's none, or it can't be read, the configuration stays
-// as it is, and a warning says why.
+// as it is, and a warning says why. It waits for PostgreSQL for
+// storeProbeTimeout at most.
 func (s *session) applyStoredIfAny(ctx context.Context) {
-	if _, err := os.Stat(s.cfg.Database.SQLitePath()); errors.Is(err, fs.ErrNotExist) {
+	if path := s.cfg.Database.SQLitePath(); path == "" {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, storeProbeTimeout)
+		defer cancel()
+	} else if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
 		return
 	}
 	st, err := s.currentStore(ctx)

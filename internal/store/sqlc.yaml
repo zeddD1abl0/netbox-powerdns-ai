@@ -1,7 +1,8 @@
 # sqlc generates the store's queries for SQLite, into ./sqlite, from the
 # migrations' schema and the queries in this directory's .sql files
-# (ADR-0038). `make generate` runs it, and `make generate-check` runs
-# `sqlc diff`. Never edit ./sqlite by hand.
+# (ADR-0038), with the Querier interface that the store calls on either
+# database (ADR-0046). `make generate` runs it, and `make generate-check`
+# runs `sqlc diff`. Never edit ./sqlite by hand.
 version: "2"
 sql:
   - engine: sqlite
@@ -11,3 +12,4 @@ sql:
       go:
         package: sqlite
         out: sqlite
+        emit_interface: true

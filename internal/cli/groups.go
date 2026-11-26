@@ -382,7 +382,7 @@ func newGroupsAddCmd(a *app) *cobra.Command {
 				return err
 			}
 			fmt.Fprintf(a.stdout, "Added server group %s, its API key sealed with the master key.\n", name)
-			fmt.Fprintf(a.stdout, "A running nbpdns serve compares it within %s.\n", settingsPoll)
+			fmt.Fprintf(a.stdout, "A running nbpdns serve compares it within %s.\n", s.cfg.Database.PollInterval)
 			return nil
 		})
 	}
@@ -467,7 +467,7 @@ func newGroupsSetCmd(a *app) *cobra.Command {
 				return nil
 			}
 			fmt.Fprintf(a.stdout, "Changed %s of server group %s.\n", strings.Join(fields, ", "), name)
-			fmt.Fprintf(a.stdout, "A running nbpdns serve applies it within %s.\n", settingsPoll)
+			fmt.Fprintf(a.stdout, "A running nbpdns serve applies it within %s.\n", s.cfg.Database.PollInterval)
 			return nil
 		})
 	}
@@ -496,7 +496,7 @@ func newGroupsRemoveCmd(a *app) *cobra.Command {
 				return err
 			}
 			fmt.Fprintf(a.stdout, "Removed server group %s. Its drift history is kept until drift.history_retention_days prunes it.\n", args[0])
-			fmt.Fprintf(a.stdout, "A running nbpdns serve stops comparing it within %s.\n", settingsPoll)
+			fmt.Fprintf(a.stdout, "A running nbpdns serve stops comparing it within %s.\n", s.cfg.Database.PollInterval)
 			return nil
 		})
 	}
@@ -535,7 +535,7 @@ func newGroupsRenameCmd(a *app) *cobra.Command {
 				return err
 			}
 			fmt.Fprintf(a.stdout, "Renamed server group %s to %s, with its drift history.\n", old, name)
-			fmt.Fprintf(a.stdout, "A running nbpdns serve applies it within %s.\n", settingsPoll)
+			fmt.Fprintf(a.stdout, "A running nbpdns serve applies it within %s.\n", s.cfg.Database.PollInterval)
 			return nil
 		})
 	}

@@ -74,3 +74,12 @@ func TestDriftFixtureNames(t *testing.T) {
 		t.Errorf("zones share a name: %v", zones)
 	}
 }
+
+func TestPostgresURL(t *testing.T) {
+	t.Setenv("DOCKER_HOST", "tcp://docker:2375")
+	got := PostgresURL("nbpdns", "p@ss word", "nbpdns_test")
+	want := "postgres://nbpdns:p%40ss%20word@docker:" + strconv.Itoa(PostgresPort) + "/nbpdns_test?sslmode=disable"
+	if got != want {
+		t.Errorf("PostgresURL() = %q, want %q", got, want)
+	}
+}

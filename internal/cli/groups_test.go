@@ -243,7 +243,7 @@ func TestServeAppliesGroups(t *testing.T) {
 	env, apiKey := groupsEnv(t)
 	serveEnv := with(configFile(t, twoGroups), "NBPDNS_DATABASE_URL", env["NBPDNS_DATABASE_URL"],
 		"NBPDNS_DATABASE_MASTER_KEY_FILE", env["NBPDNS_DATABASE_MASTER_KEY_FILE"],
-		"NBPDNS_NETBOX_URL", "http://127.0.0.1:1", "NBPDNS_NETBOX_TOKEN", "nbt_abc.def")
+		"NBPDNS_NETBOX_URL", "http://127.0.0.1:1", "NBPDNS_NETBOX_TOKEN", "nbt_abc.def", "NBPDNS_DATABASE_POLL_INTERVAL", "100ms")
 	s := startServe(t, serveEnv)
 	type status struct {
 		Schedule struct {

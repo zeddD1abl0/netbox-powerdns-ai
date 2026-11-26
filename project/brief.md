@@ -461,3 +461,17 @@ implementation. The plan and its rename are in ADR-0045.
 | A `--no-check` on `groups add` and `groups set`, for a server that's down or not built yet? | "--no-check is a great idea". |
 | The API calls a group's name "its stable ID". Say instead that a rename changes it, and leave exposing an internal ID to M10 or M19? | "Yes, this is fine". |
 | The one-shot commands, such as `nbpdns drift`, read only the config file, as for settings, so they don't see CLI groups. Leave that? | "This is good". |
+
+## Answers, 2026-10-18 (M09 design)
+
+Given in M09's design session, at its start, each chosen from proposed
+options; the label of the chosen option is quoted.
+
+| Question | Answer |
+|---|---|
+| When a PostgreSQL `database.url` names no `sslmode`, how does nbpdns connect? | "libpq's default, prefer": TLS if the server offers it, checking no certificate, unless the URL asks for more. |
+| How does the PostgreSQL password come from a file? | "URL as a secret + passfile": the whole URL from `NBPDNS_DATABASE_URL_FILE`, or the password from libpq's `passfile`; no `database.password` key. |
+| Are the runner's `memory_request_overwrite_max_allowed` and `service_memory_request_overwrite_max_allowed` deployed (ITEM-0100)? | "Yes, deployed". |
+
+The user then approved M09's plan, recorded under **Approved design** in
+M09's file, with ADR-0046 to ADR-0048, accepted with it.

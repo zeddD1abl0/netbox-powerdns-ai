@@ -1,5 +1,7 @@
 -- name: ListGroups :many
-SELECT * FROM server_groups ORDER BY name;
+-- Unordered: the store sorts the names in Go, byte by byte, so that they
+-- come in one order on either database, whatever its collation (ADR-0046).
+SELECT * FROM server_groups;
 
 -- name: GetGroup :one
 SELECT * FROM server_groups WHERE name = sqlc.arg(name);

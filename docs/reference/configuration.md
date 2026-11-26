@@ -43,8 +43,10 @@ a secret's value.
 | Key | Kind | Type | Default |
 |---|---|---|---|
 | [`audit.retention_days`](#auditretention_days) | runtime | integer, 1 to 36500 | `2557` |
+| [`database.listen`](#databaselisten) | bootstrap | `true` or `false` | `false` |
 | [`database.master_key`](#databasemaster_key) | bootstrap | string, secret | none |
-| [`database.url`](#databaseurl) | bootstrap | a `sqlite:` URL | `sqlite:///var/lib/nbpdns/nbpdns.db` |
+| [`database.poll_interval`](#databasepoll_interval) | bootstrap | duration, from `100ms` to `30s` | `5s` |
+| [`database.url`](#databaseurl) | bootstrap | a `sqlite:`, `postgres://` or `postgresql://` URL, secret | `sqlite:///var/lib/nbpdns/nbpdns.db` |
 | [`drift.group_concurrency`](#driftgroup_concurrency) | runtime | integer, 1 to 32 | `4` |
 | [`drift.history_retention_days`](#drifthistory_retention_days) | runtime | integer, 1 to 36500 | `400` |
 | [`drift.interval`](#driftinterval) | runtime | duration, at least `10s` | `5m` |
@@ -87,6 +89,26 @@ is built to support. PCI DSS asks for one year.
 > A shorter retention may fall short of your compliance obligations. Copy the
 > trail elsewhere before you shorten it: the events it deletes are gone.
 
+## `database.listen`
+
+Whether `nbpdns serve` also listens for the database's changes, with
+PostgreSQL's `LISTEN`, so that it applies them at once, rather than at its next
+check. Each change to the database sends `NOTIFY nbpdns`. With this on, `serve`
+listens on a connection of its own, and checks the database as soon as it hears
+of a change: a setting or a server group changed with the command line, or a
+leader that stops, whose lock a follower then takes. It still checks every
+`database.poll_interval`, so a notification that's lost, such as while its
+connection reconnects, costs at most one interval. It costs each `serve` one
+more connection, and works wherever nbpdns does: directly, or through a pooler
+in session mode. Only PostgreSQL has it, so nbpdns refuses it with a SQLite
+`database.url`.
+
+- **Kind:** bootstrap
+- **Type:** `true` or `false`
+- **Default:** `false`
+- **Environment variable:** `NBPDNS_DATABASE_LISTEN`
+- **Flag:** `--database-listen`
+
 ## `database.master_key`
 
 The master key that seals the secrets the database stores, such as a
@@ -107,23 +129,57 @@ secrets that it can't open. `nbpdns secrets rotate-master-key` replaces it.
 > Keep the master key apart from the database, and back it up: without it, the
 > secrets that the database stores are lost. Anyone with both can read them.
 
-## `database.url`
+## `database.poll_interval`
 
-Where `nbpdns serve` keeps its state, such as
-`sqlite:///var/lib/nbpdns/nbpdns.db`. `sqlite:///` and an absolute path, with
-three slashes, or `sqlite:` and a path relative to the working directory. Its
-directory must exist, and nbpdns's user must be able to write to it: in the
-image, mount a volume at `/var/lib/nbpdns`, writable by user 65532. nbpdns
-creates the file, readable only by its owner, and a lock file beside it, named
-for it with `.lock` added, which stops a second `nbpdns serve` from using the
-same database. Commands that only read NetBox or PowerDNS, such as `nbpdns
-drift`, don't use it.
+How often `nbpdns serve` checks the database for the changes that it follows:
+the runtime settings, the server groups and, on PostgreSQL, the leader. A
+change made with `nbpdns settings` or `nbpdns groups` reaches every `serve`
+within this long, or at once with `database.listen`. On PostgreSQL, a follower
+also tries for the leader's lock at each check, so it takes over within this
+long of the leader stopping, and of PostgreSQL freeing a lost leader's lock,
+about 30 seconds after the loss. Each check is one small read. Write it with a
+unit, such as `5s`.
 
 - **Kind:** bootstrap
-- **Type:** a `sqlite:` URL
+- **Type:** duration, from `100ms` to `30s`
+- **Default:** `5s`
+- **Environment variable:** `NBPDNS_DATABASE_POLL_INTERVAL`
+- **Flag:** `--database-poll-interval`
+
+## `database.url`
+
+Where `nbpdns serve` keeps its state: a SQLite file, such as
+`sqlite:///var/lib/nbpdns/nbpdns.db`, or a PostgreSQL database, such as
+`postgres://nbpdns@db.example.com/nbpdns?sslmode=verify-full`. For SQLite,
+`sqlite:///` and an absolute path, with three slashes, or `sqlite:` and a path
+relative to the working directory. Its directory must exist, and nbpdns's user
+must be able to write to it: in the image, mount a volume at `/var/lib/nbpdns`,
+writable by user 65532. nbpdns creates the file, readable only by its owner,
+and a lock file beside it, named for it with `.lock` added, which stops a
+second `nbpdns serve` from using the same database. For PostgreSQL 18, a
+`postgres://` or `postgresql://` URL in libpq's form, with libpq's parameters
+and defaults, such as `sslmode`, `prefer` by default, `sslrootcert`, `sslcert`,
+`sslkey`, `passfile` and `host` for a Unix socket. libpq's `PG` environment
+variables, such as `PGPASSWORD`, fill in what the URL leaves out. The database
+must exist; nbpdns creates its tables. It's a secret, since it can hold a
+password: nbpdns shows and logs it with each password masked as `xxxxx`.
+Commands that only read NetBox or PowerDNS, such as `nbpdns drift`, don't use
+it.
+
+- **Kind:** bootstrap
+- **Type:** a `sqlite:`, `postgres://` or `postgresql://` URL, secret
 - **Default:** `sqlite:///var/lib/nbpdns/nbpdns.db`
 - **Environment variable:** `NBPDNS_DATABASE_URL`
 - **Flag:** `--database-url`
+- **From a file:** `NBPDNS_DATABASE_URL_FILE`, `--database-url-file`, or `database.url_file` in the config file
+
+> [!WARNING]
+> With `sslmode` at `prefer`, libpq's default, or at `allow` or `disable`, the
+> password and the data cross the network unencrypted wherever the server
+> doesn't offer TLS, and nbpdns logs a warning each time it connects that way.
+> Below `verify-full`, nothing checks that the server is the one that the URL
+> names. Use `sslmode=verify-full`, with `sslrootcert` if the server's
+> certificate comes from a private CA.
 
 ## `drift.group_concurrency`
 
@@ -485,12 +541,14 @@ powerdns:
 
 ## Example config file
 
-Every key except the secrets, with its default:
+Every key with its default, except the secrets that have none:
 
 ```yaml
 audit:
   retention_days: 2557
 database:
+  listen: false
+  poll_interval: 5s
   url: sqlite:///var/lib/nbpdns/nbpdns.db
 drift:
   group_concurrency: 4

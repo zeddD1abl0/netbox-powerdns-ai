@@ -146,6 +146,7 @@ func (l *Loader) Load() (*Config, []Setting, error) {
 		}
 		settings = append(settings, Setting{Key: k.Name, Value: k.show(), Source: src})
 	}
+	errs = append(errs, l.checkListen(cfg))
 	groups, groupSettings, groupErrs := loadGroups(v, path)
 	l.groups, l.groupSettings = groups, groupSettings
 	cfg.PowerDNS.Groups = groups
@@ -199,6 +200,17 @@ func (l *Loader) WithStored(stored map[string]string) (*Config, []Setting, error
 	settings = append(settings, l.groupSettings...)
 	slices.SortStableFunc(settings, func(a, b Setting) int { return strings.Compare(a.Key, b.Key) })
 	return cfg, settings, errors.Join(errs...)
+}
+
+// checkListen refuses database.listen with a SQLite database.url: only
+// PostgreSQL has LISTEN and NOTIFY (ADR-0048).
+func (l *Loader) checkListen(cfg *Config) error {
+	if !cfg.Database.Listen || cfg.Database.SQLitePath() == "" {
+		return nil
+	}
+	return fmt.Errorf("database.listen (from %s): only PostgreSQL has LISTEN and NOTIFY, and database.url (from %s) names a SQLite database, "+
+		"which nbpdns serve checks for changes every database.poll_interval; unset database.listen, or give database.url a postgres:// URL",
+		l.base["database.listen"].src, l.base["database.url"].src)
 }
 
 // BootstrapError is the error for a bootstrap key given where only a runtime
