@@ -6,6 +6,8 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-26
+
 PostgreSQL and high availability, M09: `nbpdns serve` can keep its state
 in PostgreSQL 18, and run as several replicas on one database. Every
 replica serves the same API answers and status, from the database, and

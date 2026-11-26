@@ -3,7 +3,7 @@ id: ITEM-0100
 title: Keep concurrent pipelines from running the runner out of memory
 type: bug # feature | bug | debt | task
 status: in-progress # open | in-progress | blocked | done | wontfix
-milestone: M09
+milestone: M10
 requirements: []
 depends_on: []
 created: 2026-10-10
@@ -180,3 +180,7 @@ tag no longer fails main.
   jobs, `build`, `docs-site` and `secrets` ran on `talos-control-3`, or on
   its QEMU CPU. Branch pipelines don't count: the item still waits for
   M09's merge and its tag.
+- 2026-11-26: Moved from M09 to M10 at M09's close, as at M08's: a done
+  milestone can't hold an item in progress, and this one's last criterion
+  needs M09's merge and tag pipelines. It closes on them, recorded on the
+  branch after the merge, if both pass without a retry.

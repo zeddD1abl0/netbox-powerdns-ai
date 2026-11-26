@@ -1,9 +1,9 @@
 ---
 id: M09
 title: PostgreSQL and HA
-status: in-progress # planned | in-progress | done
+status: done # planned | in-progress | done
 started: 2026-10-18
-closed:
+closed: 2026-11-26
 ---
 
 # M09: PostgreSQL and HA
@@ -111,33 +111,33 @@ closes once a merge and its tag both pass without a retry.
 
 - [x] ADR-0046 to ADR-0048 are accepted, and the brief records the answers of
   2026-10-18.
-- [ ] The store runs on PostgreSQL 18 from the same migrations and queries.
+- [x] The store runs on PostgreSQL 18 from the same migrations and queries.
   Its tests pass on both databases, and `generate-check` covers both
   packages.
-- [ ] `serve` and the CLI take a `postgres://` URL in standard form, with TLS
+- [x] `serve` and the CLI take a `postgres://` URL in standard form, with TLS
   and client certificates as libpq has them. The URL can come from
   `NBPDNS_DATABASE_URL_FILE`, or its password from a `passfile`. Its
   password is never logged or shown.
-- [ ] With several replicas on one database, exactly one refreshes and
+- [x] With several replicas on one database, exactly one refreshes and
   prunes.
-- [ ] When the leader stops or is killed, another replica takes over within
+- [x] When the leader stops or is killed, another replica takes over within
   seconds. When it's cut off, another takes over within about 30 seconds,
   and the old one stops leading first.
-- [ ] Every replica serves the same API answers and deployment status from
+- [x] Every replica serves the same API answers and deployment status from
   the database: within the poll interval, or at once with `database.listen`.
-- [ ] A webhook sent to any replica is refreshed by the leader, and survives
+- [x] A webhook sent to any replica is refreshed by the leader, and survives
   a takeover. Settings and groups changed with the CLI reach every replica.
-- [ ] `/status` and the metrics say which replica leads, and since when. A
+- [x] `/status` and the metrics say which replica leads, and since when. A
   takeover is an audit event.
-- [ ] SQLite behaves as in M08, a single instance, apart from serving
+- [x] SQLite behaves as in M08, a single instance, apart from serving
   committed refreshes only.
-- [ ] `make check`, `make test-integration` and `make release-check` pass,
+- [x] `make check`, `make test-integration` and `make release-check` pass,
   and the pipelines pass within the runner's memory.
 - [ ] ITEM-0100 is closed: M09's merge and tag pipelines pass without a
   retry.
-- [ ] The docs exist, the references are regenerated, and the CHANGELOG is
+- [x] The docs exist, the references are regenerated, and the CHANGELOG is
   updated.
-- [ ] `/code-review high` and `/security-review` have run. The security
+- [x] `/code-review high` and `/security-review` have run. The security
   review covers the database's credentials, TLS and the audit trail.
 - [ ] The manual verification is recorded. The user has merged through an MR
   with a merge commit, and tagged `v0.9.0`.
@@ -202,6 +202,86 @@ closes once a merge and its tag both pass without a retry.
   Kubernetes manifest parsed as a Secret, a ConfigMap, a Deployment of 3
   replicas and a Service, but wasn't applied: the only cluster that
   `kubectl` reaches is the user's own.
+- 2026-11-26: **Pipeline 1047** (d67ed82, ITEM-0128's fix), the branch's
+  last before the close, passed every job without a retry or an OOM kill,
+  as 1039 to 1042 did. Its `vuln` job requested 3 GiB, and took 72 s.
+  ITEM-0100's notes record each pipeline's nodes and times.
+- 2026-11-26: **`/code-review high`**, on `main...m09-postgresql-and-ha`,
+  found five things, each checked against the code. None is fixed on this
+  branch: as the user chose, each is an item in M10.
+  - ITEM-0129: a healthy replica's session can end. Its
+    `idle_session_timeout` is 30 s, but a follower uses the session only at
+    each check, every `database.poll_interval`, which may be 30 s, and
+    `serve` joins before it migrates and restores. Until it joins again, it
+    holds no serve lock.
+  - ITEM-0130: a webhook's write waits at most 5 s for the write lock,
+    which a large refresh on PostgreSQL can hold for longer. The webhook
+    then gets a 503, and NetBox doesn't send it again.
+  - ITEM-0131: the fence on leader-only writes finds the leader's session
+    by its backend PID alone, which a new backend could reuse.
+  - ITEM-0132, a nit: a webhook whose sender leaves while its write waits
+    is counted as a database write failure.
+  - ITEM-0133, a nit: a leader that steps down shows itself as the leader
+    that it follows, until another replica takes over.
+- 2026-11-26: **`/security-review`**, covering the database's credentials,
+  TLS and the audit trail: no findings at its bar, confidence 8 of 10 or
+  more. One below it, at 6, is real, and is ITEM-0134, in M10. nbpdns
+  finds `database.url`'s password with `net/url`, but pgx reads the URL as
+  libpq does. So a password that starts with `?`, or is only digits before
+  a `?`, written without percent-encoding, isn't masked: `/status`,
+  `/api/status`, the logs, `db status` and `config show` show it. With `#`
+  there, the error that refuses the URL shows it. Checked and found safe:
+  - The URL is a `Secret`, with a `_FILE` variant, and a bootstrap key.
+    pgx's own errors mask the password, and no metric label or
+    `application_name` holds it.
+  - TLS comes from pgx's reading of the URL, unchanged, and the pool, the
+    replica's session, the serve lock and `LISTEN` share it. `tls` is read
+    from the connection. With `sslmode=prefer`, it reports the first
+    connection only, a weakness that ADR-0046 accepts.
+  - Every query is parameterized, and `NOTIFY` carries no payload.
+  - The audit chain's writes are serialized by `pg_advisory_xact_lock`,
+    which fails a write rather than letting it through without the lock.
+    The fence checks inside the locked transaction.
+  - The webhook queue is behind the signature check, and `/status` shows
+    what it holds as escaped text.
+- 2026-11-26: **Checks at the close**, on `f3f04c9` with this close's
+  tracking changes, each with `GOFLAGS=-count=1`, so none from Go's test
+  cache:
+  - `make check` passed in 64 s: vet, lint, the unit tests of 23 packages
+    with `-race`, govulncheck (only GO-2026-5932, in x/crypto, a required
+    module whose vulnerable package the code doesn't import), three
+    gitleaks scans with no leaks, docs, API and project lint, the
+    generated files up to date, and every module tidy.
+  - `make test-integration` passed on the lab in 260 s: internal/cli
+    221.8 s, with `TestTakeovers`; internal/store 58.4 s, on SQLite and the
+    lab's PostgreSQL 18, with `TestFence` and `TestLeaderLostInAWrite`;
+    internal/netbox 6.8 s; internal/lab 1.3 s; internal/powerdns 1.3 s.
+    The two tools modules have none.
+  - `make release-check` passed in 44 s: the snapshot
+    `0.8.0-SNAPSHOT-f3f04c9`, and internal/release 12.2 s.
+  - `go run ./internal/cmd/releasenotes -tag v0.9.0 CHANGELOG.md` prints
+    the `[0.9.0] - 2026-11-26` section.
+- 2026-11-26: **The acceptance criteria**, ticked on this evidence:
+  - The store on both databases: ITEM-0110, its tests in the integration
+    run above, and `generate-check`, whose `SQLC_CONFIGS` holds both
+    packages' configurations.
+  - `database.url`: ITEM-0111, and steps 1 and 9 of the manual
+    verification. The password is masked for a URL written as "Run nbpdns
+    on PostgreSQL" says, percent-encoded. ITEM-0134, in M10, covers the
+    unencoded forms that the security review found.
+  - One leader, takeovers, the same answers on every replica, webhooks and
+    the CLI's changes, and the leader on `/status`, the metrics and the
+    audit trail: ITEM-0112 to ITEM-0116 and ITEM-0126, `TestTakeovers`,
+    `TestFence` and `TestLeaderLostInAWrite`, and steps 2 to 8 of the
+    manual verification.
+  - SQLite as in M08: step 10, and the unit and integration tests on
+    SQLite.
+  - The checks and pipelines: the entry above, and pipelines 1039 to 1042
+    and 1047, which passed every job without a retry or an OOM kill.
+  - The docs: ITEM-0117, and `generate-check` in `make check`.
+  - The reviews: the two entries above.
+  - Left for after the merge: ITEM-0100, now in M10, on the merge's and
+    the tag's pipelines; and the merge and the tag `v0.9.0`.
 
 ## Approved design
 
